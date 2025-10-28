@@ -204,7 +204,10 @@ async def _render_found_cards(update: Update, context: ContextTypes.DEFAULT_TYPE
         part = sheets.get_participants(oid)
         unpaid = sum(1 for p in part if not p.get("paid"))
         client = o.get("client_name") or "—"
-        lines.append(f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {updated_at or '--:--'} · клиенты: {client} · долги: {unpaid}")
+lines.append(
+    f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {updated_at or '--:--'} · "
+    f"клиенты: {client} · долги: {unpaid}"
+)
 await reply_animated(
     update, context,
     "\n".join(lines) if lines else "Нет карточек."
@@ -691,10 +694,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["adm_mode"] = "add_order_status"
             await reply_animated(update, context, "Выбери стартовый статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2))
             return
-            context.user_data["adm_buf"]["country"] = country
-            context.user_data["adm_mode"] = "add_order_status"
-            await reply_animated(update, context, "Выбери стартовый статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2))
-            return
 
         if a_mode == "add_order_status":
             if not is_valid_status(raw, STATUSES):
@@ -909,8 +908,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for o in orders:
                     lines.append(
                         f"*order_id:* `{o.get('order_id','')}`\\n"
-                        f"*client_name:* {o.get('client_name','')}`\\n"
-                        f"*status:* {o.get('status','')}`\\n"
+                        f"*client_name:* {o.get('client_name','')}\n"
+                        f"*status:* {o.get('status','')}\n"
                         f"*country:* {o.get('country','')}`\\n"
                         f"*updated_at:* {o.get('updated_at','')}`\\n"
                         "—"
