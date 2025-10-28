@@ -95,13 +95,20 @@ async def _typing(context: ContextTypes.DEFAULT_TYPE, chat_id: int, seconds: flo
 
 async def reply_animated(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
     msg = update.message or update.callback_query.message
+    # normalize literal "\n" (двойной слэш в коде) к реальным переводам строк
+    if isinstance(text, str):
+        text = text.replace('\\n', '\n')
     await _typing(context, msg.chat_id, 0.4)
     return await msg.reply_text(text, **kwargs)
 
 async def reply_markdown_animated(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
     msg = update.message or update.callback_query.message
+    # normalize literal "\n" (двойной слэш в коде) к реальным переводам строк
+    if isinstance(text, str):
+        text = text.replace('\\n', '\n')
     await _typing(context, msg.chat_id, 0.4)
     return await msg.reply_markdown(text, **kwargs)
+
 
 async def show_loader(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str = "⏳ Загрузка…"):
     msg = update.message or update.callback_query.message
@@ -200,7 +207,7 @@ async def _render_found_cards(update: Update, context: ContextTypes.DEFAULT_TYPE
             f"{('note: ' + note) if note else ''}"
         )
     text = "\\n—\\n".join(lines)
-    await reply_markdown_animated(update, context, text or "_Нет карточек._")
+    await reply_animated(update, context, text or "Нет карточек.")
 
 async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
     """Переиспользуем карточку заказа + участников."""
@@ -228,14 +235,14 @@ async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, o
     if updated_at:
         head.append(f"*updated_at:* {updated_at}")
 
-    await reply_markdown_animated(update, context, "\\n".join(head), reply_markup=order_card_kb(order_id))
+    await reply_animated(update, context, "\n".join(head), reply_markup=order_card_kb(order_id))
 
     # — участники
     participants = sheets.get_participants(order_id)
     page = 0; per_page = 8
     part_text = build_participants_text(order_id, participants, page, per_page)
     kb = build_participants_kb(order_id, participants, page, per_page)
-    await reply_markdown_animated(update, context, part_text, reply_markup=kb)
+    await reply_animated(update, context, part_text, reply_markup=kb)
 
 # ---------------------- Текст кнопок (новые + обратная совместимость) ----------------------
 
@@ -399,7 +406,7 @@ def build_participants_text(order_id: str, participants: List[dict], page: int, 
     for p in slice_:
         mark = "✅" if p.get("paid") else "❌"
         lines.append(f"{mark} @{p.get('username')}")
-    return "\\n".join(lines)
+    return "\n".join(lines)
 
 def build_participants_kb(order_id: str, participants: List[dict], page: int, per_page: int) -> InlineKeyboardMarkup:
     slice_, total_pages = _slice_page(participants, page, per_page)
@@ -746,7 +753,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for oid in ids:
                     ok, rep = await remind_unpaid_for_order(context.application, oid)
                     reports.append(rep)
-                await reply_markdown_animated(update, context, "\\n\\n".join(reports))
+                await reply_animated(update, context, "\n\n".join(reports))
             finally:
                 await safe_delete_message(context, loader)
             context.user_data.pop("adm_mode", None)
@@ -859,7 +866,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         f"*updated_at:* {o.get('updated_at','')}`\\n"
                         "—"
                     )
-                await reply_markdown_animated(update, context, "\\n".join(lines))
+                await reply_animated(update, context, "\n".join(lines))
             context.user_data.pop("adm_mode", None)
             return
 
@@ -1176,7 +1183,7 @@ async def broadcast_all_unpaid_text(update: Update, context: ContextTypes.DEFAUL
             total_fail += rep.count("• ❌")
         per_order_lines.append("")
         per_order_lines.append(f"_Итого по всем:_ ✅ {total_ok}  ❌ {total_fail}")
-        await reply_markdown_animated(update, context, "\\n\\n".join(per_order_lines))
+        await reply_animated(update, context, "\n\n".join(per_order_lines))
     finally:
         await safe_delete_message(context, loader)
 
@@ -1192,7 +1199,7 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
         lines = ["🕒 Последние разборы:"]
         for o in items:
             lines.append(f"`{o.get('order_id','')}` — {o.get('status','')}, {o.get('origin') or o.get('country') or ''}, {o.get('updated_at','')}")
-        await reply_markdown_animated(update, context, "\\n".join(lines))
+        await reply_animated(update, context, "\n".join(lines))
     finally:
         await safe_delete_message(context, loader)
 
@@ -1240,7 +1247,7 @@ async def show_clients_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "—"
             )
         head = f"📚 Список клиентов ({page+1}/{total_pages})" + (f" — поиск: *{query}*" if query else "")
-        await reply_markdown_animated(update, context, head + "\\n" + "\\n".join(blocks), reply_markup=_clients_nav_kb(page, total_pages))
+        await reply_animated(update, context, (head + "\n" + "\n".join(blocks)), reply_markup=_clients_nav_kb(page, total_pages))
     finally:
         await safe_delete_message(context, loader)
 
@@ -1289,7 +1296,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             page = 0
         part_text = build_participants_text(oid, participants, 0, 8)
         kb = build_participants_kb(oid, participants, 0, 8)
-        await q.message.reply_markdown(part_text, reply_markup=kb)
+        await q.message.reply_text(part_text, reply_markup=kb)
         return
     if data.startswith("pp:page:") or data.startswith("pp:refresh:"):
         parts = data.split(":")
@@ -1298,7 +1305,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         participants = sheets.get_participants(oid)
         part_text = build_participants_text(oid, participants, page, 8)
         kb = build_participants_kb(oid, participants, page, 8)
-        await q.message.edit_text(part_text, parse_mode="Markdown", reply_markup=kb)
+        await q.message.edit_text(part_text, reply_markup=kb)
         return
 
     # Меню статусов для одного заказа
@@ -1379,7 +1386,7 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         if fail:
             lines.append("Не удалось: " + ", ".join(fail))
-        await q.message.reply_text("\\n".join(lines))
+        await q.message.reply_text("\n".join(lines))
         return
 
     # Клиенты: пагинация и поиск
