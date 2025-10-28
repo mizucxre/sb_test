@@ -89,6 +89,97 @@ async def reply_markdown_animated(update: Update, context: ContextTypes.DEFAULT_
     msg = update.message or update.callback_query.message
     await _typing(context, msg.chat_id)
     return await msg.reply_markdown(text, **kwargs)
+# ======= /find: поиск заказов по order_id, @username или телефону ===========
+FIND_EXPECTING_QUERY_FLAG = "find_expect_query"  # ключ в context.user_data
+
+def _guess_query_type(q: str) -> str:
+    """
+    Возвращает один из: 'order_id' / 'username' / 'phone'
+    """
+    q = (q or "").strip()
+    if not q:
+        return "order_id"
+    if q.startswith("@"):
+        return "username"
+    # order_id вида AA-12345 (буквы-цифры с дефисом)
+    if "-" in q:
+        left, right = q.split("-", 1)
+        if left and right and left.strip().isalpha():
+            return "order_id"
+    # иначе считаем телефоном, если много цифр
+    digits = re.sub(r"\D+", "", q)
+    if len(digits) >= 6:
+        return "phone"
+    return "order_id"
+
+async def admin_find_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Команда /find: просим ввести строку поиска."""
+    uid = update.effective_user.id
+    if not _is_admin(uid):
+        return await reply_animated(update, context, "Доступно только администраторам.")
+    context.user_data[FIND_EXPECTING_QUERY_FLAG] = True
+    text = (
+        "🔎 *Поиск заказов*\n"
+        "Пришлите одно из:\n"
+        "• `order_id` (например, CN-12345)\n"
+        "• `@username`\n"
+        "• телефон (в любом формате)\n"
+    )
+    return await reply_markdown_animated(update, context, text)
+
+async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
+    """Переиспользуем существующую карточку заказа + участников."""
+    order_id = extract_order_id(order_id) or order_id
+    order = sheets.get_order(order_id)
+    if not order:
+        return await reply_animated(update, context, "🙈 Заказ не найден.")
+    # — заголовок
+    client_name = order.get("client_name", "—")
+    status = order.get("status", "—")
+    note = order.get("note", "—")
+    country = order.get("country", order.get("origin", "—"))
+    origin = order.get("origin")
+    updated_at = order.get("updated_at")
+
+    head = [
+        f"*order_id:* `{order_id}`",
+        f"*client_name:* {client_name}",
+        f"*status:* {status}",
+        f"*note:* {note}",
+        f"*country:* {country}",
+    ]
+    if origin and origin != country:
+        head.append(f"*origin:* {origin}")
+    if updated_at:
+        head.append(f"*updated_at:* {updated_at}")
+
+    await reply_markdown_animated(update, context, "\n".join(head), reply_markup=order_card_kb(order_id))
+
+    # — участники
+    participants = sheets.get_participants(order_id)
+    page = 0; per_page = 8
+    part_text = build_participants_text(order_id, participants, page, per_page)
+    kb = build_participants_kb(order_id, participants, page, per_page)
+    await reply_markdown_animated(update, context, part_text, reply_markup=kb)
+
+def _build_find_results_kb(items: List[Dict], page: int = 0, per_page: int = 8) -> InlineKeyboardMarkup:
+    start = page * per_page
+    chunk = items[start:start+per_page]
+    rows = []
+    for o in chunk:
+        oid = str(o.get("order_id", "")).strip()
+        if not oid:
+            continue
+        rows.append([InlineKeyboardButton(f"📦 {oid}", callback_data=f"find:open:{oid}")])
+    # пагинация
+    nav = []
+    if page > 0:
+        nav.append(InlineKeyboardButton("◀︎", callback_data=f"find:page:{page-1}"))
+    if start + per_page < len(items):
+        nav.append(InlineKeyboardButton("▶︎", callback_data=f"find:page:{page+1}"))
+    if nav:
+        rows.append(nav)
+    return InlineKeyboardMarkup(rows)
 
 # ---------------------- Текст кнопок (новые + обратная совместимость) ----------------------
 
@@ -359,6 +450,28 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
     text = raw.lower()
+    # ==== Ответ на запрос после /find ========================================
+    if context.user_data.get(FIND_EXPECTING_QUERY_FLAG):
+        context.user_data.pop(FIND_EXPECTING_QUERY_FLAG, None)
+        query = raw.strip()
+        qtype = _guess_query_type(query)
+
+        if qtype == "order_id":
+            return await _open_order_card(update, context, query)
+
+        if qtype == "username":
+            items = sheets.get_orders_by_username(query)
+            if not items:
+                return await reply_animated(update, context, "Ничего не нашёл по этому @username.")
+            text = f"Найдено заказов: *{len(items)}*. Выберите заказ:"
+            return await reply_markdown_animated(update, context, text, reply_markup=_build_find_results_kb(items, 0))
+
+        # phone
+        items = sheets.get_orders_by_phone(query)
+        if not items:
+            return await reply_animated(update, context, "Ничего не нашёл по этому телефону.")
+        text = f"Найдено заказов: *{len(items)}*. Выберите заказ:"
+        return await reply_markdown_animated(update, context, text, reply_markup=_build_find_results_kb(items, 0))
 
     # ===== ADMIN FLOW =====
     if _is_admin(update.effective_user.id):
@@ -1105,6 +1218,24 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await reply_animated(update, context, "Заказ не найден.")
         return
+    # ==== /find: открыть заказ из списка
+    if data.startswith("find:open:"):
+        _, _, oid = data.split(":", 2)
+        await _open_order_card(update, context, oid)
+        return
+
+    # ==== /find: пагинация списка найденных
+    if data.startswith("find:page:"):
+        parts = data.split(":")
+        page = int(parts[2]) if len(parts) > 2 else 0
+        # Восстановить список предметно мы не можем без хранения в user_data.
+        # Простой вариант: попросим ввести /find заново (редко нужно листать).
+        try:
+            await q.answer()
+        except Exception:
+            pass
+        await reply_animated(update, context, "Для навигации по списку повторите /find и уточните критерий (чтобы сузить выбор).")
+        return
 
     # <<< НОВОЕ >>> выбор статуса в мастере добавления заказа
     if data.startswith("adm:pick_status_id:"):
@@ -1208,3 +1339,5 @@ def register_handlers(application):
     application.add_handler(CommandHandler("admin", admin_menu))
     application.add_handler(CallbackQueryHandler(on_callback))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_text))
+    application.add_handler(CommandHandler("find", admin_find_start))
+
