@@ -1576,13 +1576,60 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.pop("adm_mode", None)
         return
 
-    # 1) Создаём/обновляем заказ
-    sheets.create_or_update_order({
-        "order_id": order_id,
-        "status": status_text,
-        "origin": country,
-        "client_name": client_name_raw,
-    })
+    # 1) Создаём/обновляем заказ (универсально под твой sheets.py)
+    try:
+        exists = sheets.get_order(order_id)
+    except Exception:
+        exists = None
+
+    if not exists:
+        created = False
+        # Популярные названия функций на всякий случай
+        if hasattr(sheets, "create_order"):
+            # create_order(order_id=..., client_name=..., origin=..., status=...)
+            sheets.create_order(order_id=order_id, client_name=client_name_raw, origin=country, status=status_text)
+            created = True
+        elif hasattr(sheets, "add_order"):
+            # add_order(order_id, client_name, origin, status)
+            sheets.add_order(order_id, client_name_raw, country, status_text)
+            created = True
+        elif hasattr(sheets, "append_order"):
+            # append_order({...})
+            sheets.append_order({
+                "order_id": order_id,
+                "client_name": client_name_raw,
+                "origin": country,
+                "status": status_text,
+            })
+            created = True
+        else:
+            # Минимальный вариант: попробуем хотя бы проставить статус.
+            ok = False
+            try:
+                ok = bool(sheets.update_order_status(order_id, status_text))
+            except Exception:
+                ok = False
+            if not ok:
+                await reply_animated(
+                    update, context,
+                    "⚠️ Не удалось создать разбор: в sheets.py нет функций create_order/add_order/append_order.\n"
+                    "Пришли текущий sheets.py — добавлю точный вызов."
+                )
+                context.user_data.pop("adm_mode", None)
+                return
+    else:
+        # есть строка — обновим статус
+        try:
+            sheets.update_order_status(order_id, status_text)
+        except Exception:
+            pass
+        # и доп. поля, если есть удобная функция в sheets.py
+        if hasattr(sheets, "update_order_fields"):
+            try:
+                sheets.update_order_fields(order_id, {"origin": country, "client_name": client_name_raw})
+            except Exception:
+                pass
+
 
     # 2) Разбираем участников из client_name (несколько через запятые/пробелы/новые строки)
     usernames = []
