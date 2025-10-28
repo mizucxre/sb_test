@@ -1038,37 +1038,44 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
+
     # базовые данные
     addresses = sheets.list_addresses(u.id)
     addr = addresses[0] if addresses else {}
+
     # связанные разборы
     orders = sheets.find_orders_for_username(u.username or "") if (u.username) else []
     order_lines = []
     for oid in orders[:10]:
         o = sheets.get_order(oid) or {}
-        order_lines.append(f"• {oid} — {o.get('status','—')}")
-    more = f"\\n… и ещё {len(orders)-10}" if len(orders) > 10 else ""
-    lines = [
-        f"👤 *Профиль*",
-        f"Ник: @{(u.username or '').lower()}",
-        f"Имя в Telegram: {u.first_name or ''} {u.last_name or ''}".strip(),
-        "",
-        "*Ваши данные:*",
-        f"ФИО: {addr.get('full_name','—')}",
-        f"Телефон: {addr.get('phone','—')}",
-        f"Город: {addr.get('city','—')}",
-        f"Адрес: {addr.get('address','—')}",
-        f"Индекс: {addr.get('postcode','—')}",
-        "",
-        "*Ваши разборы:*",
-        *(order_lines or ["—"]),
-        more
-    ]
+        order_lines.append(f"• `{oid}` — {o.get('status','—')}")
+    more = f"\n… и ещё {len(orders)-10}" if len(orders) > 10 else ""
+
+    # аккуратный Markdown без лишних \n
+    text = (
+        "👤 *Профиль*\n"
+        f"*Ник:* @{(u.username or '').lower()}\n"
+        f"*Имя в Telegram:* {((u.first_name or '') + ' ' + (u.last_name or '')).strip()}\n"
+        "\n"
+        "*Ваши данные:*\n"
+        f"*ФИО:* {addr.get('full_name','—')}\n"
+        f"*Телефон:* {addr.get('phone','—')}\n"
+        f"*Город:* {addr.get('city','—')}\n"
+        f"*Адрес:* {addr.get('address','—')}\n"
+        f"*Индекс:* {addr.get('postcode','—')}\n"
+        "\n"
+        "*Ваши разборы:*\n"
+        + ("\n".join(order_lines) if order_lines else "—")
+        + more
+    )
+
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Изменить адрес", callback_data="addr:add")],
         [InlineKeyboardButton("🔔 Мои подписки", callback_data="client:subs")],
     ])
-    await reply_markdown_animated(update, context, "\\n".join([x for x in lines if x is not None]), reply_markup=kb)
+
+    await reply_markdown_animated(update, context, text, reply_markup=kb)
+
 
 # ---------- Уведомления подписчикам ----------
 
