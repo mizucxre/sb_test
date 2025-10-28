@@ -1196,9 +1196,25 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
         if not items:
             await reply_animated(update, context, "Пусто.")
             return
+
+        def flag(country: str) -> str:
+            c = (country or "").upper()
+            return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
+
+        max_len = max(len(str(o.get("order_id",""))) for o in items)
         lines = ["🕒 Последние разборы:"]
-        for o in items:
-            lines.append(f"`{o.get('order_id','')}` — {o.get('status','')}, {o.get('origin') or o.get('country') or ''}, {o.get('updated_at','')}")
+        for i, o in enumerate(items):
+            oid = str(o.get("order_id",""))
+            st  = str(o.get("status","")).strip() or "—"
+            country = (o.get("origin") or o.get("country") or "").upper()
+            # красиво форматируем время: если сегодня — показываем только HH:MM
+            dt_iso = (o.get("updated_at","") or "")
+            dt = dt_iso.replace("T", " ")
+            dt_short = dt[11:16] if len(dt) >= 16 else dt
+            if len(dt_iso) >= 10:
+                mmdd = dt_iso[5:10].replace("-", "/")
+                dt_short = f"{mmdd} {dt_short}" if i == 0 else dt_short
+            lines.append(f"{oid.ljust(max_len)} · {st} · {flag(country)} {country or '—'} · {dt_short}")
         await reply_animated(update, context, "\n".join(lines))
     finally:
         await safe_delete_message(context, loader)
