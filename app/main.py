@@ -1111,34 +1111,22 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order_lines = []
     for oid in orders[:10]:
         o = sheets.get_order(oid) or {}
-        order_lines.append(f"• {oid} — {o.get('status','—')}")
-    more = f"
-… и ещё {len(orders)-10}" if len(orders) > 10 else ""
+        order_lines.append(f"• {oid} — {o.get('status', '—')}")
+
+    # если больше 10, добавим хвост
+    more = ("\n… и ещё " + str(len(orders) - 10)) if len(orders) > 10 else ""
 
     text = (
-        f"👤 Профиль - @{(u.username or '').lower()}
-
-"
-        f"Имя - {((u.first_name or '') + ' ' + (u.last_name or '')).strip()}
-
-"
-        "Ваши данные:
-"
-        f"ФИО: {addr.get('full_name','—')}
-"
-        f"Телефон: {addr.get('phone','—')}
-"
-        f"Город: {addr.get('city','—')}
-"
-        f"Адрес: {addr.get('address','—')}
-"
-        f"Индекс: {addr.get('postcode','—')}
-
-"
-        "Ваши разборы:
-"
-        + ("
-".join(order_lines) if order_lines else "—")
+        f"👤 Профиль - @{(u.username or '').lower()}\n\n"
+        f"Имя - {((u.first_name or '') + ' ' + (u.last_name or '')).strip()}\n\n"
+        "Ваши данные:\n"
+        f"ФИО: {addr.get('full_name', '—')}\n"
+        f"Телефон: {addr.get('phone', '—')}\n"
+        f"Город: {addr.get('city', '—')}\n"
+        f"Адрес: {addr.get('address', '—')}\n"
+        f"Индекс: {addr.get('postcode', '—')}\n\n"
+        "Ваши разборы:\n"
+        + ("\n".join(order_lines) if order_lines else "—")
         + more
     )
 
@@ -1148,7 +1136,6 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ])
 
     await reply_animated(update, context, text, reply_markup=kb)
-
 
 # ---------- Уведомления подписчикам ----------
 
