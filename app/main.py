@@ -1401,5 +1401,31 @@ async def post_text_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop("adm_mode", None)
         await show_clients_page(update, context)
         return
+# === Регистрация хэндлеров для webhook ===
+from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
+
+def register_handlers(app: Application) -> None:
+    # команды
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_cmd))
+    app.add_handler(CommandHandler("admin", admin_menu))
+
+    # если у тебя есть команда /find — оставь строку ниже; если нет — можно удалить
+    try:
+        app.add_handler(CommandHandler("find", admin_find_start))
+    except NameError:
+        pass
+
+    # callbacks
+    app.add_handler(CallbackQueryHandler(on_callback))
+
+    # обычный текст — в самом конце, чтобы не перехватывать команды
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))
+
+__all__ = [
+    "register_handlers",
+    "start", "help_cmd", "admin_menu",
+    "handle_text", "on_callback",
+]
 
 # END
