@@ -1176,6 +1176,13 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
     lines = [f"📩 Уведомления по ID разбора — {order_id}"]
     ok_cnt, fail_cnt = 0, 0
 
+    # заранее собираем текст сообщения — без «многострочных f-строк»
+    msg = (
+        "💳 Напоминание по разбору *{oid}*\n"
+        "Статус: *Доставка не оплачена*\n\n"
+        "Пожалуйста, оплатите доставку. Если уже оплатили — можно игнорировать."
+    ).format(oid=order_id)
+
     for uname in usernames:
         ids = sheets.get_user_ids_by_usernames([uname]) or []
         if not ids:
@@ -1185,6 +1192,7 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
 
         uid = ids[0]
         try:
+            # подписываем на обновления статусов, если ещё не подписан
             try:
                 sheets.subscribe(uid, order_id)
             except Exception:
@@ -1192,14 +1200,7 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
 
             await application.bot.send_message(
                 chat_id=uid,
-                text=(
-                    f"💳 Напоминание по разбору *{order_id}*
-"
-                    f"Статус: *Доставка не оплачена*
-
-"
-                    f"Пожалуйста, оплатите доставку. Если уже оплатили — можно игнорировать."
-                ),
+                text=msg,
                 parse_mode="Markdown",
             )
             ok_cnt += 1
@@ -1210,8 +1211,7 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
 
     lines.append("")
     lines.append(f"_Итого:_ ✅ {ok_cnt}  ❌ {fail_cnt}")
-    return True, "
-".join(lines)
+    return True, "\n".join(lines)
 
 
 UNPAID_PAGE_KEY = "unpaid_page"
