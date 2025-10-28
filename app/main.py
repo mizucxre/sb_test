@@ -194,24 +194,25 @@ async def _render_found_cards(update: Update, context: ContextTypes.DEFAULT_TYPE
     def flag(country: str) -> str:
         c = (country or "").upper()
         return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
-    max_len = max(len(str(o.get("order_id",""))) for o in orders) if orders else 0
+    max_len = max(len(str(o.get("order_id", ""))) for o in orders) if orders else 0
     lines = ["🔎 Найденные заказы:"]
     for o in orders:
-        oid = str(o.get("order_id","")).strip()
-        status = o.get("status","—")
-        origin = o.get("origin") or o.get("country") or "—"
-        updated_at = (o.get("updated_at","") or "").replace("T"," ")[11:16]
+        oid = str(o.get("order_id", "")).strip()
+        status = str(o.get("status", "—")).strip() or "—"
+        origin = (o.get("origin") or o.get("country") or "—").upper()
+        updated_at = (o.get("updated_at", "") or "").replace("T", " ")
+        updated_at = updated_at[11:16] if len(updated_at) >= 5 else "--:--"
         part = sheets.get_participants(oid)
         unpaid = sum(1 for p in part if not p.get("paid"))
         client = o.get("client_name") or "—"
-lines.append(
-    f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {updated_at or '--:--'} · "
-    f"клиенты: {client} · долги: {unpaid}"
-)
-await reply_animated(
-    update, context,
-    "\n".join(lines) if lines else "Нет карточек."
-)
+        lines.append(
+            f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {updated_at} · "
+            f"клиенты: {client} · долги: {unpaid}"
+        )
+    await reply_animated(
+        update, context,
+        "\n".join(lines) if lines else "Нет карточек."
+    )
 
 async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
     """Переиспользуем карточку заказа + участников."""
@@ -1100,19 +1101,14 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     u = update.effective_user
-
-    # базовые данные
     addresses = sheets.list_addresses(u.id)
     addr = addresses[0] if addresses else {}
 
-    # связанные разборы
     orders = sheets.find_orders_for_username(u.username or "") if (u.username) else []
     order_lines = []
     for oid in orders[:10]:
         o = sheets.get_order(oid) or {}
         order_lines.append(f"• {oid} — {o.get('status', '—')}")
-
-    # если больше 10, добавим хвост
     more = ("\n… и ещё " + str(len(orders) - 10)) if len(orders) > 10 else ""
 
     text = (
@@ -1164,9 +1160,8 @@ async def notify_subscribers(application, order_id: str, new_status: str):
 
 
 async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str]:
-    # даже если заказа нет в orders — продолжаем по participants
     order = sheets.get_order(order_id)
-    usernames = sheets.get_unpaid_usernames(order_id)  # список username без @
+    usernames = sheets.get_unpaid_usernames(order_id)
     if order is None and not usernames:
         return False, "🙈 Заказ не найден."
     if not usernames:
@@ -1175,7 +1170,6 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
     lines = [f"📩 Уведомления по ID разбора — {order_id}"]
     ok_cnt, fail_cnt = 0, 0
 
-    # заранее собираем текст сообщения — без «многострочных f-строк»
     msg = (
         "💳 Напоминание по разбору *{oid}*\n"
         "Статус: *Доставка не оплачена*\n\n"
@@ -1191,7 +1185,6 @@ async def remind_unpaid_for_order(application, order_id: str) -> tuple[bool, str
 
         uid = ids[0]
         try:
-            # подписываем на обновления статусов, если ещё не подписан
             try:
                 sheets.subscribe(uid, order_id)
             except Exception:
@@ -1286,7 +1279,6 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
             c = (country or "").upper()
             return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
 
-        # Дата первой записи в заголовок
         first_dt = (items[0].get("updated_at", "") or "").replace("T", " ")
         first_d = first_dt[:10] if first_dt else ""
         head = "🕒 Последние разборы" + (f" — {first_d}" if first_d else "") + ":"
@@ -1295,7 +1287,7 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
         lines = [head]
         for o in items:
             oid = str(o.get("order_id", "")).strip()
-            st = str(o.get("status", "")).strip() or "—"
+            st = str(o.get("status", "—")).strip() or "—"
             country = (o.get("origin") or o.get("country") or "").upper()
             dt_iso = (o.get("updated_at", "") or "")
             dt = dt_iso.replace("T", " ")
@@ -1305,6 +1297,7 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
         await reply_animated(update, context, "\n".join(lines))
     finally:
         await safe_delete_message(context, loader)
+
 
 # ---------------------- Клиенты: список/поиск с пагинацией ----------------------
 
@@ -1332,7 +1325,6 @@ def _render_clients_page_text_kb(context: ContextTypes.DEFAULT_TYPE, query, page
             "—"
         )
     head = f"📚 Список клиентов ({page+1}/{total_pages})" + (f" — поиск: *{query}*" if query else "")
-    # nav keyboard
     nav = []
     if page > 0:
         nav.append(InlineKeyboardButton("◀︎", callback_data=f"clients:list:{page-1}"))
@@ -1361,7 +1353,6 @@ def _clients_nav_kb(page: int, total_pages: int) -> InlineKeyboardMarkup:
 
 
 async def show_clients_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # If called from callback, edit the existing message instead of sending a new one
     loader = await show_loader(update, context, "⏳ Загружаю клиентов…")
     try:
         query = context.user_data.get("clients_query")
@@ -1373,6 +1364,7 @@ async def show_clients_page(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await reply_animated(update, context, text_body, reply_markup=kb)
     finally:
         await safe_delete_message(context, loader)
+
 
 # ---------------------- Callback Router ----------------------
 
