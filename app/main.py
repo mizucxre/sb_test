@@ -1435,6 +1435,28 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data[UNPAID_PAGE_KEY] = page
         return
 
+        # === Выбор статуса при создании нового разбора (мастер) ===
+    # Поддерживаем разные варианты callback_data:
+    # 1) "status:set:<текст>"  2) "st:set:<текст>"  3) просто текст статуса как есть
+    if context.user_data.get("adm_mode") == "add_order_status":
+        status_text = None
+        if data.startswith("status:set:"):
+            status_text = data.split(":", 2)[2]
+        elif data.startswith("st:set:"):
+            status_text = data.split(":", 2)[2]
+        else:
+            # Иногда клавиатура шлёт как есть текст статуса
+            status_text = data
+
+        status_text = (status_text or "").strip()
+        if not status_text:
+            await q.answer("Статус не распознан.")
+            return
+        await _finalize_new_order(update, context, status_text)
+        await q.answer("Статус применён.")
+        return
+
+    
     # Меню статусов для одного заказа
     if data.startswith("adm:status_menu:"):
         order_id = data.split(":",2)[2]
@@ -1542,6 +1564,85 @@ async def post_text_fallback(update: Update, context: ContextTypes.DEFAULT_TYPE)
         context.user_data.pop("adm_mode", None)
         await show_clients_page(update, context)
         return
+async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE, status_text: str):
+    """Завершение мастера создания разбора: создаём заказ, участников, подписки, уведомления."""
+    buf = context.user_data.get("adm_buf") or {}
+    order_id = buf.get("order_id")
+    country  = (buf.get("country") or "").upper()
+    client_name_raw = buf.get("client_name", "").strip()
+
+    if not order_id or country not in ("CN", "KR"):
+        await reply_animated(update, context, "⚠️ Не хватает данных для создания разбора. Начните заново.")
+        context.user_data.pop("adm_mode", None)
+        return
+
+    # 1) Создаём/обновляем заказ
+    sheets.create_or_update_order({
+        "order_id": order_id,
+        "status": status_text,
+        "origin": country,
+        "client_name": client_name_raw,
+    })
+
+    # 2) Разбираем участников из client_name (несколько через запятые/пробелы/новые строки)
+    usernames = []
+    if client_name_raw:
+        for tok in re.split(r"[,\s]+", client_name_raw):
+            tok = tok.strip()
+            if tok.startswith("@"):
+                tok = tok[1:]
+            if tok:
+                usernames.append(tok)
+
+    # 3) Создаём участников в таблице и подписываем на обновления
+    for uname in usernames:
+        try:
+            sheets.add_participant(order_id, uname)
+        except Exception:
+            pass
+
+    # Подписки + уведомления о новом разборе
+    sent = 0
+    for uname in usernames:
+        try:
+            ids = sheets.get_user_ids_by_usernames([uname]) or []
+            if not ids:
+                continue
+            uid = ids[0]
+            try:
+                sheets.subscribe(uid, order_id)
+            except Exception:
+                pass
+            try:
+                await context.application.bot.send_message(
+                    chat_id=uid,
+                    text=(
+                        f"🆕 Создан новый разбор: {order_id}\n"
+                        f"Статус: {status_text}\n"
+                        f"Страна: {country}"
+                    )
+                )
+                sent += 1
+            except Exception:
+                pass
+        except Exception:
+            pass
+
+    # 4) Ответ админу
+    lines = [
+        "✅ Разбор создан:",
+        f"• ID: {order_id}",
+        f"• Статус: {status_text}",
+        f"• Страна: {country}",
+        f"• Клиенты: {client_name_raw or '—'}",
+        f"• Уведомлений отправлено: {sent}",
+    ]
+    await reply_animated(update, context, "\n".join(lines))
+
+    # 5) Сбрасываем режим
+    context.user_data.pop("adm_mode", None)
+    context.user_data.pop("adm_buf", None)
+
 # === Регистрация хэндлеров для webhook ===
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
