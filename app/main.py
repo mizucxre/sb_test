@@ -1287,22 +1287,25 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
             c = (country or "").upper()
             return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
 
-        # Заголовок с датой первой записи
-        first_dt = (items[0].get("updated_at","") or "").replace("T", " ")
+        # Дата первой записи в заголовок
+        first_dt = (items[0].get("updated_at", "") or "").replace("T", " ")
         first_d = first_dt[:10] if first_dt else ""
         head = "🕒 Последние разборы" + (f" — {first_d}" if first_d else "") + ":"
 
-        max_len = max(len(str(o.get("order_id",""))) for o in items)
+        max_len = max(len(str(o.get("order_id", ""))) for o in items)
         lines = [head]
         for o in items:
-            oid = str(o.get("order_id",""))
-            st  = str(o.get("status","")).strip() or "—"
+            oid = str(o.get("order_id", "")).strip()
+            st = str(o.get("status", "")).strip() or "—"
             country = (o.get("origin") or o.get("country") or "").upper()
-            dt_iso = (o.get("updated_at","") or "")
+            dt_iso = (o.get("updated_at", "") or "")
             dt = dt_iso.replace("T", " ")
             dt_short = dt[11:16] if len(dt) >= 16 else dt
             lines.append(f"{oid.ljust(max_len)} · {st} · {flag(country)} {country or '—'} · {dt_short}")
-await reply_animated(update, context, "\n".join(lines))
+
+        await reply_animated(update, context, "\n".join(lines))
+    finally:
+        await safe_delete_message(context, loader)
 
 # ---------------------- Клиенты: список/поиск с пагинацией ----------------------
 
