@@ -543,3 +543,81 @@ def find_orders_for_username(username: str) -> List[str]:
         if x not in seen:
             uniq.append(x); seen.add(x)
     return uniq
+# ==== Поиск заказов по username и телефону ==================================
+
+def _normalize_username(username: str) -> str:
+    return (username or "").strip().lstrip("@").lower()
+
+def _digits_only(s: str) -> str:
+    import re as _re
+    return _re.sub(r"\D+", "", str(s or ""))
+
+def get_orders_by_username(username: str) -> List[Dict[str, Any]]:
+    """
+    Найти ВСЕ заказы, где пользователь с таким @username указан участником (participants).
+    Возвращает список словарей (как get_order), отсортированный по updated_at у заказа (если есть).
+    """
+    uname = _normalize_username(username)
+    if not uname:
+        return []
+
+    ws_parts = get_worksheet("participants")
+    parts = ws_parts.get_all_records()
+    if not parts:
+        return []
+
+    order_ids = []
+    seen = set()
+    for row in parts:
+        if _normalize_username(row.get("username")) == uname:
+            oid = str(row.get("order_id", "")).strip()
+            if oid and oid not in seen:
+                seen.add(oid)
+                order_ids.append(oid)
+
+    if not order_ids:
+        return []
+
+    # Подтягиваем полные карточки из orders
+    ws_orders = get_worksheet("orders")
+    orders = ws_orders.get_all_records()
+    index = {str(r.get("order_id", "")).strip(): r for r in orders}
+
+    result = [index[oid] for oid in order_ids if oid in index]
+
+    # Сортировка по updated_at (если столбец заполнен)
+    def _key(o):
+        try:
+            return o.get("updated_at") or ""
+        except Exception:
+            return ""
+    result.sort(key=_key, reverse=True)
+    return result
+
+def get_orders_by_phone(phone: str) -> List[Dict[str, Any]]:
+    """
+    Найти заказы по телефону из листа orders (сравнение по цифрам — без пробелов и знаков).
+    """
+    needle = _digits_only(phone)
+    if not needle:
+        return []
+
+    ws_orders = get_worksheet("orders")
+    values = ws_orders.get_all_records()
+    if not values:
+        return []
+
+    result = []
+    for row in values:
+        candidate = _digits_only(row.get("phone", ""))
+        if candidate and (candidate == needle or candidate.endswith(needle) or needle.endswith(candidate)):
+            result.append(row)
+
+    # Сортировка по updated_at, как выше
+    def _key(o):
+        try:
+            return o.get("updated_at") or ""
+        except Exception:
+            return ""
+    result.sort(key=_key, reverse=True)
+    return result
