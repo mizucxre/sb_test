@@ -1751,7 +1751,7 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 3) Создаём участников в таблице и подписываем на обновления
     for uname in usernames:
         try:
-            sheets.add_participant(order_id, uname)
+            sheets.ensure_participants(order_id, usernames)
         except Exception:
             pass
 
