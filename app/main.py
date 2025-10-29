@@ -445,12 +445,14 @@ REPORTS_MENU_KB = ReplyKeyboardMarkup(
 
 def status_keyboard(cols: int = 2) -> InlineKeyboardMarkup:
     rows, row = [], []
-    for i, s in enumerate(STATUSES):
+    for i, s in enumerate(STATUSES, with_back: bool = False):
         row.append(InlineKeyboardButton(s, callback_data=f"adm:pick_status_id:{i}"))
         if len(row) == cols:
             rows.append(row); row = []
     if row:
         rows.append(row)
+        if with_back:
+        rows.append([InlineKeyboardButton("⬅️ Назад, в админ-панель", callback_data="adm:back_to_panel")])
     return InlineKeyboardMarkup(rows)
 
 # Универсальная клавиатура выбора статуса с произвольным префиксом (для массового режима)
@@ -662,7 +664,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if _is(text, ADMIN_MENU_ALIASES["admin_add"]):
             context.user_data["adm_mode"] = "add_order_id"
             context.user_data["adm_buf"] = {}
-            await reply_markdown_animated(update, context, "➕ Введи *order_id* (например: `CN-12345`):")
+            await reply_markdown_animated(update, context, "➕ Введи *order_id* (например: `CN-12345`):", reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
             return
 
         if _is(text, ADMIN_MENU_ALIASES["admin_reports"]):
@@ -752,17 +754,17 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             norm = extract_order_id(raw) or raw
             prefix = (norm.split("-",1)[0] if "-" in norm else "").upper()
             if prefix not in ("CN","KR"):
-                await reply_animated(update, context, "Неверный order_id. Пример: CN-12345")
+            await reply_animated(update, context, \"Неверный order_id\. Пример: CN-12345\", reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
                 return
             context.user_data["adm_buf"] = {"order_id": norm, "country": prefix}
             context.user_data["adm_mode"] = "add_order_client"
-            await reply_animated(update, context, "Имя клиента (можно несколько @username):")
+            await reply_animated(update, context, "Имя клиента (можно несколько @username):", reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
             return
 
         if a_mode == "add_order_client":
             context.user_data["adm_buf"]["client_name"] = raw
             context.user_data["adm_mode"] = "add_order_status"
-            await reply_animated(update, context, "Выбери стартовый статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2))
+            await reply_animated(update, context, "Выбери стартовый статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2, with_back=True))
             return
 
         if a_mode == "add_order_status":
@@ -771,7 +773,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             context.user_data["adm_buf"]["status"] = raw.strip()
             context.user_data["adm_mode"] = "add_order_note"
-            await reply_animated(update, context, "Примечание (или '-' если нет):")
+            await reply_animated(update, context, "Примечание (или '-' если нет):", reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
             return
 
         if a_mode == "add_order_note":
@@ -1749,7 +1751,7 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
                 usernames.append(tok)
 
     # 3) Создаём участников в таблице и подписываем на обновления
-    for uname in usernames:
+    if usernames:
         try:
             sheets.ensure_participants(order_id, usernames)
         except Exception:
