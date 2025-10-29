@@ -682,7 +682,6 @@ def ensure_participants(order_id: str, usernames: List[str]) -> None:
         to_add.append([order_id, uname, "FALSE", "", now, now])
 
     if to_add:
-        # добавляем строки; не добавляем дублирующий заголовок, если лист уже создан
         all_vals = ws.get_all_values()
         if not all_vals:
             ws.append_row(["order_id", "username", "paid", "qty", "created_at", "updated_at"])
