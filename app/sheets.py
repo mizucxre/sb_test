@@ -781,3 +781,21 @@ def find_orders_for_username(username: str) -> List[str]:
         if x not in seen:
             uniq.append(x); seen.add(x)
     return uniq
+
+# --- Compatibility wrappers for main.py ---
+def create_order(order: Dict[str, Any] = None, **kwargs) -> None:
+    """Create (or upsert) order; delegates to add_order to avoid code duplication."""
+    data = dict(order or {})
+    data.update(kwargs)
+    add_order(data)
+
+def append_order(order: Dict[str, Any]) -> None:
+    """Append (or upsert) order; delegates to add_order."""
+    add_order(order)
+
+def update_order_fields(order_id: str, fields: Dict[str, Any]) -> None:
+    """Update a subset of fields on an order. Uses add_order upsert semantics."""
+    data = dict(fields or {})
+    data['order_id'] = order_id
+    add_order(data)
+
