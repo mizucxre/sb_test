@@ -53,6 +53,29 @@ STATUSES = [
     "✅ получен заказчиком",
 ]
 
+
+
+# --- Нормализация статуса (человеческий текст вместо adm:pick_status_id:N) ---
+def normalize_status(raw: str) -> str:
+    if not raw:
+        return "—"
+    s = str(raw)
+    m = re.search(r'(?:^|:)pick_status_id:(\d+)$', s)
+    if m:
+        try:
+            i = int(m.group(1))
+            if 0 <= i < len(STATUSES):
+                return STATUSES[i]
+        except Exception:
+            pass
+    if s.startswith('adm:pick_status_id:'):
+        try:
+            i = int(s.split(':')[-1])
+            if 0 <= i < len(STATUSES):
+                return STATUSES[i]
+        except Exception:
+            pass
+    return s
 UNPAID_STATUS = "доставка не оплачена"
 
 ORDER_ID_RE = re.compile(r"([A-ZА-Я]{1,3})[ \\-–—_]*([A-Z0-9]{2,})", re.IGNORECASE)
@@ -214,37 +237,39 @@ async def _render_found_cards(update: Update, context: ContextTypes.DEFAULT_TYPE
         "\n".join(lines) if lines else "Нет карточек."
     )
 
+
 async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
-    """Переиспользуем карточку заказа + участников."""
+    """Расширенная карточка заказа (без блока 'Клиенты'), с участниками и нормализованным статусом."""
     order_id = extract_order_id(order_id) or order_id
     order = sheets.get_order(order_id)
     if not order:
         return await reply_animated(update, context, "🙈 Заказ не найден.")
-    # — заголовок
-    client_name = order.get("client_name", "—")
-    status = order.get("status", "—")
+
+    def flag(c: str) -> str:
+        c = (c or "").upper()
+        return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
+
+    st = normalize_status(order.get("status", "—"))
+    orig = (order.get("origin") or order.get("country") or "—").upper()
+    dt = (order.get("updated_at","") or "").replace("T"," ")
     note = order.get("note", "—")
-    country = order.get("country", order.get("origin", "—"))
-    origin = order.get("origin")
-    updated_at = order.get("updated_at")
 
-    head = [
-        f"*order_id:* `{order_id}`",
-        f"*client_name:* {client_name}",
-        f"*status:* {status}",
-        f"*note:* {note}",
-        f"*country:* {country}",
+    head_lines = [
+        f"📦 {order_id}",
+        f"Статус: {st}",
+        f"Страна: {flag(orig)} {orig}",
+        f"Обновлено: {dt or '—'}",
     ]
-    if origin and origin != country:
-        head.append(f"*origin:* {origin}")
-    if updated_at:
-        head.append(f"*updated_at:* {updated_at}")
+    if note and note != "—":
+        head_lines.append(f"Заметка: {note}")
 
-    await reply_animated(update, context, "\n".join(head), reply_markup=order_card_kb(order_id))
+    # Отправим заголовок карточки
+    await reply_animated(update, context, "\n".join(head_lines), reply_markup=order_card_kb(order_id))
 
-    # — участники
+    # Участники (постранично)
     participants = sheets.get_participants(order_id)
-    page = 0; per_page = 8
+    page = 0
+    per_page = 8
     part_text = build_participants_text(order_id, participants, page, per_page)
     kb = build_participants_kb(order_id, participants, page, per_page)
     await reply_animated(update, context, part_text, reply_markup=kb)
