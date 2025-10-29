@@ -1585,16 +1585,48 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     if not exists:
         created = False
         # Популярные названия функций на всякий случай
+    if not exists:
+        created = False
+        # Популярные названия функций на всякий случай
         if hasattr(sheets, "create_order"):
-            # create_order(order_id=..., client_name=..., origin=..., status=...)
-            sheets.create_order(order_id=order_id, client_name=client_name_raw, origin=country, status=status_text)
+            # пробуем dict, если сигнатура другая — пробуем kwargs
+            try:
+                sheets.create_order({
+                    "order_id": order_id,
+                    "client_name": client_name_raw,
+                    "origin": country,
+                    "status": status_text,
+                })
+            except TypeError:
+                sheets.create_order(
+                    order_id=order_id,
+                    client_name=client_name_raw,
+                    origin=country,
+                    status=status_text,
+                )
             created = True
+
         elif hasattr(sheets, "add_order"):
-            # add_order(order_id, client_name, origin, status)
-            sheets.add_order(order_id, client_name_raw, country, status_text)
+            # твой случай: add_order принимает dict, а не 4 позиционных
+            try:
+                sheets.add_order({
+                    "order_id": order_id,
+                    "client_name": client_name_raw,
+                    "origin": country,
+                    "status": status_text,
+                })
+            except TypeError:
+                # Если вдруг ожидались kwargs
+                sheets.add_order(
+                    order_id=order_id,
+                    client_name=client_name_raw,
+                    origin=country,
+                    status=status_text,
+                )
             created = True
+
         elif hasattr(sheets, "append_order"):
-            # append_order({...})
+            # append_order тоже обычно ждёт dict
             sheets.append_order({
                 "order_id": order_id,
                 "client_name": client_name_raw,
@@ -1602,8 +1634,9 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
                 "status": status_text,
             })
             created = True
+
         else:
-            # Минимальный вариант: попробуем хотя бы проставить статус.
+            # Минимальный фолбэк — хотя бы статус
             ok = False
             try:
                 ok = bool(sheets.update_order_status(order_id, status_text))
