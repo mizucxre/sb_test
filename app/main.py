@@ -445,14 +445,12 @@ REPORTS_MENU_KB = ReplyKeyboardMarkup(
 
 def status_keyboard(cols: int = 2) -> InlineKeyboardMarkup:
     rows, row = [], []
-    for i, s in enumerate(STATUSES, with_back: bool = False):
+    for i, s in enumerate(STATUSES):
         row.append(InlineKeyboardButton(s, callback_data=f"adm:pick_status_id:{i}"))
         if len(row) == cols:
             rows.append(row); row = []
     if row:
         rows.append(row)
-        if with_back:
-        rows.append([InlineKeyboardButton("⬅️ Назад, в админ-панель", callback_data="adm:back_to_panel")])
     return InlineKeyboardMarkup(rows)
 
 # Универсальная клавиатура выбора статуса с произвольным префиксом (для массового режима)
@@ -754,7 +752,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             norm = extract_order_id(raw) or raw
             prefix = (norm.split("-",1)[0] if "-" in norm else "").upper()
             if prefix not in ("CN","KR"):
-            await reply_animated(update, context, \"Неверный order_id\. Пример: CN-12345\", reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
+                await reply_animated(update, context, "Неверный order_id. Пример: CN-12345")
                 return
             context.user_data["adm_buf"] = {"order_id": norm, "country": prefix}
             context.user_data["adm_mode"] = "add_order_client"
@@ -769,7 +767,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if a_mode == "add_order_status":
             if not is_valid_status(raw, STATUSES):
-                await reply_animated(update, context, "Выбери статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2))
+                await reply_animated(update, context, "Выбери статус кнопкой ниже или напиши точный:", reply_markup=status_keyboard(2, with_back=True))
                 return
             context.user_data["adm_buf"]["status"] = raw.strip()
             context.user_data["adm_mode"] = "add_order_note"
@@ -1827,3 +1825,17 @@ __all__ = [
 ]
 
 # END
+
+
+def status_keyboard(cols: int = 2, with_back: bool = False) -> InlineKeyboardMarkup:
+    rows, row = [], []
+    for i, s in enumerate(STATUSES):
+        row.append(InlineKeyboardButton(s, callback_data=f"adm:pick_status_id:{i}"))
+        if len(row) == cols:
+            rows.append(row); row = []
+    if row:
+        rows.append(row)
+    if with_back:
+        rows.append([InlineKeyboardButton("⬅️ Назад, в админ-панель", callback_data="adm:back_to_panel")])
+    return InlineKeyboardMarkup(rows)
+
