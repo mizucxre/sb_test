@@ -53,6 +53,44 @@ STATUSES = [
     "✅ получен заказчиком",
 ]
 
+import re
+
+STATUS_TITLES_FALLBACK = [
+    "🧾 выкуплен",
+    "📦 отправка на адрес (Корея)",
+    "📦 отправка на адрес (Китай)",
+    "📦 приехал на адрес (Корея)",
+    "📦 приехал на адрес (Китай)",
+    "🚚 ожидает доставку в Казахстан",
+    "🚚 отправлен на адрес в Казахстан",
+    "📦 приехал админу в Казахстан",
+    "📦 ожидает отправку по Казахстану",
+    "🚚 отправлен по Казахстану",
+    "✅ получен заказчиком",
+]
+
+def normalize_status(raw: str) -> str:
+    s = str(raw or "—")
+    # adm:pick_status_id:N  |  pick_status_id:N
+    m = re.search(r'(?:^|:)pick_status_id:(\d+)$', s)
+    if m:
+        try:
+            i = int(m.group(1))
+            lst = globals().get("STATUSES") or STATUS_TITLES_FALLBACK
+            if 0 <= i < len(lst):
+                # STATUSES может быть списком строк или кортежей (текст, callback)
+                return lst[i][0] if isinstance(lst[0], (list, tuple)) else lst[i]
+        except Exception:
+            pass
+    if s.startswith("adm:pick_status_id:"):
+        try:
+            i = int(s.split(":")[-1])
+            lst = globals().get("STATUSES") or STATUS_TITLES_FALLBACK
+            if 0 <= i < len(lst):
+                return lst[i][0] if isinstance(lst[0], (list, tuple)) else lst[i]
+        except Exception:
+            pass
+    return s
 
 
 # --- Нормализация статуса (человеческий текст вместо adm:pick_status_id:N) ---
@@ -214,28 +252,34 @@ def _build_find_results_kb(items: List[Dict], page: int = 0, per_page: int = 8) 
 
 async def _render_found_cards(update: Update, context: ContextTypes.DEFAULT_TYPE, orders: List[Dict]):
     """Вывести краткие карточки по каждому найденному разбору (одним сообщением, без Markdown)."""
+    if not orders:
+        return await reply_animated(update, context, "Нет карточек.")
+
     def flag(country: str) -> str:
         c = (country or "").upper()
         return "🇨🇳" if c == "CN" else "🇰🇷" if c == "KR" else "🏳️"
-    max_len = max(len(str(o.get("order_id", ""))) for o in orders) if orders else 0
+
+    max_len = max(len(str(o.get("order_id", ""))) for o in orders)
     lines = ["🔎 Найденные заказы:"]
+
     for o in orders:
         oid = str(o.get("order_id", "")).strip()
-        status = str(o.get("status", "—")).strip() or "—"
+        status = normalize_status(o.get("status"))
         origin = (o.get("origin") or o.get("country") or "—").upper()
-        updated_at = (o.get("updated_at", "") or "").replace("T", " ")
-        updated_at = updated_at[11:16] if len(updated_at) >= 5 else "--:--"
-        part = sheets.get_participants(oid)
+
+        dt_iso = (o.get("updated_at", "") or "").replace("T", " ")
+        dt_short = dt_iso[11:16] if len(dt_iso) >= 16 else "--:--"
+
+        part = sheets.get_participants(oid) or []
         unpaid = sum(1 for p in part if not p.get("paid"))
         client = o.get("client_name") or "—"
+
         lines.append(
-            f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {updated_at} · "
+            f"{oid.ljust(max_len)} · {status} · {flag(origin)} {origin} · {dt_short} · "
             f"клиенты: {client} · долги: {unpaid}"
         )
-    await reply_animated(
-        update, context,
-        "\n".join(lines) if lines else "Нет карточек."
-    )
+
+    await reply_animated(update, context, "\n".join(lines))
 
 
 async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
@@ -1310,15 +1354,20 @@ async def show_last_orders(update: Update, context: ContextTypes.DEFAULT_TYPE, l
 
         max_len = max(len(str(o.get("order_id", ""))) for o in items)
         lines = [head]
+
         for o in items:
             oid = str(o.get("order_id", "")).strip()
-            st = str(o.get("status", "—")).strip() or "—"
+            st = normalize_status(o.get("status"))
             country = (o.get("origin") or o.get("country") or "").upper()
             dt_iso = (o.get("updated_at", "") or "")
             dt = dt_iso.replace("T", " ")
             dt_short = dt[11:16] if len(dt) >= 16 else dt
-            lines.append(f"{oid.ljust(max_len)} · {st} · {flag(country)} {country or '—'} · {dt_short}")
 
+            lines.append(
+                f"{oid.ljust(max_len)} · {st} · {flag(country)} {country or '—'} · {dt_short}"
+            )
+
+        # ВАЖНО: кавычки и .join на одной строке!
         await reply_animated(update, context, "\n".join(lines))
     finally:
         await safe_delete_message(context, loader)
