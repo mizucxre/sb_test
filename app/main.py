@@ -206,7 +206,7 @@ def _guess_query_type(q: str) -> str:
         if left and right and left.strip().isalpha():
             return "order_id"
     # иначе считаем телефоном, если много цифр
-    digits = re.sub(r"\\D+", "", q)
+    digits = re.sub(r"\D+", "", q)
     if len(digits) >= 6:
         return "phone"
     return "order_id"
@@ -630,7 +630,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 3) phone
             for t in tokens:
-                if len(re.sub(r"\\D+","",t)) >= 6 and not t.startswith("@") and not extract_order_id(t):
+                if len(re.sub(r"\D+","",t)) >= 6 and not t.startswith("@") and not extract_order_id(t):
                     for od in sheets.get_orders_by_phone(t):
                         oid = str(od.get("order_id","")).strip()
                         if oid and oid not in seen:
@@ -813,7 +813,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # Ручная рассылка по нескольким order_id
         if a_mode == "adm_remind_unpaid_order":
-            tokens = [t for t in re.split(r"[,\\s]+", raw.strip()) if t]
+            tokens = [t for t in re.split(r"[\s,]+", raw.strip()) if t]
             ids = []
             seen = set()
             for t in tokens:
@@ -837,7 +837,7 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
         if a_mode == "mass_update_status_ids":
-            tokens = [t for t in re.split(r"[,\s]+", raw.strip()) if t]
+            tokens = [t for t in re.split(r"[\s,]+", raw.strip()) if t]
             ids = []
             seen = set()
             for t in tokens:
@@ -1741,7 +1741,7 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     # 2) Разбираем участников из client_name (несколько через запятые/пробелы/новые строки)
     usernames = []
     if client_name_raw:
-        for tok in re.split(r"[,\s]+", client_name_raw):
+        for tok in re.split(r"[\s,]+", client_name_raw):
             tok = tok.strip()
             if tok.startswith("@"):
                 tok = tok[1:]
@@ -1838,4 +1838,3 @@ def status_keyboard(cols: int = 2, with_back: bool = False) -> InlineKeyboardMar
     if with_back:
         rows.append([InlineKeyboardButton("⬅️ Назад, в админ-панель", callback_data="adm:back_to_panel")])
     return InlineKeyboardMarkup(rows)
-
