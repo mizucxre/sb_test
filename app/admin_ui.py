@@ -78,11 +78,9 @@ def _hash_pwd(login: str, password: str) -> str:
 
 def _admins_ws():
     ws = sheets.get_worksheet("admins")
-    # Не ломаем существующую таблицу; заголовок может отличаться.
     vals = ws.get_all_values()
     if not vals:
         ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
-    # гарантируем владельца из ENV
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
     owner_avatar = os.getenv("ADMIN_AVATAR", "")
@@ -102,7 +100,6 @@ def _admins_ws():
                     pass
         except Exception:
             pass
-        # удалить дубликаты
         for extra in found_rows[1:][::-1]:
             try:
                 ws.delete_rows(extra)
@@ -201,11 +198,11 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
         pass
 
 # ------------------ HTML ------------------
-_LOGIN_HTML = """
+_LOGIN_HTML = '''
 <!doctype html>
-<html lang=\"ru\">
-<meta charset=\"utf-8\" />
-<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+<html lang="ru">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SEABLUU — Вход</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
@@ -217,14 +214,14 @@ _LOGIN_HTML = """
   .gap { height:10px; }
   .err { color:#ff9aa2; font-size:13px; min-height:16px; }
 </style>
-<div class=\"card\">
+<div class="card">
   <h1>SEABLUU — Вход</h1>
-  <div class=\"err\" id=\"err\"></div>
-  <input id=\"login\" placeholder=\"Логин\" autocomplete=\"username\" />
-  <div class=\"gap\"></div>
-  <input id=\"pwd\" type=\"password\" placeholder=\"Пароль\" autocomplete=\"current-password\" />
-  <div class=\"gap\"></div>
-  <button id=\"btnLogin\" onclick=\"doLogin()\">Войти</button>
+  <div class="err" id="err"></div>
+  <input id="login" placeholder="Логин" autocomplete="username" />
+  <div class="gap"></div>
+  <input id="pwd" type="password" placeholder="Пароль" autocomplete="current-password" />
+  <div class="gap"></div>
+  <button id="btnLogin" onclick="doLogin()">Войти</button>
 </div>
 <script>
 async function doLogin(){
@@ -242,7 +239,7 @@ window.doLogin = doLogin;
 window.onerror = function(msg, src, line, col, err){ try{ var el=document.getElementById('err'); if(el) el.innerText='Ошибка: '+msg; }catch(e){} if(window.console&&console.error) console.error(msg, err); };
 </script>
 </html>
-"""
+'''
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -252,11 +249,11 @@ async def admin_page(request: Request) -> str:
         return _LOGIN_HTML
 
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
-    html = """
+    html = '''
 <!doctype html>
-<html lang=\"ru\">
-<meta charset=\"utf-8\" />
-<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+<html lang="ру">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SEABLUU — Админ‑панель</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
@@ -266,8 +263,8 @@ async def admin_page(request: Request) -> str:
   h1 { margin:0; font-size:18px; }
   .wrap { max-width:1100px; margin:18px auto; padding:0 12px; }
   .tabs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
-  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; cursor:pointer; }
-  .active { background:#24304d; }
+  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; text-decoration:none; color:var(--ink); }
+  .tab.active { background:#24304d; }
   .list { margin-top:16px; display:grid; gap:10px; }
   .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }
   .item.home{max-width:820px;margin:12px auto 0}
@@ -278,11 +275,11 @@ async def admin_page(request: Request) -> str:
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
   .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
   .muted { color:#c7d2fe99; font-size:13px; }
-  .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
+  .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ебff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50}
   .overlay.show{display:flex}
-  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ебff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
   /* чат */
   .chat{display:grid; gap:10px; max-width:900px; margin:0 auto}
   .msg{display:grid; grid-template-columns:40px 1fr; gap:10px; align-items:flex-start}
@@ -290,86 +287,116 @@ async def admin_page(request: Request) -> str:
   .bubble{background:#1c233b; border:1px solid var(--muted); padding:8px 10px; border-radius:12px}
   .msg.me .bubble{background:#24304d}
   .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--muted)}
+  /* вкладки без JS */
+  .section{display:none}
+  .section:target{display:block}
+  #tab_home{display:block}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
-  <div class=\"row\"><span class=\"muted\">__USER__</span> <button onclick=\"logout()\">Выйти</button></div>
+  <div class="row"><span class="muted">__USER__</span> <button onclick="logout()">Выйти</button></div>
 </header>
-<div class=\"wrap\">
-  <div class=\"tabs\">
-    <div class=\"tab active\" data-tab=\"home\" onclick=\"openTab('home')\">Главная</div>
-    <div class=\"tab\" data-tab=\"orders\" onclick=\"openTab('orders')\">Заказы</div>
-    <div class=\"tab\" data-tab=\"create\" onclick=\"openTab('create')\">Создать разбор</div>
-    <div class=\"tab\" data-tab=\"clients\" onclick=\"openTab('clients')\">Клиенты</div>
-    <div class=\"tab\" data-tab=\"addresses\" onclick=\"openTab('addresses')\">Адреса</div>
-    <div class=\"tab\" data-tab=\"admins\" onclick=\"openTab('admins')\">Админы</div>
-    <div class=\"tab\" data-tab=\"chat\" onclick=\"openTab('chat')\">Чат</div>
+
+<div class="wrap">
+  <div class="tabs">
+    <a class="tab active" href="#tab_home">Главная</a>
+    <a class="tab" href="#tab_orders">Заказы</a>
+    <a class="tab" href="#tab_create">Создать разбор</a>
+    <a class="tab" href="#tab_clients">Клиенты</a>
+    <a class="tab" href="#tab_addresses">Адреса</a>
+    <a class="tab" href="#tab_admins">Админы</a>
+    <a class="tab" href="#tab_chat">Чат</a>
   </div>
 
-  <div id=\"tab_home\"> 
-    <div class=\"item home\"><div class=\"oid\">Быстрые действия</div><div>
-      <div class=\"row\" style=\"margin-top:8px\">
-        <button onclick=\"openTab('orders')\">Открыть «Заказы»</button>
-        <button onclick=\"openTab('create')\">Создать разбор</button>
-        <button onclick=\"openTab('clients')\">Список клиентов</button>
-        <button onclick=\"openTab('chat')\">Чат</button>
+  <div id="tab_home" class="section">
+    <div class="item home"><div class="oid">Быстрые действия</div><div>
+      <div class="row" style="margin-top:8px">
+        <a class="tab" href="#tab_orders">Открыть «Заказы»</a>
+        <a class="tab" href="#tab_create">Создать разбор</a>
+        <a class="tab" href="#tab_clients">Список клиентов</a>
+        <a class="tab" href="#tab_chat">Чат</a>
       </div>
-      <div class=\"muted\" style=\"margin-top:8px\">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
+      <div class="muted" style="margin-top:8px">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
     </div></div>
 
-  <div id=\"tab_orders\" hidden>
-    <div class=\"search\">
-      <input id=\"q\" placeholder=\"order_id / @username / телефон\" />
-      <button id=\"btnSearch\" class=\"btn\" onclick=\"runSearch()\">Искать</button>
+  <div id="tab_orders" class="section">
+    <div class="search">
+      <input id="q" placeholder="order_id / @username / телефон" />
+      <button id="btnSearch" class="btn" onclick="runSearch()">Искать</button>
     </div>
-    <div id=\"list\" class=\"list\"></div>
+    <div id="list" class="list"></div>
   </div>
 
-  <div id=\"tab_create\" hidden>
-    <div class=\"row\" style=\"margin-top:10px\">
-      <input id=\"c_order_id\" placeholder=\"только цифры (например 12345)\" inputmode=\"numeric\" pattern=\"[0-9]*\" oninput=\"this.value=this.value.replace(/\\\\D+/g,'')\" />
-      <select id=\"c_origin\"> <option value=\"CN\">CN</option> <option value=\"KR\">KR</option> </select>
-      <select id=\"c_status\"> __OPTIONS__ </select>
+  <div id="tab_create" class="section">
+    <div class="row" style="margin-top:10px">
+      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/\\D+/g,'')" />
+      <select id="c_origin"> <option value="CN">CN</option> <option value="KR">KR</option> </select>
+      <select id="c_status"> __OPTIONS__ </select>
     </div>
-    <div class=\"row\" style=\"margin-top:10px\">
-      <input id=\"c_clients\" placeholder=\"клиенты через запятую (@user1, @user2)\" style=\"min-width:420px\" />
-      <input id=\"c_note\" placeholder=\"заметка\" style=\"min-width:260px\" />
-      <button id=\"btnCreate\" class=\"btn\" onclick=\"createOrder()\">Создать</button>
+    <div class="row" style="margin-top:10px">
+      <input id="c_clients" placeholder="клиенты через запятую (@user1, @user2)" style="min-width:420px" />
+      <input id="c_note" placeholder="заметка" style="min-width:260px" />
+      <button id="btnCreate" class="btn" onclick="createOrder()">Создать</button>
     </div>
-    <div id=\"c_msg\" class=\"muted\" style=\"margin-top:8px\"></div>
+    <div id="c_msg" class="muted" style="margin-top:8px"></div>
   </div>
 
-  <div id=\"tab_clients\" hidden>
-    <div class=\"search\"><input id=\"cq\" placeholder=\"поиск по имени/телефону/username\"/> <button id=\"btnClients\" class=\"btn\" onclick=\"loadClients()\">Найти</button></div>
-    <div id=\"clients\" class=\"list\"></div>
+  <div id="tab_clients" class="section">
+    <div class="search"><input id="cq" placeholder="поиск по имени/телефону/username"/> <button id="btnClients" class="btn" onclick="loadClients()">Найти</button></div>
+    <div id="clients" class="list"></div>
   </div>
 
-  <div id=\"tab_addresses\" hidden>
-    <div class=\"search\"><input id=\"aq\" placeholder=\"username для фильтра (необязательно)\"/> <button id=\"btnAddr\" class=\"btn\" onclick=\"loadAddresses()\">Загрузить</button></div>
-    <div id=\"addresses\" class=\"list\"></div>
+  <div id="tab_addresses" class="section">
+    <div class="search"><input id="aq" placeholder="username для фильтра (необязательно)"/> <button id="btnAddr" class="btn" onclick="loadAddresses()">Загрузить</button></div>
+    <div id="addresses" class="list"></div>
   </div>
 
-  <div id=\"tab_admins\" hidden>
-    <div class=\"search\">
-      <input id=\"a_login\" placeholder=\"новый логин\" />
-      <input id=\"a_pwd\" type=\"password\" placeholder=\"пароль\" />
-      <input id=\"a_avatar\" placeholder=\"avatar url (необязательно)\" style=\"min-width:320px\" />
-      <button id=\"btnAddAdmin\" class=\"btn\" onclick=\"addAdmin()\">Добавить админа</button>
+  <div id="tab_admins" class="section">
+    <div class="search">
+      <input id="a_login" placeholder="новый логин" />
+      <input id="a_pwd" type="password" placeholder="пароль" />
+      <input id="a_avatar" placeholder="avatar url (необязательно)" style="min-width:320px" />
+      <button id="btnAddAdmin" class="btn" onclick="addAdmin()">Добавить админа</button>
     </div>
-    <div id=\"admins\" class=\"list\"></div>
+    <div id="admins" class="list"></div>
   </div>
 
-  <div id=\"tab_chat\" hidden>
-    <div class=\"chat\" id=\"chat\"></div>
-    <div class=\"row\" style=\"margin-top:12px; max-width:900px; margin-left:auto; margin-right:auto;\">
-      <input id=\"ch_text\" placeholder=\"Сообщение… Поддерживаются @username и CN-12345\" style=\"flex:1\" />
-      <input id=\"ch_ref\" placeholder=\"Привязка (например CN-12345 или @username)\" style=\"min-width:260px\" />
-      <button id=\"btnSend\" onclick=\"sendMsg()\">Отправить</button>
+  <div id="tab_chat" class="section">
+    <div class="chat" id="chat"></div>
+    <div class="row" style="margin-top:12px; max-width:900px; margin-left:auto; margin-right:auto;">
+      <input id="ch_text" placeholder="Сообщение… Поддерживаются @username и CN-12345" style="flex:1" />
+      <input id="ch_ref" placeholder="Привязка (например CN-12345 или @username)" style="min-width:260px" />
+      <button id="btnSend" onclick="sendMsg()">Отправить</button>
     </div>
   </div>
 </div>
-<div id=\"overlay\" class=\"overlay\"><div class=\"spinner\">Загрузка…</div></div>
-<div id=\"toast\" class=\"toast\"></div>
+<div id="overlay" class="overlay"><div class="spinner">Загрузка…</div></div>
+<div id="toast" class="toast"></div>
+
+<script>
+(function(){
+  function setActive(){
+    var id = location.hash || '#tab_home';
+    try{
+      var secs=document.querySelectorAll('.section');
+      for(var i=0;i<secs.length;i++){ secs[i].style.display='none'; }
+      var el=document.querySelector(id); if(el){ el.style.display='block'; }
+      var tabs=document.querySelectorAll('.tabs .tab');
+      for(var j=0;j<tabs.length;j++){ tabs[j].classList.toggle('active', tabs[j].getAttribute('href')===id); }
+      if(id==='#tab_orders') runSearch();
+      if(id==='#tab_clients') loadClients();
+      if(id==='#tab_addresses') loadAddresses();
+      if(id==='#tab_admins') loadAdmins();
+      if(id==='#tab_chat') loadChat();
+    }catch(e){}
+  }
+  window.addEventListener('hashchange', setActive);
+  window.addEventListener('DOMContentLoaded', setActive);
+  window.setActiveTab = setActive;
+  window.logout = function(){ fetch('/admin/api/logout',{method:'POST'}).then(function(){ location.reload(); }); };
+})();
+</script>
+
 <script>
 const STATUSES = __STATUSES__;
 let __pending=0;
@@ -383,22 +410,9 @@ async function api(path, opts={}){
     if(!r.ok){ data = Object.assign({ok:false}, data||{}); if(!data.error) data.error = 'HTTP '+r.status; }
     return data;
   } finally { __pending--; if(__pending<=0) overlay(false); }
-}}, opts)); return await r.json(); }
-  finally { __pending--; if(__pending<=0) overlay(false); }
 }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
-function openTab(name){
-  for(const id of ['home','orders','create','clients','addresses','admins','chat']){
-    const box=document.getElementById('tab_'+id); if(box) box.hidden = (id!==name);
-    const el=document.querySelector('.tab[data-tab="'+id+'"]'); if(el) el.classList.toggle('active', id===name);
-  }
-  if(name==='orders') runSearch();
-  if(name==='clients') loadClients();
-  if(name==='addresses') loadAddresses();
-  if(name==='admins') loadAdmins();
-  if(name==='chat') loadChat();
-}
 async function runSearch(){
   const b=document.getElementById('btnSearch'); if(b) b.disabled=true;
   try{
@@ -407,19 +421,6 @@ async function runSearch(){
     const list = document.getElementById('list'); list.innerHTML='';
     if(!data || data.ok===false){ list.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
     if(!data.items || !data.items.length){ list.innerHTML='<div class="muted">Ничего не найдено.</div>'; return; }
-    for(const o of data.items){
-      const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
-      const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
-      div.innerHTML=`<div class=\"oid\">${o.order_id||''}</div><div>
-        <div>Статус: <b>${statusName(o.status)}</b></div>
-        <div class=\"muted\">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
-        <div class=\"row\" style=\"margin-top:8px\">
-          <select id=\"pick_${o.order_id}\">${opts}</select>
-          <button class=\"btn\" onclick=\"saveStatus('${o.order_id}', this)\">Сохранить статус</button>
-        </div></div>`; list.appendChild(div);
-    }
-  } finally{ if(b) b.disabled=false; }
-}
     for(const o of data.items){
       const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
       const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
@@ -448,19 +449,18 @@ async function createOrder(){
     toast(r.ok?'Разбор создан':(r.error||'Ошибка'));
   } finally{ if(b) b.disabled=false; }
 }
-async function loadClients(){ const b=document.getElementById('btnClients'); if(b) b.disabled=true; try{ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const c of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${c.username||''}</div><div><div>${c.full_name||'—'} — ${c.phone||'—'}</div><div class=\"muted\">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
-async function loadAddresses(){ const b=document.getElementById('btnAddr'); if(b) b.disabled=true; try{ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${a.username||a.user_id||''}</div><div><div>${a.full_name||'—'} — ${a.phone||'—'}</div><div class=\"muted\">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
-async function loadAdmins(){ const data=await api('/api/admins'); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет админов</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; const av=a.avatar?`<img class=\"avatar\" src=\"${a.avatar}\" alt=\"${a.login}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; div.innerHTML=`<div>${av}</div><div><div>${a.login} — <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);} }
+async function loadClients(){ const b=document.getElementById('btnClients'); if(b) b.disabled=true; try{ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет записей</div>'; return; } for(const c of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${c.username||''}</div><div><div>${c.full_name||'—'} — ${c.phone||'—'}</div><div class=\"muted\">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAddresses(){ const b=document.getElementById('btnAddr'); if(b) b.disabled=true; try{ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${a.username||a.user_id||''}</div><div><div>${a.full_name||'—'} — ${a.phone||'—'}</div><div class=\"muted\">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAdmins(){ const data=await api('/api/admins'); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет админов</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; const av=a.avatar?`<img class=\"avatar\" src=\"${a.avatar}\" alt=\"${a.login}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; div.innerHTML=`<div>${av}</div><div><div>${a.login} — <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);} }
 async function addAdmin(){ const b=document.getElementById('btnAddAdmin'); if(b) b.disabled=true; try{ const login=document.getElementById('a_login').value.trim(); const password=document.getElementById('a_pwd').value; const avatar=document.getElementById('a_avatar').value.trim(); const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})}); if(!r.ok){ toast(r.error||'Ошибка'); return; } document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; await loadAdmins(); } finally{ if(b) b.disabled=false; } }
-async function loadChat(){ const data=await api('/api/chat'); const box=document.getElementById('chat'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } for(const m of (data.items||[])){ const me = m.login=== '__USER__'; const row=document.createElement('div'); row.className='msg'+(me?' me':''); const av=m.avatar?`<img class=\"avatar\" src=\"${m.avatar}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; const ref = m.ref?`<div class=\"muted\">${m.ref}</div>`:''; if(me){ row.innerHTML=`<div></div><div class=\"bubble\"><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } else { row.innerHTML=`<div>${av}</div><div class=\"bubble\"><div><b>@${m.login}</b></div><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } box.appendChild(row);} }
+async function loadChat(){ const data=await api('/api/chat'); const box=document.getElementById('chat'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } for(const m of (data.items||[])){ const me = m.login=== '__USER__'; const row=document.createElement('div'); row.className='msg'+(me?' me':''); const av=m.avatar?`<img class=\"avatar\" src=\"${m.avatar}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; const ref = m.ref?`<div class=\"muted\">${m.ref}</div>`:''; if(me){ row.innerHTML=`<div></div><div class=\"bubble\"><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } else { row.innerHTML=`<div>${av}</div><div class=\"bubble\"><div><b>@${m.login}</b></div><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } box.appendChild(row);} }
 async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
-openTab('home');
-window.openTab=openTab; window.runSearch=runSearch; window.saveStatus=saveStatus; window.createOrder=createOrder; window.loadClients=loadClients; window.loadAddresses=loadAddresses; window.loadAdmins=loadAdmins; window.addAdmin=addAdmin; window.loadChat=loadChat; window.sendMsg=sendMsg; window.logout=logout;
+window.runSearch=runSearch; window.saveStatus=saveStatus; window.createOrder=createOrder; window.loadClients=loadClients; window.loadAddresses=loadAddresses; window.loadAdmins=loadAdmins; window.addAdmin=addAdmin; window.loadChat=loadChat; window.sendMsg=sendMsg; window.logout=logout;
 window.onerror=function(msg,src,line,col,err){ try{ const t=document.getElementById('toast'); if(t){ t.textContent='Ошибка: '+msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000);} }catch(e){} if(window.console&&console.error) console.error(msg,err); };
 </script>
 </html>
-"""
+'''
     return (html
         .replace("__USER__", user)
         .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
@@ -542,7 +542,6 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     if not new_status:
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
     ok = sheets.update_order_status(order_id, new_status)
-    # сброс last_sent_status и пуш в ТГ
     try:
         subs = sheets.get_all_subscriptions()
         for s in subs:
@@ -622,9 +621,7 @@ async def api_chat_list(request: Request) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     ws = _chat_ws()
     rows = ws.get_all_records()
-    # последние 80
     rows = rows[-80:]
-    # сопоставим аватары
     admin_map = {a.get("login"): a for a in _list_admins()}
     for r in rows:
         adm = admin_map.get(r.get("login")) or {}
