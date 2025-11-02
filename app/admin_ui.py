@@ -15,6 +15,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 from . import sheets
 
+# ------------------ Статусы ------------------
 STATUSES = [
     "🛒 выкуплен",
     "📦 отправка на адрес (Корея)",
@@ -31,30 +32,31 @@ STATUSES = [
 
 router = APIRouter()
 
-# ====== lightweight in‑memory cache to cut Sheets RPS ======
-_SEARCH_CACHE: Dict[str, Any] = {}
+# ------------------ Мини‑кэш ------------------
+_CACHE: Dict[str, Any] = {}
 
-def _cache_get(key: str, ttl: int = 10):
-    val = _SEARCH_CACHE.get(key)
-    if not val:
+def _cache_get(k: str, ttl: int = 10):
+    v = _CACHE.get(k)
+    if not v:
         return None
-    ts, data = val
+    ts, data = v
     if time.time() - ts > ttl:
         return None
     return data
 
-def _cache_set(key: str, data: Any):
-    _SEARCH_CACHE[key] = (time.time(), data)
+def _cache_set(k: str, data: Any):
+    _CACHE[k] = (time.time(), data)
 
 def _cache_clear():
-    _SEARCH_CACHE.clear()
+    _CACHE.clear()
 
+# ------------------ Утилиты ------------------
 
 def _normalize_status(raw: str) -> str:
     if not raw:
         return "—"
     s = str(raw)
-    if s.startswith("adm:pick_status_id") or "pick_status_id" in s:
+    if "pick_status_id" in s:
         import re
         try:
             i = int(re.sub(r"[^0-9]", "", s))
@@ -66,61 +68,55 @@ def _normalize_status(raw: str) -> str:
 
 
 def _secret() -> str:
-    return (os.getenv("ADMIN_SECRET", "dev-secret-change-me") or "dev-secret-change-me").strip()
+    return (os.getenv("ADMIN_SECRET", "dev-secret") or "dev-secret").strip()
 
 
 def _hash_pwd(login: str, password: str) -> str:
-    login_norm = str(login or "").strip().lower()
-    password_norm = str(password or "").strip()
-    data = f"{login_norm}:{password_norm}:{_secret()}".encode("utf-8")
-    return hashlib.sha256(data).hexdigest()
+    base = f"{login.strip().lower()}:{password}:{_secret()}".encode()
+    return hashlib.sha256(base).hexdigest()
 
 
 def _admins_ws():
     ws = sheets.get_worksheet("admins")
-    header = ["login", "password_hash", "role", "created_at"]
+    # Не ломаем существующую таблицу; заголовок может отличаться.
     vals = ws.get_all_values()
     if not vals:
-        ws.append_row(header)
-        vals = ws.get_all_values()
-    else:
-        first = [str(c).strip().lower() for c in (vals[0] if vals else [])]
-        if not first or first[:3] != ["login", "password_hash", "role"]:
-            ws.insert_row(header, 1)
-            vals = ws.get_all_values()
-
+        ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
+    # гарантируем владельца из ENV
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
+    owner_avatar = os.getenv("ADMIN_AVATAR", "")
 
     rows = ws.get_all_records()
-    matches = []
-    for i, r in enumerate(rows, start=2):  # 2 = учёт заголовка
-        if str(r.get("login", "")).strip().lower() == owner_login.strip().lower():
-            matches.append(i)
-
     want_hash = _hash_pwd(owner_login, owner_pass)
-    if matches:
-        idx = matches[0]
+    found_rows = [i for i, r in enumerate(rows, start=2) if str(r.get("login", "")).strip().lower() == owner_login.lower()]
+    if found_rows:
+        i = found_rows[0]
         try:
-            ws.update_cell(idx, 2, want_hash)
-            ws.update_cell(idx, 3, "owner")
+            ws.update_cell(i, 2, want_hash)
+            ws.update_cell(i, 3, "owner")
+            if owner_avatar:
+                try:
+                    ws.update_cell(i, 4, owner_avatar)
+                except Exception:
+                    pass
         except Exception:
             pass
-        for extra in matches[1:][::-1]:
+        # удалить дубликаты
+        for extra in found_rows[1:][::-1]:
             try:
                 ws.delete_rows(extra)
             except Exception:
                 pass
     else:
-        ws.append_row([owner_login, want_hash, "owner", sheets._now()])
-
+        ws.append_row([owner_login, want_hash, "owner", owner_avatar, sheets._now()])
     return ws
 
 
 def _get_admin(login: str) -> Optional[Dict[str, Any]]:
     ws = _admins_ws()
     for r in ws.get_all_records():
-        if str(r.get("login", "")).strip().lower() == str(login).strip().lower():
+        if str(r.get("login", "")).strip().lower() == login.strip().lower():
             return r
     return None
 
@@ -129,29 +125,25 @@ def _list_admins() -> List[Dict[str, Any]]:
     return _admins_ws().get_all_records()
 
 
-def _add_admin(current_login: str, new_login: str, password: str, role: str = "admin") -> bool:
+def _add_admin(current_login: str, new_login: str, password: str, role: str, avatar: str = "") -> bool:
     cur = _get_admin(current_login)
     if not cur or cur.get("role") != "owner":
         return False
-    new_login = str(new_login or "").strip()
     if not new_login or _get_admin(new_login):
         return False
     ws = _admins_ws()
-    ws.append_row([new_login, _hash_pwd(new_login, password), role, sheets._now()])
+    ws.append_row([new_login, _hash_pwd(new_login, password), role, avatar, sheets._now()])
     return True
 
 
 def _sign(data: str) -> str:
-    sig = hmac.new(_secret().encode("utf-8"), data.encode("utf-8"), hashlib.sha256).hexdigest()
-    return sig
+    return hmac.new(_secret().encode(), data.encode(), hashlib.sha256).hexdigest()
 
 
-def _make_token(login: str, ttl_seconds: int = 12 * 3600) -> str:
-    exp = int(time.time()) + ttl_seconds
-    payload = json.dumps({"login": login, "exp": exp}, separators=(",", ":"))
-    b = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
-    sig = _sign(b)
-    return b + "." + sig
+def _make_token(login: str, ttl: int = 12 * 3600) -> str:
+    payload = json.dumps({"login": login, "exp": int(time.time()) + ttl}, separators=(",", ":"))
+    b = base64.urlsafe_b64encode(payload.encode()).decode()
+    return b + "." + _sign(b)
 
 
 def _parse_token(token: str) -> Optional[str]:
@@ -159,19 +151,17 @@ def _parse_token(token: str) -> Optional[str]:
         b, sig = token.split(".", 1)
         if not hmac.compare_digest(_sign(b), sig):
             return None
-        payload = json.loads(base64.urlsafe_b64decode(b.encode("ascii")).decode("utf-8"))
-        if int(payload.get("exp", 0)) < int(time.time()):
+        payload = json.loads(base64.urlsafe_b64decode(b.encode()).decode())
+        if payload.get("exp", 0) < time.time():
             return None
-        return str(payload.get("login"))
+        return payload.get("login")
     except Exception:
         return None
 
 
 def _authed_login(request: Request) -> Optional[str]:
     token = request.cookies.get("adm_session", "")
-    if not token:
-        return None
-    return _parse_token(token)
+    return _parse_token(token) if token else None
 
 
 def _bot_token() -> str:
@@ -210,7 +200,7 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
     except Exception:
         pass
 
-
+# ------------------ HTML ------------------
 _LOGIN_HTML = """
 <!doctype html>
 <html lang=\"ru\">
@@ -220,9 +210,9 @@ _LOGIN_HTML = """
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
   body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; height:100vh; }
-  .card { width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); box-shadow:0 10px 30px rgba(0,0,0,.25); }
-  input { width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#1c233b; color:var(--ink); }
-  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:var(--ink); cursor:pointer; }
+  .card { width:420px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); box-shadow:0 10px 30px rgba(0,0,0,.25); }
+  input { display:block; width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#dfe7f5; color:#0b1020; }
+  button { display:block; width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:#e6ebff; cursor:pointer; }
   h1 { margin:0 0 14px 0; font-size:18px; }
   .gap { height:10px; }
   .err { color:#ff9aa2; font-size:13px; min-height:16px; }
@@ -262,7 +252,7 @@ async def admin_page(request: Request) -> str:
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
     html = """
 <!doctype html>
-<html lang=\"ру\">
+<html lang=\"ru\">
 <meta charset=\"utf-8\" />
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Админ‑панель</title>
@@ -281,7 +271,8 @@ async def admin_page(request: Request) -> str:
   .item.home{max-width:820px;margin:12px auto 0}
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .search { display:flex; gap:8px; margin-top:10px; }
-  input, select { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
+  input, select, textarea { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
+  textarea { width:100%; min-height:60px; }
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
   .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
   .muted { color:#c7d2fe99; font-size:13px; }
@@ -290,6 +281,13 @@ async def admin_page(request: Request) -> str:
   .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50}
   .overlay.show{display:flex}
   .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  /* чат */
+  .chat{display:grid; gap:10px; max-width:900px; margin:0 auto}
+  .msg{display:grid; grid-template-columns:40px 1fr; gap:10px; align-items:flex-start}
+  .msg.me{grid-template-columns:1fr 40px}
+  .bubble{background:#1c233b; border:1px solid var(--muted); padding:8px 10px; border-radius:12px}
+  .msg.me .bubble{background:#24304d}
+  .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--muted)}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
@@ -303,6 +301,7 @@ async def admin_page(request: Request) -> str:
     <div class=\"tab\" data-tab=\"clients\" onclick=\"openTab('clients')\">Клиенты</div>
     <div class=\"tab\" data-tab=\"addresses\" onclick=\"openTab('addresses')\">Адреса</div>
     <div class=\"tab\" data-tab=\"admins\" onclick=\"openTab('admins')\">Админы</div>
+    <div class=\"tab\" data-tab=\"chat\" onclick=\"openTab('chat')\">Чат</div>
   </div>
 
   <div id=\"tab_home\"> 
@@ -311,6 +310,7 @@ async def admin_page(request: Request) -> str:
         <button onclick=\"openTab('orders')\">Открыть «Заказы»</button>
         <button onclick=\"openTab('create')\">Создать разбор</button>
         <button onclick=\"openTab('clients')\">Список клиентов</button>
+        <button onclick=\"openTab('chat')\">Чат</button>
       </div>
       <div class=\"muted\" style=\"margin-top:8px\">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
     </div></div>
@@ -351,34 +351,44 @@ async def admin_page(request: Request) -> str:
     <div class=\"search\">
       <input id=\"a_login\" placeholder=\"новый логин\" />
       <input id=\"a_pwd\" type=\"password\" placeholder=\"пароль\" />
+      <input id=\"a_avatar\" placeholder=\"avatar url (необязательно)\" style=\"min-width:320px\" />
       <button id=\"btnAddAdmin\" class=\"btn\" onclick=\"addAdmin()\">Добавить админа</button>
     </div>
     <div id=\"admins\" class=\"list\"></div>
+  </div>
+
+  <div id=\"tab_chat\" hidden>
+    <div class=\"chat\" id=\"chat\"></div>
+    <div class=\"row\" style=\"margin-top:12px; max-width:900px; margin-left:auto; margin-right:auto;\">
+      <input id=\"ch_text\" placeholder=\"Сообщение… Поддерживаются @username и CN-12345\" style=\"flex:1\" />
+      <input id=\"ch_ref\" placeholder=\"Привязка (например CN-12345 или @username)\" style=\"min-width:260px\" />
+      <button id=\"btnSend\" onclick=\"sendMsg()\">Отправить</button>
+    </div>
   </div>
 </div>
 <div id=\"overlay\" class=\"overlay\"><div class=\"spinner\">Загрузка…</div></div>
 <div id=\"toast\" class=\"toast\"></div>
 <script>
 const STATUSES = __STATUSES__;
-let __reqs=0; let __pending=0;
-function showSpinner(show){ const ov=document.getElementById('overlay'); if(!ov) return; if(show){ ov.classList.add('show'); } else { ov.classList.remove('show'); } }
+let __pending=0;
+function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}){
-  __pending++; if(__pending===1) showSpinner(true);
+  __pending++; if(__pending===1) overlay(true);
   try{ const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts)); return await r.json(); }
-  finally { __pending--; if(__pending<=0) showSpinner(false); }
+  finally { __pending--; if(__pending<=0) overlay(false); }
 }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 function openTab(name){
-  for(const id of ['home','orders','create','clients','addresses','admins']){
-    document.getElementById('tab_'+id).hidden = (id!==name);
-    const el = document.querySelector('.tab[data-tab="'+id+'"]');
-    if(el){ el.classList.toggle('active', id===name); }
+  for(const id of ['home','orders','create','clients','addresses','admins','chat']){
+    const box=document.getElementById('tab_'+id); if(box) box.hidden = (id!==name);
+    const el=document.querySelector('.tab[data-tab="'+id+'"]'); if(el) el.classList.toggle('active', id===name);
   }
-  if(name==='orders'){ runSearch(); }
-  if(name==='clients'){ loadClients(); }
-  if(name==='addresses'){ loadAddresses(); }
-  if(name==='admins'){ loadAdmins(); }
+  if(name==='orders') runSearch();
+  if(name==='clients') loadClients();
+  if(name==='addresses') loadAddresses();
+  if(name==='admins') loadAdmins();
+  if(name==='chat') loadChat();
 }
 async function runSearch(){
   const b=document.getElementById('btnSearch'); if(b) b.disabled=true;
@@ -386,106 +396,53 @@ async function runSearch(){
     const q = document.getElementById('q').value.trim();
     const data = await api('/api/search?q='+encodeURIComponent(q));
     const list = document.getElementById('list'); list.innerHTML='';
-    for(const o of (data.items||[])){
+    if(!data.items || !data.items.length){ list.innerHTML='<div class="muted">Ничего не найдено.</div>'; return; }
+    for(const o of data.items){
       const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
       const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
-      div.innerHTML=`<div class=\"oid\">${o.order_id||''}</div><div>
+      div.innerHTML=`<div class="oid">${o.order_id||''}</div><div>
         <div>Статус: <b>${statusName(o.status)}</b></div>
-        <div class=\"muted\">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
-        <div class=\"row\" style=\"margin-top:8px\">
-          <select id=\"pick_${o.order_id}\">${opts}</select>
-          <button class=\"btn\" onclick=\"saveStatus('${o.order_id}', this)\">Сохранить статус</button>
+        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+        <div class="row" style="margin-top:8px">
+          <select id="pick_${o.order_id}">${opts}</select>
+          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
         </div></div>`; list.appendChild(div);
     }
   } finally{ if(b) b.disabled=false; }
 }
-async function saveStatus(oid, btn){
-  if(btn) btn.disabled=true;
-  try{
-    const sel=document.getElementById('pick_'+CSS.escape(oid));
-    const pick_index=parseInt(sel.value);
-    const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})});
-    if(res && res.ok!==false) toast('Статус сохранён'); else toast(res.error||'Ошибка сохранения');
-    await runSearch();
-  } finally{ if(btn) btn.disabled=false; }
-}
+async function saveStatus(oid, btn){ if(btn) btn.disabled=true; try{ const sel=document.getElementById('pick_'+CSS.escape(oid)); const pick_index=parseInt(sel.value); const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}); toast(res && res.ok!==false?'Статус сохранён':(res.error||'Ошибка')); await runSearch(); } finally{ if(btn) btn.disabled=false; } }
 async function createOrder(){
   const b=document.getElementById('btnCreate'); if(b) b.disabled=true;
   try{
     const origin=document.getElementById('c_origin').value;
-    const idraw=document.getElementById('c_order_id').value.trim();
-    const idnum=idraw.replace(/\\\\D+/g,'');
+    const idnum=(document.getElementById('c_order_id').value.trim()).replace(/\D+/g,'');
     if(!idnum){ toast('Введите цифры номера заказа'); return; }
     const order_id=origin+'-'+idnum;
     const status=document.getElementById('c_status').value;
     const clients=document.getElementById('c_clients').value.trim();
     const note=document.getElementById('c_note').value.trim();
     const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
-    if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
+    toast(r.ok?'Разбор создан':(r.error||'Ошибка'));
   } finally{ if(b) b.disabled=false; }
 }
-async function loadClients(){
-  const b=document.getElementById('btnClients'); if(b) b.disabled=true;
-  try{
-    const q=document.getElementById('cq').value.trim();
-    const data=await api('/api/clients?q='+encodeURIComponent(q));
-    const box=document.getElementById('clients'); box.innerHTML='';
-    for(const c of (data.items||[])){
-      const div=document.createElement('div'); div.className='item';
-      div.innerHTML=`<div class=\"oid\">${c.username||''}</div><div>
-        <div>${c.full_name||'—'} — ${c.phone||'—'}</div>
-        <div class=\"muted\">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div>
-      </div>`; box.appendChild(div);
-    }
-  } finally{ if(b) b.disabled=false; }
-}
-async function loadAddresses(){
-  const b=document.getElementById('btnAddr'); if(b) b.disabled=true;
-  try{
-    const q=document.getElementById('aq').value.trim();
-    const data=await api('/api/addresses?q='+encodeURIComponent(q));
-    const box=document.getElementById('addresses'); box.innerHTML='';
-    for(const a of (data.items||[])){
-      const div=document.createElement('div'); div.className='item';
-      div.innerHTML=`<div class=\"oid\">${a.username||a.user_id||''}</div><div>
-        <div>${a.full_name||'—'} — ${a.phone||'—'}</div>
-        <div class=\"muted\">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div>
-      </div>`; box.appendChild(div);
-    }
-  } finally{ if(b) b.disabled=false; }
-}
-async function loadAdmins(){
-  const data=await api('/api/admins');
-  const box=document.getElementById('admins'); box.innerHTML='';
-  for(const a of (data.items||[])){
-    const div=document.createElement('div'); div.className='item';
-    div.innerHTML=`<div class=\"oid\">${a.login}</div><div><div>Роль: <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);
-  }
-}
-async function addAdmin(){
-  const b=document.getElementById('btnAddAdmin'); if(b) b.disabled=true;
-  try{
-    const login=document.getElementById('a_login').value.trim();
-    const password=document.getElementById('a_pwd').value;
-    const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password})});
-    if(!r.ok){ toast(r.error||'Ошибка'); return; }
-    document.getElementById('a_login').value=''; document.getElementById('a_pwd').value='';
-    await loadAdmins();
-  } finally{ if(b) b.disabled=false; }
-}
+async function loadClients(){ const b=document.getElementById('btnClients'); if(b) b.disabled=true; try{ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const c of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class="oid">${c.username||''}</div><div><div>${c.full_name||'—'} — ${c.phone||'—'}</div><div class="muted">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAddresses(){ const b=document.getElementById('btnAddr'); if(b) b.disabled=true; try{ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class="oid">${a.username||a.user_id||''}</div><div><div>${a.full_name||'—'} — ${a.phone||'—'}</div><div class="muted">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAdmins(){ const data=await api('/api/admins'); const box=document.getElementById('admins'); box.innerHTML=''; if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет админов</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; const av=a.avatar?`<img class=\"avatar\" src=\"${a.avatar}\" alt=\"${a.login}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; div.innerHTML=`<div>${av}</div><div><div>${a.login} — <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);} }
+async function addAdmin(){ const b=document.getElementById('btnAddAdmin'); if(b) b.disabled=true; try{ const login=document.getElementById('a_login').value.trim(); const password=document.getElementById('a_pwd').value; const avatar=document.getElementById('a_avatar').value.trim(); const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})}); if(!r.ok){ toast(r.error||'Ошибка'); return; } document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; await loadAdmins(); } finally{ if(b) b.disabled=false; } }
+async function loadChat(){ const data=await api('/api/chat'); const box=document.getElementById('chat'); box.innerHTML=''; for(const m of (data.items||[])){ const me = m.login=== '__USER__'; const row=document.createElement('div'); row.className='msg'+(me?' me':''); const av=m.avatar?`<img class=\"avatar\" src=\"${m.avatar}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; const ref = m.ref?`<div class=\"muted\">${m.ref}</div>`:''; if(me){ row.innerHTML=`<div></div><div class=\"bubble\"><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } else { row.innerHTML=`<div>${av}</div><div class=\"bubble\"><div><b>@${m.login}</b></div><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } box.appendChild(row);} }
+async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
 openTab('home');
 </script>
 </html>
 """
-    return (
-        html
+    return (html
         .replace("__USER__", user)
         .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
         .replace("__OPTIONS__", options)
     )
 
-
+# ------------------ API ------------------
 @router.post("/api/login")
 async def api_login(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     login = str(payload.get("login", "")).strip()
@@ -560,6 +517,7 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     if not new_status:
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
     ok = sheets.update_order_status(order_id, new_status)
+    # сброс last_sent_status и пуш в ТГ
     try:
         subs = sheets.get_all_subscriptions()
         for s in subs:
@@ -604,7 +562,7 @@ async def api_admins(request: Request) -> JSONResponse:
     cur = _get_admin(login)
     if not cur:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    items = _list_admins() if cur.get("role") == "owner" else [{"login": cur.get("login"), "role": cur.get("role"), "created_at": cur.get("created_at") }]
+    items = _list_admins() if cur.get("role") == "owner" else [{"login": cur.get("login"), "role": cur.get("role"), "avatar": cur.get("avatar"), "created_at": cur.get("created_at") }]
     return JSONResponse({"items": items})
 
 
@@ -615,34 +573,52 @@ async def api_admins_add(request: Request, payload: Dict[str, Any] = Body(...)) 
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     nl = str(payload.get("login", "")).strip()
     pw = str(payload.get("password", ""))
-    ok = _add_admin(login, nl, pw, role="admin")
+    avatar = str(payload.get("avatar", "")).strip()
+    ok = _add_admin(login, nl, pw, role="admin", avatar=avatar)
     if not ok:
         return JSONResponse({"ok": False, "error": "not_allowed_or_exists"}, status_code=403)
     return JSONResponse({"ok": True})
 
 
-@router.post("/api/orders")
-async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
-    if not _authed_login(request):
+# ------------------ Чат ------------------
+
+def _chat_ws():
+    ws = sheets.get_worksheet("chat")
+    vals = ws.get_all_values()
+    if not vals:
+        ws.append_row(["id", "login", "text", "ref", "created_at"])
+    return ws
+
+
+@router.get("/api/chat")
+async def api_chat_list(request: Request) -> JSONResponse:
+    login = _authed_login(request)
+    if not login:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    order_id = str(payload.get("order_id", "")).strip()
-    origin = (payload.get("origin") or "").strip().upper()
-    status = str(payload.get("status", "")).strip()
-    clients = str(payload.get("clients", "")).strip()
-    note = str(payload.get("note", "")).strip()
-    if not order_id or origin not in ("CN", "KR"):
-        return JSONResponse({"ok": False, "error": "order_id_and_origin_required"}, status_code=400)
-    sheets.add_order({"order_id": order_id, "client_name": clients, "origin": origin, "status": status, "note": note})
-    usernames: List[str] = []
-    if clients:
-        for tok in [t.strip() for t in clients.split(',') if t.strip()]:
-            if tok.startswith("@"): tok = tok[1:]
-            if tok: usernames.append(tok)
-    if usernames:
-        sheets.ensure_participants(order_id, usernames)
-        sheets.ensure_clients_from_usernames(usernames)
-    _cache_clear()
-    return JSONResponse({"ok": True, "order_id": order_id})
+    ws = _chat_ws()
+    rows = ws.get_all_records()
+    # последние 80
+    rows = rows[-80:]
+    # сопоставим аватары
+    admin_map = {a.get("login"): a for a in _list_admins()}
+    for r in rows:
+        adm = admin_map.get(r.get("login")) or {}
+        r["avatar"] = adm.get("avatar", "")
+    return JSONResponse({"ok": True, "items": rows})
+
+
+@router.post("/api/chat")
+async def api_chat_post(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+    login = _authed_login(request)
+    if not login:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    text = str(payload.get("text", "")).strip()
+    ref = str(payload.get("ref", "")).strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    ws = _chat_ws()
+    ws.append_row([str(int(time.time()*1000)), login, text, ref, sheets._now()])
+    return JSONResponse({"ok": True})
 
 
 def get_admin_router() -> APIRouter:
