@@ -391,12 +391,20 @@ async function saveStatus(oid){
   await runSearch();
 }
 async function createOrder(){
-  const order_id=document.getElementById('c_order_id').value.trim();
-  const origin=document.getElementById('c_origin').value;
-  const status=document.getElementById('c_status').value;
-  const clients=document.getElementById('c_clients').value.trim();
-  const note=document.getElementById('c_note').value.trim();
-  const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
+  const b=document.getElementById('btnCreate'); if(b) b.disabled=true;
+  try{
+    const origin=document.getElementById('c_origin').value;
+    const idraw=document.getElementById('c_order_id').value.trim();
+    const idnum=idraw.replace(/\\D+/g,'');
+    if(!idnum){ toast('Введите цифры номера заказа'); return; }
+    const order_id=origin+'-'+idnum;
+    const status=document.getElementById('c_status').value;
+    const clients=document.getElementById('c_clients').value.trim();
+    const note=document.getElementById('c_note').value.trim();
+    const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
+    if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
+  } finally{ if(b) b.disabled=false; }
+})});
   if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
 }
 async function loadClients(){
