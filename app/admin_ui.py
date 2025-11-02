@@ -219,14 +219,13 @@ _LOGIN_HTML = """
 <title>SEABLUU — Вход</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
-  * { box-sizing:border-box; }
-  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; min-height:100vh; }
+  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; height:100vh; }
   .card { width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); box-shadow:0 10px 30px rgba(0,0,0,.25); }
   input { width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#1c233b; color:var(--ink); }
-  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#2b3961; color:var(--ink); cursor:pointer; }
+  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:var(--ink); cursor:pointer; }
   h1 { margin:0 0 14px 0; font-size:18px; }
   .gap { height:10px; }
-  .err { color:#ff9aa2; font-size:13px; min-height:18px; }
+  .err { color:#ff9aa2; font-size:13px; min-height:16px; }
 </style>
 <div class=\"card\">
   <h1>SEABLUU — Вход</h1>
@@ -239,7 +238,7 @@ _LOGIN_HTML = """
 </div>
 <script>
 async function doLogin(){
-  const b=document.getElementById('btnLogin'); if(b) b.disabled=true;
+  const btn=document.getElementById('btnLogin'); let old='Войти'; if(btn){ old=btn.textContent; btn.disabled=true; btn.textContent='Входим…'; }
   try{
     const login=document.getElementById('login').value.trim();
     const password=document.getElementById('pwd').value;
@@ -247,7 +246,7 @@ async function doLogin(){
     const j=await r.json();
     if(!j.ok){ document.getElementById('err').innerText=j.error||'Ошибка входа'; return; }
     location.reload();
-  } finally{ if(b) b.disabled=false; }
+  } finally { if(btn){ btn.disabled=false; btn.textContent=old; } }
 }
 </script>
 </html>
@@ -263,7 +262,7 @@ async def admin_page(request: Request) -> str:
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
     html = """
 <!doctype html>
-<html lang=\"ru\">
+<html lang=\"ру\">
 <meta charset=\"utf-8\" />
 <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Админ‑панель</title>
@@ -274,11 +273,12 @@ async def admin_page(request: Request) -> str:
   header { padding:14px 16px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; }
   h1 { margin:0; font-size:18px; }
   .wrap { max-width:1100px; margin:18px auto; padding:0 12px; }
-  .tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; }
   .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; cursor:pointer; }
   .active { background:#24304d; }
   .list { margin-top:16px; display:grid; gap:10px; }
   .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }
+  .item.home{max-width:820px;margin:12px auto 0}
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .search { display:flex; gap:8px; margin-top:10px; }
   input, select { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
@@ -287,8 +287,9 @@ async def admin_page(request: Request) -> str:
   .muted { color:#c7d2fe99; font-size:13px; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  .spinner{position:fixed;right:16px;bottom:16px;background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:10px 12px;border-radius:12px;opacity:0;transform:translateY(8px);transition:all .25s ease}
-  .spinner.show{opacity:1;transform:translateY(0)}
+  .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50}
+  .overlay.show{display:flex}
+  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
@@ -305,7 +306,7 @@ async def admin_page(request: Request) -> str:
   </div>
 
   <div id=\"tab_home\"> 
-    <div class=\"item\"><div class=\"oid\">Быстрые действия</div><div>
+    <div class=\"item home\"><div class=\"oid\">Быстрые действия</div><div>
       <div class=\"row\" style=\"margin-top:8px\">
         <button onclick=\"openTab('orders')\">Открыть «Заказы»</button>
         <button onclick=\"openTab('create')\">Создать разбор</button>
@@ -355,18 +356,16 @@ async def admin_page(request: Request) -> str:
     <div id=\"admins\" class=\"list\"></div>
   </div>
 </div>
-<div id=\"spinner\" class=\"spinner\">Загрузка…</div>
+<div id=\"overlay\" class=\"overlay\"><div class=\"spinner\">Загрузка…</div></div>
 <div id=\"toast\" class=\"toast\"></div>
 <script>
 const STATUSES = __STATUSES__;
-let __reqs=0;
-function showSpinner(show){ const s=document.getElementById('spinner'); if(!s) return; if(show){ s.classList.add('show'); } else { s.classList.remove('show'); } }
+let __reqs=0; let __pending=0;
+function showSpinner(show){ const ov=document.getElementById('overlay'); if(!ov) return; if(show){ ov.classList.add('show'); } else { ov.classList.remove('show'); } }
 async function api(path, opts={}){
-  __reqs++; if(__reqs===1) showSpinner(true);
-  try{
-    const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
-    return await r.json();
-  } finally { __reqs--; if(__reqs<=0) showSpinner(false); }
+  __pending++; if(__pending===1) showSpinner(true);
+  try{ const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts)); return await r.json(); }
+  finally { __pending--; if(__pending<=0) showSpinner(false); }
 }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
@@ -390,12 +389,12 @@ async function runSearch(){
     for(const o of (data.items||[])){
       const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
       const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
-      div.innerHTML=`<div class="oid">${o.order_id||''}</div><div>
+      div.innerHTML=`<div class=\"oid\">${o.order_id||''}</div><div>
         <div>Статус: <b>${statusName(o.status)}</b></div>
-        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
-        <div class="row" style="margin-top:8px">
-          <select id="pick_${o.order_id}">${opts}</select>
-          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
+        <div class=\"muted\">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+        <div class=\"row\" style=\"margin-top:8px\">
+          <select id=\"pick_${o.order_id}\">${opts}</select>
+          <button class=\"btn\" onclick=\"saveStatus('${o.order_id}', this)\">Сохранить статус</button>
         </div></div>`; list.appendChild(div);
     }
   } finally{ if(b) b.disabled=false; }
@@ -415,7 +414,7 @@ async function createOrder(){
   try{
     const origin=document.getElementById('c_origin').value;
     const idraw=document.getElementById('c_order_id').value.trim();
-    const idnum=idraw.replace(/\\D+/g,'');
+    const idnum=idraw.replace(/\\\\D+/g,'');
     if(!idnum){ toast('Введите цифры номера заказа'); return; }
     const order_id=origin+'-'+idnum;
     const status=document.getElementById('c_status').value;
@@ -433,9 +432,9 @@ async function loadClients(){
     const box=document.getElementById('clients'); box.innerHTML='';
     for(const c of (data.items||[])){
       const div=document.createElement('div'); div.className='item';
-      div.innerHTML=`<div class="oid">${c.username||''}</div><div>
+      div.innerHTML=`<div class=\"oid\">${c.username||''}</div><div>
         <div>${c.full_name||'—'} — ${c.phone||'—'}</div>
-        <div class="muted">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div>
+        <div class=\"muted\">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div>
       </div>`; box.appendChild(div);
     }
   } finally{ if(b) b.disabled=false; }
@@ -448,9 +447,9 @@ async function loadAddresses(){
     const box=document.getElementById('addresses'); box.innerHTML='';
     for(const a of (data.items||[])){
       const div=document.createElement('div'); div.className='item';
-      div.innerHTML=`<div class="oid">${a.username||a.user_id||''}</div><div>
+      div.innerHTML=`<div class=\"oid\">${a.username||a.user_id||''}</div><div>
         <div>${a.full_name||'—'} — ${a.phone||'—'}</div>
-        <div class="muted">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div>
+        <div class=\"muted\">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div>
       </div>`; box.appendChild(div);
     }
   } finally{ if(b) b.disabled=false; }
@@ -460,7 +459,7 @@ async function loadAdmins(){
   const box=document.getElementById('admins'); box.innerHTML='';
   for(const a of (data.items||[])){
     const div=document.createElement('div'); div.className='item';
-    div.innerHTML=`<div class="oid">${a.login}</div><div><div>Роль: <b>${a.role}</b></div><div class="muted">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);
+    div.innerHTML=`<div class=\"oid\">${a.login}</div><div><div>Роль: <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);
   }
 }
 async function addAdmin(){
