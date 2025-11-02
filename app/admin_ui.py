@@ -238,6 +238,8 @@ async function doLogin(){
     location.reload();
   } finally { if(btn){ btn.disabled=false; btn.textContent=old; } }
 }
+window.doLogin = doLogin;
+window.onerror = function(msg, src, line, col, err){ try{ var el=document.getElementById('err'); if(el) el.innerText='Ошибка: '+msg; }catch(e){} if(window.console&&console.error) console.error(msg, err); };
 </script>
 </html>
 """
@@ -454,6 +456,8 @@ async function loadChat(){ const data=await api('/api/chat'); const box=document
 async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
 openTab('home');
+window.openTab=openTab; window.runSearch=runSearch; window.saveStatus=saveStatus; window.createOrder=createOrder; window.loadClients=loadClients; window.loadAddresses=loadAddresses; window.loadAdmins=loadAdmins; window.addAdmin=addAdmin; window.loadChat=loadChat; window.sendMsg=sendMsg; window.logout=logout;
+window.onerror=function(msg,src,line,col,err){ try{ const t=document.getElementById('toast'); if(t){ t.textContent='Ошибка: '+msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000);} }catch(e){} if(window.console&&console.error) console.error(msg,err); };
 </script>
 </html>
 """
