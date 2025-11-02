@@ -58,26 +58,43 @@ def _hash_pwd(login: str, password: str) -> str:
 
 def _admins_ws():
     ws = sheets.get_worksheet("admins")
+    header = ["login", "password_hash", "role", "created_at"]
     vals = ws.get_all_values()
     if not vals:
-        ws.append_row(["login", "password_hash", "role", "created_at"])  # role: owner/admin
+        ws.append_row(header)
+        vals = ws.get_all_values()
+    else:
+        first = [str(c).strip().lower() for c in (vals[0] if vals else [])]
+        if not first or first[:3] != ["login", "password_hash", "role"]:
+            ws.insert_row(header, 1)
+            vals = ws.get_all_values()
+
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
+
     rows = ws.get_all_records()
-    found_idx = None
-    for i, r in enumerate(rows, start=2):
+    matches = []
+    for i, r in enumerate(rows, start=2):  # 2 = учёт заголовка
         if str(r.get("login", "")).strip().lower() == owner_login.strip().lower():
-            found_idx = i
-            break
+            matches.append(i)
+
     want_hash = _hash_pwd(owner_login, owner_pass)
-    if found_idx is None:
-        ws.append_row([owner_login, want_hash, "owner", sheets._now()])
-    else:
+    if matches:
+        idx = matches[0]
         try:
-            ws.update_cell(found_idx, 2, want_hash)
-            ws.update_cell(found_idx, 3, "owner")
+            ws.update_cell(idx, 2, want_hash)
+            ws.update_cell(idx, 3, "owner")
         except Exception:
             pass
+        # удалить дубликаты (если есть)
+        for extra in matches[1:][::-1]:
+            try:
+                ws.delete_rows(extra)
+            except Exception:
+                pass
+    else:
+        ws.append_row([owner_login, want_hash, "owner", sheets._now()])
+
     return ws
 
 
