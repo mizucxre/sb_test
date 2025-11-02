@@ -211,6 +211,20 @@ def _guess_query_type(q: str) -> str:
         return "phone"
     return "order_id"
 
+    USERNAME_TOKEN_RE = re.compile(r"@?[A-Za-z0-9_]{5,}")
+
+def _looks_like_username(tok: str) -> bool:
+    t = (tok or "").strip()
+    if not t:
+        return False
+    if t.startswith("@"):  # классика
+        return True
+    # без @, но похоже на юзернейм и не похоже на order_id/телефон
+    if USERNAME_TOKEN_RE.fullmatch(t) and not extract_order_id(t):
+        digits = re.sub(r"\D+", "", t)
+        return len(digits) < 6
+    return False
+    
 async def admin_find_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Команда /find или кнопка «Поиск»: просим ввести *несколько* значений."""
     uid = update.effective_user.id
@@ -622,11 +636,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 2) username
             for t in tokens:
-                if t.startswith("@"):
-                    for od in sheets.get_orders_by_username(t):
-                        oid = str(od.get("order_id","")).strip()
-                        if oid and oid not in seen:
-                            orders.append(od); seen.add(oid)
+    if _looks_like_username(t):
+        for od in sheets.get_orders_by_username(t):
+            oid = str(od.get("order_id","")).strip()
+            if oid and oid not in seen:
+                orders.append(od); seen.add(oid)
 
             # 3) phone
             for t in tokens:
@@ -788,6 +802,8 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 usernames = [m.group(1) for m in USERNAME_RE.finditer(buf.get("client_name", ""))]
                 if usernames:
                     sheets.ensure_participants(buf["order_id"], usernames)
+                    sheets.ensure_clients_from_usernames(usernames)  # автодобавление в clients (с защитой от дублей)
+
                     # подписка и уведомление о создании
                     ids = sheets.get_user_ids_by_usernames(usernames)
                     for uid in ids:
