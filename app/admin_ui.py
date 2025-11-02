@@ -6,6 +6,8 @@ import hmac
 import json
 import os
 import time
+import urllib.parse
+import urllib.request
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Body, Query, Request
@@ -28,6 +30,24 @@ STATUSES = [
 ]
 
 router = APIRouter()
+
+# ====== lightweight in‑memory cache to cut Sheets RPS ======
+_SEARCH_CACHE: Dict[str, Any] = {}
+
+def _cache_get(key: str, ttl: int = 10):
+    val = _SEARCH_CACHE.get(key)
+    if not val:
+        return None
+    ts, data = val
+    if time.time() - ts > ttl:
+        return None
+    return data
+
+def _cache_set(key: str, data: Any):
+    _SEARCH_CACHE[key] = (time.time(), data)
+
+def _cache_clear():
+    _SEARCH_CACHE.clear()
 
 
 def _normalize_status(raw: str) -> str:
@@ -86,7 +106,6 @@ def _admins_ws():
             ws.update_cell(idx, 3, "owner")
         except Exception:
             pass
-        # удалить дубликаты (если есть)
         for extra in matches[1:][::-1]:
             try:
                 ws.delete_rows(extra)
@@ -153,6 +172,43 @@ def _authed_login(request: Request) -> Optional[str]:
     if not token:
         return None
     return _parse_token(token)
+
+
+def _bot_token() -> str:
+    try:
+        from .config import BOT_TOKEN as _TOK  # type: ignore
+        if _TOK:
+            return _TOK
+    except Exception:
+        pass
+    return os.getenv("BOT_TOKEN", "")
+
+
+def _notify_subscribers(order_id: str, new_status: str) -> None:
+    token = _bot_token()
+    if not token:
+        return
+    try:
+        subs = sheets.get_all_subscriptions()
+        chat_ids = []
+        for s in subs:
+            if str(s.get("order_id", "")) == order_id:
+                try:
+                    chat_ids.append(int(s.get("user_id")))
+                except Exception:
+                    pass
+        if not chat_ids:
+            return
+        text = f"Статус {order_id}: {_normalize_status(new_status)}"
+        for uid in set(chat_ids):
+            try:
+                params = urllib.parse.urlencode({"chat_id": uid, "text": text})
+                urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage?{params}", timeout=5).read()
+                sheets.set_last_sent_status(uid, order_id, new_status)
+            except Exception:
+                pass
+    except Exception:
+        pass
 
 
 _LOGIN_HTML = """
@@ -233,14 +289,25 @@ async def admin_page(request: Request) -> str:
 </header>
 <div class=\"wrap\">
   <div class=\"tabs\">
-    <div class=\"tab active\" data-tab=\"orders\" onclick=\"openTab('orders')\">Заказы</div>
+    <div class=\"tab active\" data-tab=\"home\" onclick=\"openTab('home')\">Главная</div>
+    <div class=\"tab\" data-tab=\"orders\" onclick=\"openTab('orders')\">Заказы</div>
     <div class=\"tab\" data-tab=\"create\" onclick=\"openTab('create')\">Создать разбор</div>
     <div class=\"tab\" data-tab=\"clients\" onclick=\"openTab('clients')\">Клиенты</div>
     <div class=\"tab\" data-tab=\"addresses\" onclick=\"openTab('addresses')\">Адреса</div>
     <div class=\"tab\" data-tab=\"admins\" onclick=\"openTab('admins')\">Админы</div>
   </div>
 
-  <div id=\"tab_orders\">
+  <div id=\"tab_home\">
+    <div class=\"item\"><div class=\"oid\">Быстрые действия</div><div>
+      <div class=\"row\" style=\"margin-top:8px\">
+        <button onclick=\"openTab('orders')\">Открыть «Заказы»</button>
+        <button onclick=\"openTab('create')\">Создать разбор</button>
+        <button onclick=\"openTab('clients')\">Список клиентов</button>
+      </div>
+      <div class=\"muted\" style=\"margin-top:8px\">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
+    </div></div>
+
+  <div id=\"tab_orders\" hidden>
     <div class=\"search\">
       <input id=\"q\" placeholder=\"order_id / @username / телефон\" />
       <button onclick=\"runSearch()\">Искать</button>
@@ -285,7 +352,7 @@ async def admin_page(request: Request) -> str:
 <script>
 const STATUSES = __STATUSES__;
 function openTab(name){
-  for(const id of ['orders','create','clients','addresses','admins']){
+  for(const id of ['home','orders','create','clients','addresses','admins']){
     document.getElementById('tab_'+id).hidden = (id!==name);
     const el = document.querySelector('.tab[data-tab="'+id+'"]');
     if(el){ el.classList.toggle('active', id===name); }
@@ -373,7 +440,7 @@ async function addAdmin(){
   await loadAdmins();
 }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
-runSearch();
+openTab('home');
 </script>
 </html>
 """
@@ -410,6 +477,11 @@ async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     q = (q or "").strip()
+    cache_key = "recent" if not q else f"q:{q.lower()}"
+    cached = _cache_get(cache_key, ttl=10)
+    if cached is not None:
+        return JSONResponse({"items": cached})
+
     items: List[Dict[str, Any]] = []
     if not q:
         items = sheets.list_recent_orders(30)
@@ -431,6 +503,7 @@ async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
             items = sheets.get_orders_by_username(q)
         if not items:
             items = sheets.get_orders_by_phone(q)
+    _cache_set(cache_key, items)
     return JSONResponse({"items": items})
 
 
@@ -463,6 +536,8 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
                     pass
     except Exception:
         pass
+    _notify_subscribers(order_id, new_status)
+    _cache_clear()
     return JSONResponse({"ok": ok, "order_id": order_id, "status": new_status})
 
 
@@ -532,6 +607,7 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
     if usernames:
         sheets.ensure_participants(order_id, usernames)
         sheets.ensure_clients_from_usernames(usernames)
+    _cache_clear()
     return JSONResponse({"ok": True, "order_id": order_id})
 
 
