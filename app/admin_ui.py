@@ -124,23 +124,21 @@ def _authed_login(request: Request) -> Optional[str]:
     return _parse_token(token)
 
 
-@router.get("/", response_class=HTMLResponse)
-async def admin_page(request: Request) -> str:
-    user = _authed_login(request)
-    if not user:
-        return f"""
+_LOGIN_HTML = """
 <!doctype html>
-<html lang=\"ru\">\n<meta charset=\"utf-8\" />\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+<html lang=\"ru\">
+<meta charset=\"utf-8\" />
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Вход</title>
 <style>
-  :root {{ --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }}
-  body {{ margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; height:100vh; }}
-  .card {{ width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); }}
-  input {{ width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#1c233b; color:var(--ink); }}
-  button {{ width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:var(--ink); cursor:pointer; }}
-  h1 {{ margin:0 0 14px 0; font-size:18px; }}
-  .gap {{ height:10px; }}
-  .err {{ color:#ff9aa2; font-size:13px; min-height:16px; }}
+  :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
+  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; height:100vh; }
+  .card { width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); }
+  input { width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#1c233b; color:var(--ink); }
+  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:var(--ink); cursor:pointer; }
+  h1 { margin:0 0 14px 0; font-size:18px; }
+  .gap { height:10px; }
+  .err { color:#ff9aa2; font-size:13px; min-height:16px; }
 </style>
 <div class=\"card\">
   <h1>SEABLUU — Вход</h1>
@@ -152,43 +150,53 @@ async def admin_page(request: Request) -> str:
   <button onclick=\"doLogin()\">Войти</button>
 </div>
 <script>
-async function doLogin(){{
+async function doLogin(){
   const login=document.getElementById('login').value.trim();
   const password=document.getElementById('pwd').value;
   const r=await fetch('/admin/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,password})});
   const j=await r.json();
-  if(!j.ok){{ document.getElementById('err').innerText=j.error||'Ошибка входа'; return; }}
+  if(!j.ok){ document.getElementById('err').innerText=j.error||'Ошибка входа'; return; }
   location.reload();
-}}
+}
 </script>
 </html>
 """
 
-    return f"""
+
+@router.get("/", response_class=HTMLResponse)
+async def admin_page(request: Request) -> str:
+    user = _authed_login(request)
+    if not user:
+        return _LOGIN_HTML
+
+    options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
+    html = """
 <!doctype html>
-<html lang=\"ru\">\n<meta charset=\"utf-8\" />\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
+<html lang=\"ru\">
+<meta charset=\"utf-8\" />
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Админ‑панель</title>
 <style>
-  :root {{ --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }}
-  * {{ box-sizing:border-box; }}
-  body {{ margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); }}
-  header {{ padding:14px 16px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; }}
-  h1 {{ margin:0; font-size:18px; }}
-  .wrap {{ max-width:1100px; margin:18px auto; padding:0 12px; }}
-  .tabs {{ display:flex; gap:8px; flex-wrap:wrap; }}
-  .tab {{ padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; cursor:pointer; }}
-  .active {{ background:#24304d; }}
-  .list {{ margin-top:16px; display:grid; gap:10px; }}
-  .item {{ padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }}
-  .row {{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; }}
-  .search {{ display:flex; gap:8px; margin-top:10px; }}
-  input, select {{ padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }}
-  button {{ padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }}
-  .muted {{ color:#c7d2fe99; font-size:13px; }}
+  :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); }
+  header { padding:14px 16px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; }
+  h1 { margin:0; font-size:18px; }
+  .wrap { max-width:1100px; margin:18px auto; padding:0 12px; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; }
+  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; cursor:pointer; }
+  .active { background:#24304d; }
+  .list { margin-top:16px; display:grid; gap:10px; }
+  .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .search { display:flex; gap:8px; margin-top:10px; }
+  input, select { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
+  button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
+  .muted { color:#c7d2fe99; font-size:13px; }
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
-  <div class=\"row\"><span class=\"muted\">{user}</span> <button onclick=\"logout()\">Выйти</button></div>
+  <div class=\"row\"><span class=\"muted\">__USER__</span> <button onclick=\"logout()\">Выйти</button></div>
 </header>
 <div class=\"wrap\">
   <div class=\"tabs\">
@@ -211,7 +219,7 @@ async function doLogin(){{
     <div class=\"row\" style=\"margin-top:10px\">
       <input id=\"c_order_id\" placeholder=\"order_id (например CN-12345)\" />
       <select id=\"c_origin\"> <option value=\"CN\">CN</option> <option value=\"KR\">KR</option> </select>
-      <select id=\"c_status\"> {''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i,s in enumerate(STATUSES)])} </select>
+      <select id=\"c_status\"> __OPTIONS__ </select>
     </div>
     <div class=\"row\" style=\"margin-top:10px\">
       <input id=\"c_clients\" placeholder=\"клиенты через запятую (@user1, @user2)\" style=\"min-width:420px\" />
@@ -241,7 +249,7 @@ async function doLogin(){{
   </div>
 </div>
 <script>
-const STATUSES = {STATUSES!r};
+const STATUSES = __STATUSES__;
 function openTab(name){
   for(const id of ['orders','create','clients','addresses','admins']){
     document.getElementById('tab_'+id).hidden = (id!==name);
@@ -328,6 +336,12 @@ runSearch();
 </script>
 </html>
 """
+    return (
+        html
+        .replace("__USER__", user)
+        .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
+        .replace("__OPTIONS__", options)
+    )
 
 
 @router.post("/api/login")
