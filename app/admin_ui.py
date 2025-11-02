@@ -59,11 +59,23 @@ def _admins_ws():
     vals = ws.get_all_values()
     if not vals:
         ws.append_row(["login", "password_hash", "role", "created_at"])  # role: owner/admin
+    owner_login = os.getenv("ADMIN_LOGIN", "admin")
+    owner_pass = os.getenv("ADMIN_PASSWORD", "admin")
     rows = ws.get_all_records()
-    if not rows:
-        owner_login = os.getenv("ADMIN_LOGIN", "admin")
-        owner_pass = os.getenv("ADMIN_PASSWORD", "admin")
-        ws.append_row([owner_login, _hash_pwd(owner_login, owner_pass), "owner", sheets._now()])
+    found_idx = None
+    for i, r in enumerate(rows, start=2):
+        if str(r.get("login", "")).strip().lower() == owner_login.strip().lower():
+            found_idx = i
+            break
+    want_hash = _hash_pwd(owner_login, owner_pass)
+    if found_idx is None:
+        ws.append_row([owner_login, want_hash, "owner", sheets._now()])
+    else:
+        try:
+            ws.update_cell(found_idx, 2, want_hash)
+            ws.update_cell(found_idx, 3, "owner")
+        except Exception:
+            pass
     return ws
 
 
@@ -193,6 +205,8 @@ async def admin_page(request: Request) -> str:
   input, select { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
   .muted { color:#c7d2fe99; font-size:13px; }
+  .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
+  .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
@@ -248,6 +262,7 @@ async def admin_page(request: Request) -> str:
     <div id=\"admins\" class=\"list\"></div>
   </div>
 </div>
+<div id=\"toast\" class=\"toast\"></div>
 <script>
 const STATUSES = __STATUSES__;
 function openTab(name){
@@ -265,6 +280,7 @@ async function api(path, opts={}){
   const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
   return await r.json();
 }
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 async function runSearch(){
   const q = document.getElementById('q').value.trim();
@@ -281,7 +297,13 @@ async function runSearch(){
       </div></div>`; list.appendChild(div);
   }
 }
-async function saveStatus(oid){ const sel=document.getElementById('pick_'+CSS.escape(oid)); const pick_index=parseInt(sel.value); await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}); await runSearch(); }
+async function saveStatus(oid){
+  const sel=document.getElementById('pick_'+CSS.escape(oid));
+  const pick_index=parseInt(sel.value);
+  const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})});
+  if(res && res.ok!==false) toast('Статус сохранён'); else toast(res.error||'Ошибка сохранения');
+  await runSearch();
+}
 async function createOrder(){
   const order_id=document.getElementById('c_order_id').value.trim();
   const origin=document.getElementById('c_origin').value;
@@ -289,7 +311,7 @@ async function createOrder(){
   const clients=document.getElementById('c_clients').value.trim();
   const note=document.getElementById('c_note').value.trim();
   const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
-  document.getElementById('c_msg').innerText = r.ok? ('Создан '+order_id) : (r.error||'Ошибка');
+  if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
 }
 async function loadClients(){
   const q=document.getElementById('cq').value.trim();
@@ -327,7 +349,7 @@ async function addAdmin(){
   const login=document.getElementById('a_login').value.trim();
   const password=document.getElementById('a_pwd').value;
   const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password})});
-  if(!r.ok){ alert(r.error||'Ошибка'); return; }
+  if(!r.ok){ toast(r.error||'Ошибка'); return; }
   document.getElementById('a_login').value=''; document.getElementById('a_pwd').value='';
   await loadAdmins();
 }
@@ -373,7 +395,14 @@ async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
     if not q:
         items = sheets.list_recent_orders(30)
     else:
-        from .main import extract_order_id, _looks_like_username
+        try:
+            from .main import extract_order_id, _looks_like_username  # type: ignore
+        except Exception:
+            def extract_order_id(s: str) -> Optional[str]:
+                s = (s or "").strip()
+                return s if s and not s.startswith("@") else None
+            def _looks_like_username(s: str) -> bool:
+                return str(s or "").strip().startswith("@")
         oid = extract_order_id(q)
         if oid:
             o = sheets.get_order(oid)
@@ -405,6 +434,16 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     if not new_status:
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
     ok = sheets.update_order_status(order_id, new_status)
+    try:
+        subs = sheets.get_all_subscriptions()
+        for s in subs:
+            if str(s.get("order_id","")) == order_id:
+                try:
+                    sheets.set_last_sent_status(int(s.get("user_id")), order_id, "")
+                except Exception:
+                    pass
+    except Exception:
+        pass
     return JSONResponse({"ok": ok, "order_id": order_id, "status": new_status})
 
 
