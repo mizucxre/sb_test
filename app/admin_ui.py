@@ -219,13 +219,14 @@ _LOGIN_HTML = """
 <title>SEABLUU — Вход</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
-  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; height:100vh; }
-  .card { width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); }
+  * { box-sizing:border-box; }
+  body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); display:grid; place-items:center; min-height:100vh; }
+  .card { width:380px; padding:22px; border:1px solid var(--muted); border-radius:14px; background:var(--card); box-shadow:0 10px 30px rgba(0,0,0,.25); }
   input { width:100%; padding:12px 14px; border:1px solid var(--muted); border-radius:12px; background:#1c233b; color:var(--ink); }
-  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#24304d; color:var(--ink); cursor:pointer; }
+  button { width:100%; padding:12px 16px; border-radius:12px; border:1px solid var(--muted); background:#2b3961; color:var(--ink); cursor:pointer; }
   h1 { margin:0 0 14px 0; font-size:18px; }
   .gap { height:10px; }
-  .err { color:#ff9aa2; font-size:13px; min-height:16px; }
+  .err { color:#ff9aa2; font-size:13px; min-height:18px; }
 </style>
 <div class=\"card\">
   <h1>SEABLUU — Вход</h1>
@@ -234,16 +235,19 @@ _LOGIN_HTML = """
   <div class=\"gap\"></div>
   <input id=\"pwd\" type=\"password\" placeholder=\"Пароль\" autocomplete=\"current-password\" />
   <div class=\"gap\"></div>
-  <button onclick=\"doLogin()\">Войти</button>
+  <button id=\"btnLogin\" onclick=\"doLogin()\">Войти</button>
 </div>
 <script>
 async function doLogin(){
-  const login=document.getElementById('login').value.trim();
-  const password=document.getElementById('pwd').value;
-  const r=await fetch('/admin/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,password})});
-  const j=await r.json();
-  if(!j.ok){ document.getElementById('err').innerText=j.error||'Ошибка входа'; return; }
-  location.reload();
+  const b=document.getElementById('btnLogin'); if(b) b.disabled=true;
+  try{
+    const login=document.getElementById('login').value.trim();
+    const password=document.getElementById('pwd').value;
+    const r=await fetch('/admin/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({login,password})});
+    const j=await r.json();
+    if(!j.ok){ document.getElementById('err').innerText=j.error||'Ошибка входа'; return; }
+    location.reload();
+  } finally{ if(b) b.disabled=false; }
 }
 </script>
 </html>
@@ -279,9 +283,12 @@ async def admin_page(request: Request) -> str:
   .search { display:flex; gap:8px; margin-top:10px; }
   input, select { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
+  .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
   .muted { color:#c7d2fe99; font-size:13px; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
+  .spinner{position:fixed;right:16px;bottom:16px;background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:10px 12px;border-radius:12px;opacity:0;transform:translateY(8px);transition:all .25s ease}
+  .spinner.show{opacity:1;transform:translateY(0)}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
@@ -297,7 +304,7 @@ async def admin_page(request: Request) -> str:
     <div class=\"tab\" data-tab=\"admins\" onclick=\"openTab('admins')\">Админы</div>
   </div>
 
-  <div id=\"tab_home\">
+  <div id=\"tab_home\"> 
     <div class=\"item\"><div class=\"oid\">Быстрые действия</div><div>
       <div class=\"row\" style=\"margin-top:8px\">
         <button onclick=\"openTab('orders')\">Открыть «Заказы»</button>
@@ -310,32 +317,32 @@ async def admin_page(request: Request) -> str:
   <div id=\"tab_orders\" hidden>
     <div class=\"search\">
       <input id=\"q\" placeholder=\"order_id / @username / телефон\" />
-      <button onclick=\"runSearch()\">Искать</button>
+      <button id=\"btnSearch\" class=\"btn\" onclick=\"runSearch()\">Искать</button>
     </div>
     <div id=\"list\" class=\"list\"></div>
   </div>
 
   <div id=\"tab_create\" hidden>
     <div class=\"row\" style=\"margin-top:10px\">
-      <input id=\"c_order_id\" placeholder=\"order_id (например CN-12345)\" />
+      <input id=\"c_order_id\" placeholder=\"только цифры (например 12345)\" inputmode=\"numeric\" pattern=\"[0-9]*\" oninput=\"this.value=this.value.replace(/\\\\D+/g,'')\" />
       <select id=\"c_origin\"> <option value=\"CN\">CN</option> <option value=\"KR\">KR</option> </select>
       <select id=\"c_status\"> __OPTIONS__ </select>
     </div>
     <div class=\"row\" style=\"margin-top:10px\">
       <input id=\"c_clients\" placeholder=\"клиенты через запятую (@user1, @user2)\" style=\"min-width:420px\" />
       <input id=\"c_note\" placeholder=\"заметка\" style=\"min-width:260px\" />
-      <button onclick=\"createOrder()\">Создать</button>
+      <button id=\"btnCreate\" class=\"btn\" onclick=\"createOrder()\">Создать</button>
     </div>
     <div id=\"c_msg\" class=\"muted\" style=\"margin-top:8px\"></div>
   </div>
 
   <div id=\"tab_clients\" hidden>
-    <div class=\"search\"><input id=\"cq\" placeholder=\"поиск по имени/телефону/username\"/> <button onclick=\"loadClients()\">Найти</button></div>
+    <div class=\"search\"><input id=\"cq\" placeholder=\"поиск по имени/телефону/username\"/> <button id=\"btnClients\" class=\"btn\" onclick=\"loadClients()\">Найти</button></div>
     <div id=\"clients\" class=\"list\"></div>
   </div>
 
   <div id=\"tab_addresses\" hidden>
-    <div class=\"search\"><input id=\"aq\" placeholder=\"username для фильтра (необязательно)\"/> <button onclick=\"loadAddresses()\">Загрузить</button></div>
+    <div class=\"search\"><input id=\"aq\" placeholder=\"username для фильтра (необязательно)\"/> <button id=\"btnAddr\" class=\"btn\" onclick=\"loadAddresses()\">Загрузить</button></div>
     <div id=\"addresses\" class=\"list\"></div>
   </div>
 
@@ -343,14 +350,26 @@ async def admin_page(request: Request) -> str:
     <div class=\"search\">
       <input id=\"a_login\" placeholder=\"новый логин\" />
       <input id=\"a_pwd\" type=\"password\" placeholder=\"пароль\" />
-      <button onclick=\"addAdmin()\">Добавить админа</button>
+      <button id=\"btnAddAdmin\" class=\"btn\" onclick=\"addAdmin()\">Добавить админа</button>
     </div>
     <div id=\"admins\" class=\"list\"></div>
   </div>
 </div>
+<div id=\"spinner\" class=\"spinner\">Загрузка…</div>
 <div id=\"toast\" class=\"toast\"></div>
 <script>
 const STATUSES = __STATUSES__;
+let __reqs=0;
+function showSpinner(show){ const s=document.getElementById('spinner'); if(!s) return; if(show){ s.classList.add('show'); } else { s.classList.remove('show'); } }
+async function api(path, opts={}){
+  __reqs++; if(__reqs===1) showSpinner(true);
+  try{
+    const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
+    return await r.json();
+  } finally { __reqs--; if(__reqs<=0) showSpinner(false); }
+}
+function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
+function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 function openTab(name){
   for(const id of ['home','orders','create','clients','addresses','admins']){
     document.getElementById('tab_'+id).hidden = (id!==name);
@@ -362,33 +381,34 @@ function openTab(name){
   if(name==='addresses'){ loadAddresses(); }
   if(name==='admins'){ loadAdmins(); }
 }
-async function api(path, opts={}){
-  const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
-  return await r.json();
-}
-function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 1800); }
-function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 async function runSearch(){
-  const q = document.getElementById('q').value.trim();
-  const data = await api('/api/search?q='+encodeURIComponent(q));
-  const list = document.getElementById('list'); list.innerHTML='';
-  for(const o of (data.items||[])){
-    const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
-    div.innerHTML=`<div class="oid">${o.order_id||''}</div><div>
-      <div>Статус: <b>${statusName(o.status)}</b></div>
-      <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
-      <div class="row" style="margin-top:8px">
-        <select id="pick_${o.order_id}">${STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('')}</select>
-        <button onclick="saveStatus('${o.order_id}')">Сохранить статус</button>
-      </div></div>`; list.appendChild(div);
-  }
+  const b=document.getElementById('btnSearch'); if(b) b.disabled=true;
+  try{
+    const q = document.getElementById('q').value.trim();
+    const data = await api('/api/search?q='+encodeURIComponent(q));
+    const list = document.getElementById('list'); list.innerHTML='';
+    for(const o of (data.items||[])){
+      const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
+      const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
+      div.innerHTML=`<div class="oid">${o.order_id||''}</div><div>
+        <div>Статус: <b>${statusName(o.status)}</b></div>
+        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+        <div class="row" style="margin-top:8px">
+          <select id="pick_${o.order_id}">${opts}</select>
+          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
+        </div></div>`; list.appendChild(div);
+    }
+  } finally{ if(b) b.disabled=false; }
 }
-async function saveStatus(oid){
-  const sel=document.getElementById('pick_'+CSS.escape(oid));
-  const pick_index=parseInt(sel.value);
-  const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})});
-  if(res && res.ok!==false) toast('Статус сохранён'); else toast(res.error||'Ошибка сохранения');
-  await runSearch();
+async function saveStatus(oid, btn){
+  if(btn) btn.disabled=true;
+  try{
+    const sel=document.getElementById('pick_'+CSS.escape(oid));
+    const pick_index=parseInt(sel.value);
+    const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})});
+    if(res && res.ok!==false) toast('Статус сохранён'); else toast(res.error||'Ошибка сохранения');
+    await runSearch();
+  } finally{ if(btn) btn.disabled=false; }
 }
 async function createOrder(){
   const b=document.getElementById('btnCreate'); if(b) b.disabled=true;
@@ -404,32 +424,36 @@ async function createOrder(){
     const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
     if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
   } finally{ if(b) b.disabled=false; }
-})});
-  if(r.ok){ toast('Разбор создан'); } else { toast(r.error||'Ошибка'); }
 }
 async function loadClients(){
-  const q=document.getElementById('cq').value.trim();
-  const data=await api('/api/clients?q='+encodeURIComponent(q));
-  const box=document.getElementById('clients'); box.innerHTML='';
-  for(const c of (data.items||[])){
-    const div=document.createElement('div'); div.className='item';
-    div.innerHTML=`<div class="oid">${c.username||''}</div><div>
-      <div>${c.full_name||'—'} — ${c.phone||'—'}</div>
-      <div class="muted">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div>
-    </div>`; box.appendChild(div);
-  }
+  const b=document.getElementById('btnClients'); if(b) b.disabled=true;
+  try{
+    const q=document.getElementById('cq').value.trim();
+    const data=await api('/api/clients?q='+encodeURIComponent(q));
+    const box=document.getElementById('clients'); box.innerHTML='';
+    for(const c of (data.items||[])){
+      const div=document.createElement('div'); div.className='item';
+      div.innerHTML=`<div class="oid">${c.username||''}</div><div>
+        <div>${c.full_name||'—'} — ${c.phone||'—'}</div>
+        <div class="muted">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div>
+      </div>`; box.appendChild(div);
+    }
+  } finally{ if(b) b.disabled=false; }
 }
 async function loadAddresses(){
-  const q=document.getElementById('aq').value.trim();
-  const data=await api('/api/addresses?q='+encodeURIComponent(q));
-  const box=document.getElementById('addresses'); box.innerHTML='';
-  for(const a of (data.items||[])){
-    const div=document.createElement('div'); div.className='item';
-    div.innerHTML=`<div class="oid">${a.username||a.user_id||''}</div><div>
-      <div>${a.full_name||'—'} — ${a.phone||'—'}</div>
-      <div class="muted">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div>
-    </div>`; box.appendChild(div);
-  }
+  const b=document.getElementById('btnAddr'); if(b) b.disabled=true;
+  try{
+    const q=document.getElementById('aq').value.trim();
+    const data=await api('/api/addresses?q='+encodeURIComponent(q));
+    const box=document.getElementById('addresses'); box.innerHTML='';
+    for(const a of (data.items||[])){
+      const div=document.createElement('div'); div.className='item';
+      div.innerHTML=`<div class="oid">${a.username||a.user_id||''}</div><div>
+        <div>${a.full_name||'—'} — ${a.phone||'—'}</div>
+        <div class="muted">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div>
+      </div>`; box.appendChild(div);
+    }
+  } finally{ if(b) b.disabled=false; }
 }
 async function loadAdmins(){
   const data=await api('/api/admins');
@@ -440,12 +464,15 @@ async function loadAdmins(){
   }
 }
 async function addAdmin(){
-  const login=document.getElementById('a_login').value.trim();
-  const password=document.getElementById('a_pwd').value;
-  const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password})});
-  if(!r.ok){ toast(r.error||'Ошибка'); return; }
-  document.getElementById('a_login').value=''; document.getElementById('a_pwd').value='';
-  await loadAdmins();
+  const b=document.getElementById('btnAddAdmin'); if(b) b.disabled=true;
+  try{
+    const login=document.getElementById('a_login').value.trim();
+    const password=document.getElementById('a_pwd').value;
+    const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password})});
+    if(!r.ok){ toast(r.error||'Ошибка'); return; }
+    document.getElementById('a_login').value=''; document.getElementById('a_pwd').value='';
+    await loadAdmins();
+  } finally{ if(b) b.disabled=false; }
 }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
 openTab('home');
