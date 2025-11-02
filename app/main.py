@@ -1,15 +1,5 @@
 # -*- coding: utf-8 -*-
-# SEABLUU bot — main.py (fixed & refactored)
-#
-# Изменения по задаче:
-# 1) Поиск по @username: нормализуем username (без @, lower), ищем в participants и в client_name (fallback).
-#    Теперь админ может просто прислать "@user" — бот найдёт разборы и покажет карточки.
-# 2) Создание клиента при создании разбора: при добавлении order с @username создаём клиента
-#    через sheets.ensure_clients_from_usernames и защищаемся от дублей.
-# 3) Профиль клиента: показывает связанные разборы (через sheets.orders_for_username).
-# 4) Исправлены опечатки и дубли функций; унифицированы парсеры order_id/username.
-#
-# Совместимо с PTB v21.x
+# SEABLUU bot — main.py (fixed v2)
 
 import logging
 import re
@@ -33,8 +23,6 @@ from .config import ADMIN_IDS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# ---------------------- Константы/утилиты ----------------------
 
 STATUSES = [
     "🛒 выкуплен",
@@ -64,7 +52,6 @@ def _looks_like_username(tok: str) -> bool:
         return False
     if t.startswith("@"):
         return True
-    # без @, но похоже на username и не похоже на order_id
     if USERNAME_TOKEN_RE.fullmatch(t) and not extract_order_id(t):
         digits = re.sub(r"\D+", "", t)
         return len(digits) < 6
@@ -72,14 +59,12 @@ def _looks_like_username(tok: str) -> bool:
 
 
 def extract_order_id(s: str) -> Optional[str]:
-    """Нормализуем к виду PREFIX-SUFFIX. Поддержка буквенных суффиксов (CN-TEST)."""
     if not s:
         return None
     s = s.strip()
     m = ORDER_ID_RE.search(s)
     if m:
         return f"{m.group(1).upper()}-{m.group(2).upper()}"
-    # fallback: уже с дефисом
     if "-" in s:
         left, right = s.split("-", 1)
         left, right = left.strip(), right.strip()
@@ -98,7 +83,7 @@ def normalize_status(raw: str) -> str:
     if not raw:
         return "—"
     s = str(raw)
-    m = re.search(r'(?:^|:)pick_status_id:(\d+)$', s)
+    m = re.search(r'(?:^|:)pick_status_id:?([0-9]+)$', s)
     if m:
         try:
             i = int(m.group(1))
@@ -106,16 +91,15 @@ def normalize_status(raw: str) -> str:
                 return STATUSES[i]
         except Exception:
             pass
-    if s.startswith('adm:pick_status_id:'):
+    if s.startswith('adm:pick_status_id'):
         try:
-            i = int(s.split(':')[-1])
+            i = int(re.sub(r'[^0-9]', '', s))
             if 0 <= i < len(STATUSES):
                 return STATUSES[i]
         except Exception:
             pass
     return s
 
-# -------- небольшая «анимация»/лоадер --------
 
 async def _typing(context: ContextTypes.DEFAULT_TYPE, chat_id: int, seconds: float = 0.6):
     try:
@@ -127,16 +111,12 @@ async def _typing(context: ContextTypes.DEFAULT_TYPE, chat_id: int, seconds: flo
 
 async def reply_animated(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
     msg = update.message or update.callback_query.message
-    if isinstance(text, str):
-        text = text.replace('\n', '\n')
     await _typing(context, msg.chat_id, 0.4)
     return await msg.reply_text(text, **kwargs)
 
 
 async def reply_markdown_animated(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str, **kwargs):
     msg = update.message or update.callback_query.message
-    if isinstance(text, str):
-        text = text.replace('\n', '\n')
     await _typing(context, msg.chat_id, 0.4)
     return await msg.reply_markdown(text, **kwargs)
 
@@ -157,7 +137,6 @@ async def safe_delete_message(context: ContextTypes.DEFAULT_TYPE, message):
     except Exception:
         pass
 
-# ---------------------- Текст кнопок ----------------------
 
 BTN_TRACK_NEW = "🔍 Отследить разбор"
 BTN_ADDRS_NEW = "🏠 Мои адреса"
@@ -194,8 +173,6 @@ ADMIN_MENU_ALIASES = {
     "back_admin": {BTN_BACK_TO_ADMIN_NEW, "назад, в админ-панель"},
 }
 
-# ---------------------- Клавиатуры ----------------------
-
 MAIN_KB = ReplyKeyboardMarkup(
     [
         [KeyboardButton(BTN_TRACK_NEW)],
@@ -215,8 +192,6 @@ ADMIN_MENU_KB = ReplyKeyboardMarkup(
     ],
     resize_keyboard=True,
 )
-
-# ---------------------- Админ: Поиск ----------------------
 
 FIND_EXPECTING_QUERY_FLAG = "find_expect_query"
 FIND_RESULTS_KEY = "find_results"
@@ -298,7 +273,6 @@ async def _open_order_card(update: Update, context: ContextTypes.DEFAULT_TYPE, o
 
     await reply_animated(update, context, "\n".join(head_lines), reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("✏️ Изменить статус", callback_data=f"adm:status_menu:{order_id}")]]))
 
-# ---------------------- Команды ----------------------
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     hello = (
@@ -331,13 +305,11 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop(k, None)
     await reply_animated(update, context, "🛠 Открываю админ-панель…", reply_markup=ADMIN_MENU_KB)
 
-# ---------------------- Пользовательские сценарии ----------------------
 
 async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw = (update.message.text or "").strip()
     text = raw.lower()
 
-    # Админ быстрый поиск: если прислали @username без входа в режим поиска — выполним поиск
     if _is_admin(update.effective_user.id) and _looks_like_username(raw) and not context.user_data.get(FIND_EXPECTING_QUERY_FLAG):
         loader = await show_loader(update, context, "⏳ Ищу по username…")
         try:
@@ -352,13 +324,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_delete_message(context, loader)
         return
 
-    # Если ждём ввод после /find и прилетела «Назад» — выходим
     if context.user_data.get(FIND_EXPECTING_QUERY_FLAG) and text == BTN_BACK_TO_ADMIN_NEW.lower():
         context.user_data.pop(FIND_EXPECTING_QUERY_FLAG, None)
         await admin_menu(update, context)
         return
 
-    # ==== Ответ на запрос после /find (мультипоиск) ====
     if context.user_data.get(FIND_EXPECTING_QUERY_FLAG):
         context.user_data.pop(FIND_EXPECTING_QUERY_FLAG, None)
         loader = await show_loader(update, context, "⏳ Ищу…")
@@ -369,7 +339,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             orders: List[Dict] = []
             seen = set()
 
-            # 1) order_id
             for t in tokens:
                 oid = extract_order_id(t)
                 if oid and oid not in seen:
@@ -377,7 +346,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if od:
                         orders.append(od); seen.add(oid)
 
-            # 2) username
             for t in tokens:
                 if _looks_like_username(t):
                     for od in sheets.get_orders_by_username(t):
@@ -385,7 +353,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         if oid and oid not in seen:
                             orders.append(od); seen.add(oid)
 
-            # 3) phone
             for t in tokens:
                 if len(re.sub(r"\D+","",t)) >= 6 and not t.startswith("@") and not extract_order_id(t):
                     for od in sheets.get_orders_by_phone(t):
@@ -406,7 +373,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_delete_message(context, loader)
         return
 
-    # ===== ADMIN FLOW =====
     if _is_admin(update.effective_user.id):
         if text in {x.lower() for x in ADMIN_MENU_ALIASES["admin_exit"]}:
             context.user_data.clear()
@@ -435,7 +401,6 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             ), reply_markup=ReplyKeyboardMarkup([[KeyboardButton(BTN_BACK_TO_ADMIN_NEW)]], resize_keyboard=True))
             return
 
-    # ===== USER FLOW =====
     if text in {x.lower() for x in CLIENT_ALIASES["cancel"]}:
         context.user_data["mode"] = None
         await reply_animated(update, context, "Отменили действие. Что дальше? 🙂", reply_markup=MAIN_KB)
@@ -465,14 +430,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query_status(update, context, raw)
         return
 
-    # По умолчанию — подсказка
     if _is_admin(update.effective_user.id):
         await reply_animated(update, context, "Вы в админ-панели. Выберите действие:", reply_markup=ADMIN_MENU_KB)
     else:
         await reply_animated(update, context, "Хмм, не понял. Выберите кнопку ниже или введите номер заказа. Если что — «Отмена».", reply_markup=MAIN_KB)
 
-
-# ---------------------- Клиент: статус/подписки/адреса/профиль ----------------------
 
 async def query_status(update: Update, context: ContextTypes.DEFAULT_TYPE, order_id: str):
     await _typing(context, update.effective_chat.id, 0.5)
@@ -481,7 +443,7 @@ async def query_status(update: Update, context: ContextTypes.DEFAULT_TYPE, order
     if not order:
         await reply_animated(update, context, "🙈 Такой заказ не найден. Проверьте номер или повторите позже.")
         return
-    status = order.get("status") or "статус не указан"
+    status = normalize_status(order.get("status")) or "статус не указан"
     origin = order.get("origin") or ""
     txt = f"📦 Заказ *{order_id}*\nСтатус: *{status}*"
     if origin:
@@ -528,7 +490,6 @@ async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
         address=context.user_data.get("address", ""),
         postcode=context.user_data.get("postcode", ""),
     )
-    # автоподписка на свои разборы
     try:
         if u.username:
             for oid in sheets.find_orders_for_username(u.username):
@@ -571,11 +532,10 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
     addresses = sheets.list_addresses(u.id)
     addr = addresses[0] if addresses else {}
 
-    # заказы по username текущего пользователя
     orders = sheets.orders_for_username(u.username or "") if (u.username) else []
     order_lines = []
     for oid, st in orders[:10]:
-        order_lines.append(f"• {oid} — {st}")
+        order_lines.append(f"• {oid} — {normalize_status(st)}")
     more = ("\n… и ещё " + str(len(orders) - 10)) if len(orders) > 10 else ""
 
     text = (
@@ -599,8 +559,6 @@ async def show_profile(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await reply_animated(update, context, text, reply_markup=kb)
 
-
-# ---------- Уведомления подписчикам ----------
 
 async def notify_subscribers(application, order_id: str, new_status: str):
     try:
@@ -627,8 +585,6 @@ async def notify_subscribers(application, order_id: str, new_status: str):
             logger.warning(f"notify_subscribers fail to {uid}: {e}")
 
 
-# ---------- Админ: создание/массовые операции (укорочено под задачу) ----------
-
 async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE, status_text: str):
     buf = context.user_data.get("adm_buf") or {}
     order_id = buf.get("order_id")
@@ -640,7 +596,6 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data.pop("adm_mode", None)
         return
 
-    # создаём/апдейтим заказ
     sheets.add_order({
         "order_id": order_id,
         "client_name": client_name_raw,
@@ -648,7 +603,6 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
         "status": status_text,
     })
 
-    # парсим username'ы
     usernames: List[str] = []
     if client_name_raw:
         for tok in re.split(r"[\s,]+", client_name_raw):
@@ -658,10 +612,9 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
             if tok:
                 usernames.append(tok)
 
-    # участники + клиенты + подписки + уведомления
     if usernames:
         sheets.ensure_participants(order_id, usernames)
-        sheets.ensure_clients_from_usernames(usernames)  # создаём клиентов без дублей
+        sheets.ensure_clients_from_usernames(usernames)
         ids = sheets.get_user_ids_by_usernames(usernames)
         sent = 0
         for uid in ids:
@@ -684,8 +637,6 @@ async def _finalize_new_order(update: Update, context: ContextTypes.DEFAULT_TYPE
     context.user_data.pop("adm_mode", None)
     context.user_data.pop("adm_buf", None)
 
-
-# ---------------------- Callback Router (кратко) ----------------------
 
 async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -727,7 +678,6 @@ async def on_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
 
-# === Регистрация хэндлеров для webhook ===
 from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters
 
 def register_handlers(app: Application) -> None:
