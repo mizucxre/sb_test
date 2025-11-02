@@ -36,7 +36,18 @@ from .config import ADMIN_IDS
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+USERNAME_TOKEN_RE = re.compile(r"@?[A-Za-z0-9_]{5,}")
 
+def _looks_like_username(tok: str) -> bool:
+    t = (tok or "").strip()
+    if not t:
+        return False
+    if t.startswith("@"):
+        return True
+    if USERNAME_TOKEN_RE.fullmatch(t) and not extract_order_id(t):
+        digits = re.sub(r"\D+", "", t)
+        return len(digits) < 6
+    return False
 # ---------------------- Константы и утилиты ----------------------
 
 STATUSES = [
