@@ -636,11 +636,11 @@ async def handle_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 2) username
             for t in tokens:
-    if _looks_like_username(t):
-        for od in sheets.get_orders_by_username(t):
-            oid = str(od.get("order_id","")).strip()
-            if oid and oid not in seen:
-                orders.append(od); seen.add(oid)
+                if _looks_like_username(t):
+                    for od in sheets.get_orders_by_username(t):
+                        oid = str(od.get("order_id","")).strip()
+                        if oid and oid not in seen:
+                            orders.append(od); seen.add(oid)
 
             # 3) phone
             for t in tokens:
