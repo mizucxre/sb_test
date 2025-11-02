@@ -556,6 +556,40 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     _cache_clear()
     return JSONResponse({"ok": ok, "order_id": order_id, "status": new_status})
 
+@router.post("/api/orders")
+async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+
+    order_id = str(payload.get("order_id", "")).strip()
+    origin   = (str(payload.get("origin", "")).strip() or "").upper()[:2]
+    status   = str(payload.get("status", "")).strip()
+    note     = str(payload.get("note", "")).strip()
+    clients_raw = str(payload.get("clients", "")).strip()
+
+    if not order_id or not origin:
+        return JSONResponse({"ok": False, "error": "order_id and origin are required"}, status_code=400)
+
+    # защита на случай, если пришли только цифры
+    if not (order_id.startswith("CN-") or order_id.startswith("KR-")):
+        order_id = f"{origin}-{order_id.lstrip(' -')}"
+
+    # создать/обновить разбор
+    sheets.add_order({
+        "order_id": order_id,
+        "origin": origin,
+        "status": status or "",
+        "note": note,
+    })
+
+    # создать клиентов и привязать к разбору
+    usernames = [u.strip() for u in clients_raw.split(",") if u.strip()]
+    created = sheets.ensure_clients_from_usernames(usernames)
+    if usernames:
+        sheets.ensure_participants(order_id, usernames)
+
+    _cache_clear()
+    return JSONResponse({"ok": True, "order_id": order_id, "clients_created": created})
 
 @router.get("/api/clients")
 async def api_clients(request: Request, q: str = Query("")) -> JSONResponse:
