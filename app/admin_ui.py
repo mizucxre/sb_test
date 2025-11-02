@@ -46,11 +46,13 @@ def _normalize_status(raw: str) -> str:
 
 
 def _secret() -> str:
-    return os.getenv("ADMIN_SECRET", "dev-secret-change-me")
+    return (os.getenv("ADMIN_SECRET", "dev-secret-change-me") or "dev-secret-change-me").strip()
 
 
 def _hash_pwd(login: str, password: str) -> str:
-    data = f"{login}:{password}:{_secret()}".encode("utf-8")
+    login_norm = str(login or "").strip().lower()
+    password_norm = str(password or "").strip()
+    data = f"{login_norm}:{password_norm}:{_secret()}".encode("utf-8")
     return hashlib.sha256(data).hexdigest()
 
 
@@ -59,8 +61,8 @@ def _admins_ws():
     vals = ws.get_all_values()
     if not vals:
         ws.append_row(["login", "password_hash", "role", "created_at"])  # role: owner/admin
-    owner_login = os.getenv("ADMIN_LOGIN", "admin")
-    owner_pass = os.getenv("ADMIN_PASSWORD", "admin")
+    owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
+    owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
     rows = ws.get_all_records()
     found_idx = None
     for i, r in enumerate(rows, start=2):
@@ -369,7 +371,7 @@ runSearch();
 @router.post("/api/login")
 async def api_login(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     login = str(payload.get("login", "")).strip()
-    password = str(payload.get("password", ""))
+    password = str(payload.get("password", "")).strip()
     adm = _get_admin(login)
     if not adm or adm.get("password_hash") != _hash_pwd(login, password):
         return JSONResponse({"ok": False, "error": "Неверные логин или пароль"}, status_code=401)
