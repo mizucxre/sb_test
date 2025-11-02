@@ -18,6 +18,8 @@ logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
+from .admin_ui import get_admin_router
+app.include_router(get_admin_router(), prefix="/admin")
 application: Application | None = None
 
 
