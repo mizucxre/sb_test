@@ -482,28 +482,40 @@ def orders_for_username(uname: str, only_active: bool = True) -> List[Tuple[str,
 
 # ==== Поиск заказов по username и телефону ==================================
 
+from datetime import datetime
+
 def get_orders_by_username(username: str) -> List[Dict[str, Any]]:
     uname = _normalize_username(username)
     if not uname:
         return []
+
     ws_parts = get_worksheet("participants")
     parts = ws_parts.get_all_records()
-    oids = []
+    oids: List[str] = []
     for r in parts:
-        if str(r.get("username","")).strip().lower() == uname:
-            oid = str(r.get("order_id","")).strip()
+        if str(r.get("username", "")).strip().lower() == uname:
+            oid = str(r.get("order_id", "")).strip()
             if oid:
                 oids.append(oid)
-    if not oids:
-        return []
+
     ws_orders = get_worksheet("orders")
-    rows = ws_orders.get_all_records()
-    by_id = { str(r.get("order_id","")).strip(): r for r in rows }
-    res = [ by_id[oid] for oid in oids if oid in by_id ]
-    # отсортируем по updated_at (desc)
+    orders = ws_orders.get_all_records()
+
+    # Fallback: если участников нет — ищем по client_name в orders
+    if not oids:
+        want = uname
+        res = []
+        for r in orders:
+            cn = str(r.get("client_name", "")).lower()
+            if ("@" + want) in cn or want in cn:
+                res.append(r)
+    else:
+        by_id = {str(r.get("order_id", "")).strip(): r for r in orders}
+        res = [by_id[oid] for oid in oids if oid in by_id]
+
     def _dt(r):
         try:
-            return datetime.fromisoformat(str(r.get("updated_at","")))
+            return datetime.fromisoformat(str(r.get("updated_at", "")))
         except Exception:
             return datetime.min
     res.sort(key=_dt, reverse=True)
@@ -544,7 +556,37 @@ def get_orders_by_phone(phone: str) -> List[Dict[str, Any]]:
             return datetime.min
     res.sort(key=_dt, reverse=True)
     return res
+def ensure_clients_from_usernames(usernames: List[str]) -> List[str]:
+    """Создаёт в листе clients строки для новых username.
+    Возвращает список реально добавленных username (нормализованных).
+    Дубли (по нормализованному username) не добавляются.
+    """
+    if not usernames:
+        return []
+    ws = get_worksheet("clients")
+    df = _get_clients_df()  # уже добавляет username_norm/phone_digits
+    have = set(df.get("username_norm", pd.Series(dtype=str)).astype(str).tolist()) if not df.empty else set()
 
+    now = _now()
+    to_add: List[List[Any]] = []
+    created: List[str] = []
+
+    for u in usernames:
+        uname = _normalize_username(u)
+        if not uname:
+            continue
+        if uname in have:
+            continue  # защита от дублей
+        to_add.append(["", uname, "", "", "", "", "", now, now])
+        created.append(uname)
+        have.add(uname)
+
+    if to_add:
+        all_vals = ws.get_all_values()
+        if not all_vals:
+            ws.append_row(["user_id","username","full_name","phone","city","address","postcode","created_at","updated_at"])
+        ws.append_rows(to_add)
+    return created
 # -------------------------------------------------
 #  SUBSCRIPTIONS
 # -------------------------------------------------
