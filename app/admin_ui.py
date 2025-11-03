@@ -1213,4 +1213,3 @@ if __name__ == "__main__":
     from fastapi import FastAPI
     app = FastAPI()
     app.include_router(get_admin_router(), prefix="/admin")
-
