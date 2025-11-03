@@ -4,7 +4,7 @@ from __future__ import annotations
 import base64, hashlib, hmac, json, os, time, urllib.parse, urllib.request
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Body, Query, Request, UploadFile, File
+from fastapi import APIRouter, Body, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
 from . import sheets
@@ -275,7 +275,7 @@ async def admin_page(request: Request) -> str:
   h1 { margin:0; font-size:18px; }
   .wrap { max-width:1100px; margin:18px auto; padding:0 12px 70px; }
   .tabs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; position:sticky; top:56px; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); padding:10px 0; z-index:4; }
-  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; text-decoration:none; color:var(--ink); }
+  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; text-decoration:none; color:#var(--ink); }
   .tab.active { background:#24304d; }
   .list { margin-top:16px; display:grid; gap:10px; }
   .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }
@@ -460,13 +460,13 @@ async function runSearch(){
     if(!data.items || !data.items.length){ list.innerHTML='<div class="muted">Ничего не найдено.</div>'; return; }
     for(const o of data.items){
       const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
-      const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
-      div.innerHTML=`<div class="oid">${o.order_id||''}</div><div>
-        <div>Статус: <b>${statusName(o.status)}</b></div>
-        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+      const opts = STATUSES.map((s,i)=>`<option value="\${i}" \${statusName(o.status)===s?'selected':''}>\${s}</option>`).join('');
+      div.innerHTML=`<div class="oid">\${o.order_id||''}</div><div>
+        <div>Статус: <b>\${statusName(o.status)}</b></div>
+        <div class="muted">Страна: \${(o.origin||o.country||'—').toUpperCase()} · Обновлено: \${dt||'—'} · Клиент: \${o.client_name||'—'}</div>
         <div class="row" style="margin-top:8px">
-          <select id="pick_${o.order_id}">${opts}</select>
-          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
+          <select id="pick_\${o.order_id}">\${opts}</select>
+          <button class="btn" onclick="saveStatus('\${o.order_id}', this)">Сохранить статус</button>
         </div></div>`; list.appendChild(div);
     }
   } finally{ if(b) b.disabled=false; }
@@ -504,9 +504,9 @@ async function loadAdmins(){
 async function uploadAvatar(fileInputId, targetInputId, previewId){
   const fileEl=document.getElementById(fileInputId);
   if(!fileEl || !fileEl.files || !fileEl.files[0]){ toast('Выберите файл'); return; }
-  const fd = new FormData(); fd.append('file', fileEl.files[0]);
-  const r = await fetch('/admin/api/admins/upload_avatar', { method:'POST', body: fd });
-  const j = await r.json();
+  const f = fileEl.files[0];
+  const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(f.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f });
+  let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; }
   if(!j.ok){ toast(j.error||'Ошибка загрузки'); return; }
   const url = j.url;
   document.getElementById(targetInputId).value = url;
@@ -531,7 +531,6 @@ async function addAdmin(){
 }
 
 async function loadMe(){
-  // используем список админов и берём текущего по имени в шапке
   const me='__USER__';
   const r=await api('/api/admins');
   if(!r || !r.items) return;
@@ -718,7 +717,7 @@ async def api_addresses(request: Request, q: str = Query("")) -> JSONResponse:
     ws = sheets.get_worksheet("addresses")
     values = ws.get_all_records()
     if q:
-        qn = q.strip().lstrip("@").lower()
+        qn = q.strip().lstrip("@").lower();
         values = [r for r in values if str(r.get("username", "")).strip().lower() == qn]
     return JSONResponse({"items": values[-200:]})
 
@@ -761,21 +760,25 @@ async def api_admins_avatar(request: Request, payload: Dict[str, Any] = Body(...
     ok = _set_admin_avatar(target, avatar)
     return JSONResponse({"ok": ok})
 
-# ---- Загрузка и раздача аватаров ----
+# ---- Загрузка и раздача аватаров (без multipart) ----
 _MEDIA_DIR = os.getenv("ADMIN_MEDIA_DIR", os.path.join(os.getcwd(), "data", "avatars"))
 os.makedirs(_MEDIA_DIR, exist_ok=True)
 
 @router.post("/api/admins/upload_avatar")
-async def upload_avatar(request: Request, file: UploadFile = File(...)) -> JSONResponse:
+async def upload_avatar(request: Request, filename: str = Query("avatar.jpg")) -> JSONResponse:
     login = _authed_login(request)
     if not login:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    name, ext = os.path.splitext(file.filename or "avatar")
-    ext = ext.lower() if ext.lower() in [".png",".jpg",".jpeg",".gif",".webp"] else ".jpg"
+    content = await request.body()
+    if not content:
+        return JSONResponse({"ok": False, "error": "empty_body"}, status_code=400)
+    name, ext = os.path.splitext(filename or "avatar.jpg")
+    ext = (ext or "").lower()
+    if ext not in [".png",".jpg",".jpeg",".gif",".webp"]:
+        ext = ".jpg"
     safe = "".join([c for c in login if c.isalnum() or c in "-_"]).strip("-_") or "user"
     fname = f"{safe}_{int(time.time())}{ext}"
     path = os.path.join(_MEDIA_DIR, fname)
-    content = await file.read()
     with open(path, "wb") as f:
         f.write(content)
     url = f"/admin/media/avatars/{fname}"
