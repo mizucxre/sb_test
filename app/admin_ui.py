@@ -770,3 +770,222 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     order_id = str(payload.get("order_id", ""))
+
+
+# ---- Added routes and exports to make Admin UI work ----
+
+from fastapi import UploadFile
+from fastapi import Response
+from fastapi import HTTPException
+from fastapi import Depends
+from fastapi.responses import PlainTextResponse
+
+# Index page
+@router.get("/", response_class=HTMLResponse)
+async def admin_index(request: Request):
+    return HTMLResponse(admin_page(request))
+
+# Admins API
+@router.get("/api/admins")
+async def api_admins(request: Request) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        items = _list_admins()
+        return JSONResponse({"ok": True, "items": items})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": "admins_error"}, status_code=500)
+
+@router.post("/api/admins")
+async def api_add_admin(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+    me = _authed_login(request)
+    if not me:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    login = str(payload.get("login", "")).strip()
+    password = str(payload.get("password", "")).strip()
+    avatar = str(payload.get("avatar", "")).strip()
+    if not login or not password:
+        return JSONResponse({"ok": False, "error": "login_or_password_empty"}, status_code=400)
+    ok = _add_admin(me, login, password, role="admin", avatar=avatar)
+    return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "forbidden_or_exists"})}, status_code=200 if ok else 403)
+
+@router.post("/api/admins/avatar")
+async def api_set_my_avatar(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+    me = _authed_login(request)
+    if not me:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    url = str(payload.get("avatar", "")).strip()
+    if not url:
+        return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
+    ok = _set_admin_avatar(me, url)
+    return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "update_failed"})}, status_code=200 if ok else 500)
+
+def _safe_filename(name: str) -> str:
+    name = name.strip().replace("\\", "/").split("/")[-1]
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name)
+    if not name:
+        name = f"avatar_{int(time.time())}.bin"
+    return name
+
+_MEDIA_DIR = os.path.join(os.getcwd(), "media", "avatars")
+
+@router.post("/api/admins/upload_avatar")
+async def api_upload_avatar_raw(request: Request, filename: str = Query(default="")) -> JSONResponse:
+    me = _authed_login(request)
+    if not me:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        raw = await request.body()
+        if not raw:
+            return JSONResponse({"ok": False, "error": "empty_body"}, status_code=400)
+        fn = _safe_filename(filename or f"{me}_{int(time.time())}.jpg")
+        os.makedirs(_MEDIA_DIR, exist_ok=True)
+        path = os.path.join(_MEDIA_DIR, fn)
+        with open(path, "wb") as f:
+            f.write(raw)
+        url = f"/admin/media/avatars/{fn}"
+        return JSONResponse({"ok": True, "url": url})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": "upload_failed"}, status_code=500)
+
+@router.get("/media/avatars/{filename}")
+async def media_avatar(filename: str):
+    fn = _safe_filename(filename)
+    path = os.path.join(_MEDIA_DIR, fn)
+    if not os.path.isfile(path):
+        raise HTTPException(status_code=404)
+    return FileResponse(path)
+
+# Clients
+@router.get("/api/clients")
+async def api_clients(request: Request) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        ws = sheets.get_worksheet("clients")
+        records = ws.get_all_records()
+        items = []
+        for r in records:
+            items.append({
+                "username": r.get("username") or r.get("login") or r.get("tg") or "",
+                "name": r.get("name") or "",
+                "phone": r.get("phone") or r.get("tel") or r.get("номер") or ""
+            })
+        return JSONResponse({"ok": True, "items": items})
+    except Exception:
+        # if sheet missing, return empty list gracefully
+        return JSONResponse({"ok": True, "items": []})
+
+# Addresses
+@router.get("/api/addresses")
+async def api_addresses(request: Request, q: Optional[str] = Query(default="")) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        ws = sheets.get_worksheet("addresses")
+        records = ws.get_all_records()
+        qq = (q or "").strip().lower()
+        items = []
+        for r in records:
+            rec = {
+                "username": r.get("username") or r.get("login") or r.get("tg") or "",
+                "address": r.get("address") or r.get("адрес") or ""
+            }
+            if qq:
+                hay = f"{rec['username']} {rec['address']}".lower()
+                if qq not in hay:
+                    continue
+            items.append(rec)
+        return JSONResponse({"ok": True, "items": items})
+    except Exception:
+        return JSONResponse({"ok": True, "items": []})
+
+# Chat
+@router.get("/api/chat")
+async def api_chat_list(request: Request) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        ws = sheets.get_worksheet("chat")
+        records = ws.get_all_records()
+        for i, r in enumerate(records, start=1):
+            if not r.get("id"):
+                r["id"] = str(i)
+        items = []
+        for r in records:
+            items.append({
+                "id": str(r.get("id") or ""),
+                "created_at": r.get("created_at") or r.get("time") or r.get("dt") or "",
+                "login": r.get("login") or r.get("user") or "",
+                "avatar": r.get("avatar") or "",
+                "text": r.get("text") or r.get("message") or "",
+                "ref": r.get("ref") or r.get("context") or ""
+            })
+        return JSONResponse({"ok": True, "items": items})
+    except Exception:
+        return JSONResponse({"ok": True, "items": []})
+
+@router.post("/api/chat")
+async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
+    me = _authed_login(request)
+    if not me:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    text = str(payload.get("text", "")).strip()
+    ref = str(payload.get("ref", "")).strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    try:
+        ws = sheets.get_worksheet("chat")
+        records = ws.get_all_records()
+        next_id = 1
+        for r in records:
+            try:
+                next_id = max(next_id, int(str(r.get("id") or "0")) + 1)
+            except Exception:
+                pass
+        # find my avatar
+        my = _get_admin(me) or {}
+        avatar = my.get("avatar", "")
+        # ensure header
+        if not ws.get_all_values():
+            ws.append_row(["id","created_at","login","avatar","text","ref"])
+        ws.append_row([str(next_id), sheets._now(), me, avatar, text, ref])
+        return JSONResponse({"ok": True, "id": str(next_id)})
+    except Exception:
+        return JSONResponse({"ok": False, "error": "chat_failed"}, status_code=500)
+
+# News
+@router.get("/api/news")
+async def api_news(request: Request) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        ws = sheets.get_worksheet("news")
+        records = ws.get_all_records()
+        items = []
+        for r in records:
+            # ignore emoji-only lines as 'image' per docstring hint
+            txt = str(r.get("text") or "").strip()
+            if not txt and not r.get("image"):
+                continue
+            items.append({
+                "date": r.get("date") or r.get("created_at") or r.get("dt") or "",
+                "text": txt,
+                "image": r.get("image") or r.get("photo") or "",
+                "channel_image": r.get("channel_image") or r.get("avatar") or "",
+                "channel_name": r.get("channel_name") or r.get("channel") or "SEABLUU"
+            })
+        return JSONResponse({"ok": True, "items": items})
+    except Exception:
+        # graceful empty feed
+        return JSONResponse({"ok": True, "items": []})
+
+# Export for webhook app
+def get_admin_router() -> APIRouter:
+    return router
+
+# Optional self-run for local debug: uvicorn app.admin_ui:app
+if __name__ == "__main__":
+    from fastapi import FastAPI
+    app = FastAPI()
+    app.include_router(get_admin_router(), prefix="/admin")
