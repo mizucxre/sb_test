@@ -37,7 +37,6 @@ STATUSES = [
 
 router = APIRouter()
 
-# ------------------ cache helpers ------------------
 _CACHE: Dict[str, Any] = {}
 
 def _cache_get(k: str, ttl: int = 8):
@@ -55,7 +54,6 @@ def _cache_set(k: str, data: Any):
 def _cache_clear():
     _CACHE.clear()
 
-# ------------------ core helpers ------------------
 
 def _secret() -> str:
     return (os.getenv("ADMIN_SECRET", "dev-secret") or "dev-secret").strip()
@@ -88,13 +86,11 @@ def _hash_pwd(login: str, password: str) -> str:
     base = f"{login.strip().lower()}:{password}:{_secret()}".encode()
     return hashlib.sha256(base).hexdigest()
 
-# ------------------ admins sheet ------------------
 
 def _admins_ws():
     ws = sheets.get_worksheet("admins")
     if not ws.get_all_values():
         ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
-    # ensure owner exists/updated
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
     owner_avatar = os.getenv("ADMIN_AVATAR", "")
@@ -141,7 +137,6 @@ def _add_admin(current_login: str, new_login: str, password: str, role: str, ava
 
 def _set_admin_avatar(target_login: str, avatar_url: str) -> bool:
     ws = _admins_ws()
-    # find row/col
     try:
         headers = ws.row_values(1)
         col = 4
@@ -162,7 +157,6 @@ def _set_admin_avatar(target_login: str, avatar_url: str) -> bool:
     except Exception:
         return False
 
-# ------------------ notifications (optional) ------------------
 
 def _bot_token() -> str:
     try:
@@ -198,12 +192,11 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
     except Exception:
         pass
 
-# ------------------ pages ------------------
 _LOGIN_HTML = r"""
 <!doctype html>
-<html lang="ru">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang=\"ru\">
+<meta charset=\"utf-8\" />
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Вход</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; }
@@ -215,14 +208,14 @@ _LOGIN_HTML = r"""
   .gap { height:10px; }
   .err { color:#ff9aa2; font-size:13px; min-height:16px; }
 </style>
-<div class="card">
+<div class=\"card\">
   <h1>SEABLUU — Вход</h1>
-  <div class="err" id="err"></div>
-  <input id="login" placeholder="Логин" autocomplete="username" />
-  <div class="gap"></div>
-  <input id="pwd" type="password" placeholder="Пароль" autocomplete="current-password" />
-  <div class="gap"></div>
-  <button id="btnLogin" onclick="doLogin()">Войти</button>
+  <div class=\"err\" id=\"err\"></div>
+  <input id=\"login\" placeholder=\"Логин\" autocomplete=\"username\" />
+  <div class=\"gap\"></div>
+  <input id=\"pwd\" type=\"password\" placeholder=\"Пароль\" autocomplete=\"current-password\" />
+  <div class=\"gap\"></div>
+  <button id=\"btnLogin\" onclick=\"doLogin()\">Войти</button>
 </div>
 <script>
 async function doLogin(){
@@ -250,12 +243,11 @@ async def admin_page(request: Request) -> str:
 
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
 
-    # === Вся страница (минимум зависимостей, чистый JS/CSS) ===
     html = r"""
 <!doctype html>
-<html lang="ru">
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<html lang=\"ru\">
+<meta charset=\"utf-8\" />
+<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />
 <title>SEABLUU — Админ‑панель</title>
 <style>
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; --accent:#4f5fff; }
@@ -301,12 +293,10 @@ async def admin_page(request: Request) -> str:
   .tick{position:absolute; right:6px; bottom:-16px; font-size:12px; color:#9fb0ff99}
   .sending::after{content:'⏳'; position:absolute; right:6px; bottom:-16px; font-size:12px; opacity:.9}
   .failed{border-color:#ff7b7b!important}
-  /* News: VK-like */
   .news-card{padding:12px;border:1px solid var(--muted); border-radius:12px; background:var(--card)}
   .news-head{display:flex;gap:10px;align-items:center}
   .news-ava{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--muted); background:#111}
   .news-img{width:100%; max-height:440px; object-fit:cover; border-radius:10px;border:1px solid var(--muted); background:#111; margin-top:8px}
-  /* settings (drawer) */
   .gear{width:28px;height:28px;cursor:pointer;opacity:.9}
   .drawer{position:fixed;top:0;right:-420px;width:380px;height:100vh;background:var(--card);border-left:1px solid var(--muted);box-shadow:-12px 0 24px rgba(0,0,0,.25);transition:right .28s ease;z-index:60;padding:16px}
   .drawer.show{right:0}
@@ -317,118 +307,118 @@ async def admin_page(request: Request) -> str:
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
-  <div class="row">
-    <img id="header_avatar" class="avatar sm" src="" alt=""/>
-    <span class="muted">__USER__</span>
-    <svg class="gear" id="btnSettings" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path stroke-width="2" d="M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a7.94 7.94 0 00-.16-1.64l2.02-1.57-2-3.46-2.42.98a8.05 8.05 0 00-2.84-1.64l-.43-2.56H9.89l-.43 2.56a8.05 8.05 0 00-2.84 1.64l-2.42-.98-2 3.46 2.02 1.57A7.94 7.94 0 003.06 12c0 .56.06 1.11.16 1.64l-2.02 1.57 2 3.46 2.42-.98a8.05 8.05 0 002.84 1.64l.43 2.56h4.26l.43-2.56a8.05 8.05 0 002.84-1.64l2.42.98 2-3.46-2.02-1.57c.1-.53.16-1.08.16-1.64z"/></svg>
-    <button onclick="logout()">Выйти</button>
+  <div class=\"row\">
+    <img id=\"header_avatar\" class=\"avatar sm\" src=\"\" alt=\"\"/>
+    <span class=\"muted\">__USER__</span>
+    <svg class=\"gear\" id=\"btnSettings\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\"><path stroke-width=\"2\" d=\"M12 8a4 4 0 100 8 4 4 0 000-8zm8.94 4a7.94 7.94 0 00-.16-1.64l2.02-1.57-2-3.46-2.42.98a8.05 8.05 0 00-2.84-1.64l-.43-2.56H9.89l-.43 2.56a8.05 8.05 0 00-2.84 1.64l-2.42-.98-2 3.46 2.02 1.57A7.94 7.94 0 003.06 12c0 .56.06 1.11.16 1.64l-2.02 1.57 2 3.46 2.42-.98a8.05 8.05 0 002.84 1.64l.43 2.56h4.26l.43-2.56a8.05 8.05 0 002.84-1.64l2.42.98 2-3.46-2.02-1.57c.1-.53.16-1.08.16-1.64z\"/></svg>
+    <button onclick=\"logout()\">Выйти</button>
   </div>
 </header>
 
-<div id="drawer" class="drawer">
-  <h3 style="margin:4px 0 12px 0">Настройки профиля</h3>
-  <div class="news-card" style="display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center">
-    <img id="me_preview" class="avatar lg" src="" alt=""/>
+<div id=\"drawer\" class=\"drawer\">
+  <h3 style=\"margin:4px 0 12px 0\">Настройки профиля</h3>
+  <div class=\"news-card\" style=\"display:grid;grid-template-columns:58px 1fr;gap:10px;align-items:center\">
+    <img id=\"me_preview\" class=\"avatar lg\" src=\"\" alt=\"\"/>
     <div>
-      <div class="row" style="gap:6px">
-        <input id="me_avatar" placeholder="avatar URL" style="min-width:260px" autocomplete="off"/>
-        <button class="btn" onclick="saveMyAvatar()">Сохранить</button>
+      <div class=\"row\" style=\"gap:6px\">
+        <input id=\"me_avatar\" placeholder=\"avatar URL\" style=\"min-width:260px\" autocomplete=\"off\"/>
+        <button class=\"btn\" onclick=\"saveMyAvatar()\">Сохранить</button>
       </div>
-      <div id="drop" class="drop" style="margin-top:8px">Перетащите файл сюда или нажмите, чтобы выбрать</div>
-      <input id="me_file" type="file" accept="image/*" style="display:none"/>
+      <div id=\"drop\" class=\"drop\" style=\"margin-top:8px\">Перетащите файл сюда или нажмите, чтобы выбрать</div>
+      <input id=\"me_file\" type=\"file\" accept=\"image/*\" style=\"display:none\"/>
     </div>
   </div>
 </div>
 
-<div class="wrap">
-  <div class="tabs">
-    <a class="tab active" href="#tab_home">Главная</a>
-    <a class="tab" href="#tab_orders">Заказы</a>
-    <a class="tab" href="#tab_create">Создать разбор</a>
-    <a class="tab" href="#tab_clients">Клиенты</a>
-    <a class="tab" href="#tab_addresses">Адреса</a>
-    <a class="tab" href="#tab_admins">Админы</a>
-    <a class="tab" href="#tab_chat">Чат</a>
+<div class=\"wrap\">
+  <div class=\"tabs\">
+    <a class=\"tab active\" href=\"#tab_home\">Главная</a>
+    <a class=\"tab\" href=\"#tab_orders\">Заказы</a>
+    <a class=\"tab\" href=\"#tab_create\">Создать разбор</a>
+    <a class=\"tab\" href=\"#tab_clients\">Клиенты</a>
+    <a class=\"tab\" href=\"#tab_addresses\">Адреса</a>
+    <a class=\"tab\" href=\"#tab_admins\">Админы</a>
+    <a class=\"tab\" href=\"#tab_chat\">Чат</a>
   </div>
 
-  <div id="tab_home" class="section">
-    <div class="item home">
-      <div class="row"><button class="btn" onclick="loadNews(true)">Обновить новости</button><span class="muted">Покажем 5 последних постов</span></div>
-      <div id="news" class="list"></div>
+  <div id=\"tab_home\" class=\"section\">
+    <div class=\"item home\">
+      <div class=\"row\"><button class=\"btn\" onclick=\"loadNews(true)\">Обновить новости</button><span class=\"muted\">Покажем 5 последних постов</span></div>
+      <div id=\"news\" class=\"list\"></div>
     </div>
   </div>
 
-  <div id="tab_orders" class="section">
-    <div class="search">
-      <input id="q" placeholder="order_id / @username / телефон" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-      <button id="btnSearch" class="btn" onclick="loadOrders(true)">Обновить</button>
+  <div id=\"tab_orders\" class=\"section\">
+    <div class=\"search\">
+      <input id=\"q\" placeholder=\"order_id / @username / телефон\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+      <button id=\"btnSearch\" class=\"btn\" onclick=\"loadOrders(true)\">Обновить</button>
     </div>
-    <div class="muted">До 20 записей</div>
-    <div id="orders" class="list"></div>
+    <div class=\"muted\">До 20 записей</div>
+    <div id=\"orders\" class=\"list\"></div>
   </div>
 
-  <div id="tab_create" class="section">
-    <div class="row" style="margin-top:6px">
-      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[0-9]*" oninput="this.value=this.value.replace(/\D+/g,'')" />
-      <select id="c_origin"> <option value="CN">CN</option> <option value="KR">KR</option> </select>
-      <select id="c_status"> __OPTIONS__ </select>
+  <div id=\"tab_create\" class=\"section\">
+    <div class=\"row\" style=\"margin-top:6px\">
+      <input id=\"c_order_id\" placeholder=\"только цифры (например 12345)\" inputmode=\"numeric\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\" pattern=\"[0-9]*\" oninput=\"this.value=this.value.replace(/\\D+/g,'')\" />
+      <select id=\"c_origin\"> <option value=\"CN\">CN</option> <option value=\"KR\">KR</option> </select>
+      <select id=\"c_status\"> __OPTIONS__ </select>
     </div>
-    <div class="row" style="margin-top:6px">
-      <input id="c_clients" placeholder="клиенты через запятую (@user1, @user2)" style="min-width:420px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-      <input id="c_note" placeholder="заметка" style="min-width:260px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-      <button id="btnCreate" class="btn" onclick="createOrder()">Создать</button>
+    <div class=\"row\" style=\"margin-top:6px\">
+      <input id=\"c_clients\" placeholder=\"клиенты через запятую (@user1, @user2)\" style=\"min-width:420px\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+      <input id=\"c_note\" placeholder=\"заметка\" style=\"min-width:260px\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+      <button id=\"btnCreate\" class=\"btn\" onclick=\"createOrder()\">Создать</button>
     </div>
   </div>
 
-  <div id="tab_clients" class="section">
-    <div class="row"><button id="btnClients" class="btn" onclick="loadClients(true)">Обновить</button><span class="muted">До 20 записей</span></div>
-    <div id="clients" class="list"></div>
+  <div id=\"tab_clients\" class=\"section\">
+    <div class=\"row\"><button id=\"btnClients\" class=\"btn\" onclick=\"loadClients(true)\">Обновить</button><span class=\"muted\">До 20 записей</span></div>
+    <div id=\"clients\" class=\"list\"></div>
   </div>
 
-  <div id="tab_addresses" class="section">
-    <div class="row">
-      <input id="aq" placeholder="username для фильтра (опц.) — без @" style="min-width:240px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-      <button id="btnAddr" class="btn" onclick="loadAddresses(true)">Обновить</button>
-      <span class="muted">До 20 записей</span>
+  <div id=\"tab_addresses\" class=\"section\">
+    <div class=\"row\">
+      <input id=\"aq\" placeholder=\"username для фильтра (опц.) — без @\" style=\"min-width:240px\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+      <button id=\"btnAddr\" class=\"btn\" onclick=\"loadAddresses(true)\">Обновить</button>
+      <span class=\"muted\">До 20 записей</span>
     </div>
-    <div id="addresses" class="list"></div>
+    <div id=\"addresses\" class=\"list\"></div>
   </div>
 
-  <div id="tab_admins" class="section">
-    <div class="row"><button class="btn" onclick="loadAdmins(true)">Обновить список</button></div>
-    <div id="admins" class="list"></div>
-    <div style="height:8px"></div>
-    <div class="news-card">
-      <div style="font-weight:600;margin-bottom:6px">Добавить админа</div>
-      <div class="row" style="gap:6px">
-        <input id="a_login" placeholder="новый логин" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-        <input id="a_pwd" type="password" placeholder="пароль" autocomplete="new-password"/>
-        <input id="a_avatar" placeholder="avatar URL (опц.)" style="min-width:320px" autocomplete="off"/>
-        <input id="a_file" type="file" accept="image/*" style="display:none"/>
-        <button class="btn" onclick="document.getElementById('a_file').click()">Загрузить аву</button>
-        <button id="btnAddAdmin" class="btn" onclick="addAdmin()">Добавить</button>
+  <div id=\"tab_admins\" class=\"section\">
+    <div class=\"row\"><button class=\"btn\" onclick=\"loadAdmins(true)\">Обновить список</button></div>
+    <div id=\"admins\" class=\"list\"></div>
+    <div style=\"height:8px\"></div>
+    <div class=\"news-card\">
+      <div style=\"font-weight:600;margin-bottom:6px\">Добавить админа</div>
+      <div class=\"row\" style=\"gap:6px\">
+        <input id=\"a_login\" placeholder=\"новый логин\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+        <input id=\"a_pwd\" type=\"password\" placeholder=\"пароль\" autocomplete=\"new-password\"/>
+        <input id=\"a_avatar\" placeholder=\"avatar URL (опц.)\" style=\"min-width:320px\" autocomplete=\"off\"/>
+        <input id=\"a_file\" type=\"file\" accept=\"image/*\" style=\"display:none\"/>
+        <button class=\"btn\" onclick=\"document.getElementById('a_file').click()\">Загрузить аву</button>
+        <button id=\"btnAddAdmin\" class=\"btn\" onclick=\"addAdmin()\">Добавить</button>
       </div>
-      <div id="a_drop" class="drop" style="margin-top:8px">Перетащите файл сюда или нажмите «Загрузить аву»</div>
+      <div id=\"a_drop\" class=\"drop\" style=\"margin-top:8px\">Перетащите файл сюда или нажмите «Загрузить аву»</div>
     </div>
   </div>
 
-  <div id="tab_chat" class="section">
-    <div class="chat-wrap">
-      <div class="row">
-        <button class="btn" onclick="loadChat(true,true)">Обновить чат</button>
-        <label class="row pill" style="gap:6px"><input id="autoChat" type="checkbox" onchange="toggleAutoChat()"> автообновление</label>
+  <div id=\"tab_chat\" class=\"section\">
+    <div class=\"chat-wrap\">
+      <div class=\"row\">
+        <button class=\"btn\" onclick=\"loadChat(true,true)\">Обновить чат</button>
+        <label class=\"row pill\" style=\"gap:6px\"><input id=\"autoChat\" type=\"checkbox\" onchange=\"toggleAutoChat()\"> автообновление</label>
       </div>
-      <div id="messages" class="messages"></div>
-      <div class="composer row">
-        <input id="ch_text" placeholder="Сообщение… (Enter — отправить)" style="flex:1" autocomplete="off" autocapitalize="off" spellcheck="false"/>
-        <input id="ch_ref" placeholder="Привязка: @username или CN-12345" style="min-width:220px" autocomplete="off"/>
-        <button id="btnSend" onclick="sendMsg()">Отправить</button>
+      <div id=\"messages\" class=\"messages\"></div>
+      <div class=\"composer row\">
+        <input id=\"ch_text\" placeholder=\"Сообщение… (Enter — отправить)\" style=\"flex:1\" autocomplete=\"off\" autocapitalize=\"off\" spellcheck=\"false\"/>
+        <input id=\"ch_ref\" placeholder=\"Привязка: @username или CN-12345\" style=\"min-width:220px\" autocomplete=\"off\"/>
+        <button id=\"btnSend\" onclick=\"sendMsg()\">Отправить</button>
       </div>
     </div>
   </div>
 </div>
-<div id="overlay" class="overlay"><div class="spinner" id="spinner">Загрузка…</div></div>
-<div id="toast" class="toast"></div>
+<div id=\"overlay\" class=\"overlay\"><div class=\"spinner\" id=\"spinner\">Загрузка…</div></div>
+<div id=\"toast\" class=\"toast\"></div>
 
 <script>
 (function(){
@@ -445,10 +435,8 @@ async def admin_page(request: Request) -> str:
   window.addEventListener('hashchange', setActive);
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', setActive); else setActive();
   window.logout = function(){ fetch('/admin/api/logout',{method:'POST'}).then(function(){ location.reload(); }); };
-  // settings drawer
   var dr=document.getElementById('drawer'), gear=document.getElementById('btnSettings');
   if(gear) gear.onclick=function(){ dr.classList.toggle('show'); };
-  // drop zone profile
   var drop=document.getElementById('drop'), file=document.getElementById('me_file');
   if(drop){
     drop.onclick=function(){ file.click(); };
@@ -457,7 +445,6 @@ async def admin_page(request: Request) -> str:
     drop.ondrop=function(e){ e.preventDefault(); drop.classList.remove('drag'); if(e.dataTransfer.files && e.dataTransfer.files[0]) uploadAvatarRaw(e.dataTransfer.files[0],'me_avatar','me_preview',true); };
   }
   if(file){ file.onchange=function(){ if(file.files && file.files[0]) uploadAvatarRaw(file.files[0],'me_avatar','me_preview',true); }; }
-  // add-admin drop
   var adrop=document.getElementById('a_drop'), afile=document.getElementById('a_file');
   if(adrop){ adrop.onclick=function(){ afile.click(); }; adrop.ondragover=function(e){ e.preventDefault(); adrop.classList.add('drag'); }; adrop.ondragleave=function(){ adrop.classList.remove('drag'); }; adrop.ondrop=function(e){ e.preventDefault(); adrop.classList.remove('drag'); if(e.dataTransfer.files && e.dataTransfer.files[0]) uploadAvatarRaw(e.dataTransfer.files[0],'a_avatar',null,false); }; }
   if(afile){ afile.onchange=function(){ if(afile.files && afile.files[0]) uploadAvatarRaw(afile.files[0],'a_avatar',null,false); }; }
@@ -480,21 +467,20 @@ function toast(msg){ const el=document.getElementById('toast'); el.textContent=m
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return s; return d.toLocaleString(); }
 
-// ----- ORDERS -----
 function renderOrders(items){
   const list = document.getElementById('orders'); list.innerHTML='';
-  if(!items.length){ list.innerHTML='<div class="muted">Пусто</div>'; return; }
+  if(!items.length){ list.innerHTML='<div class=\"muted\">Пусто</div>'; return; }
   for(const o of items){
     const div=document.createElement('div'); div.className='item';
     const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
-    const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
-    div.innerHTML=`<div class="oid">${o.order_id||''}</div>
+    const opts = STATUSES.map((s,i)=>`<option value=\"${i}\" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
+    div.innerHTML=`<div class=\"oid\">${o.order_id||''}</div>
       <div>
         <div>Статус: <b>${statusName(o.status)}</b></div>
-        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
-        <div class="row" style="margin-top:8px">
-          <select id="pick_${o.order_id}">${opts}</select>
-          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
+        <div class=\"muted\">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+        <div class=\"row\" style=\"margin-top:8px\">
+          <select id=\"pick_${o.order_id}\">${opts}</select>
+          <button class=\"btn\" onclick=\"saveStatus('${o.order_id}', this)\">Сохранить статус</button>
         </div>
       </div>`;
     list.appendChild(div);
@@ -503,7 +489,7 @@ function renderOrders(items){
 async function loadOrders(sp){
   const q = (document.getElementById('q')||{value:''}).value.trim();
   const data = await api('/api/search?q='+encodeURIComponent(q), {}, sp);
-  if(!data || data.ok===false){ document.getElementById('orders').innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  if(!data || data.ok===false){ document.getElementById('orders').innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
   renderOrders((data.items||[]).slice(0,20));
 }
 async function saveStatus(oid, btn){
@@ -515,7 +501,6 @@ async function saveStatus(oid, btn){
   } finally { if(btn) btn.disabled=false; }
 }
 
-// ----- CREATE ORDER -----
 async function createOrder(){
   const b=document.getElementById('btnCreate'); if(b) b.disabled=true; try{
     const origin=document.getElementById('c_origin').value;
@@ -530,48 +515,45 @@ async function createOrder(){
   } finally{ if(b) b.disabled=false; }
 }
 
-// ----- CLIENTS -----
 async function loadClients(sp){
   const data=await api('/api/clients',{method:'GET'}, sp);
   const box=document.getElementById('clients'); box.innerHTML='';
-  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
   const arr=(data.items||[]).slice(0,20);
-  if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  if(!arr.length){ box.innerHTML='<div class=\"muted\">Пусто</div>'; return; }
   for(const u of arr){
     const div=document.createElement('div'); div.className='item';
     div.style.gridTemplateColumns='160px 1fr';
-    div.innerHTML=`<div>${u.username||u.name||''}</div><div class="muted">${u.phone||''}</div>`;
+    div.innerHTML=`<div>${u.username||u.name||''}</div><div class=\"muted\">${u.phone||''}</div>`;
     box.appendChild(div);
   }
 }
 
-// ----- ADDRESSES -----
 async function loadAddresses(sp){
   const q=(document.getElementById('aq')||{value:''}).value.trim();
   const data=await api('/api/addresses?q='+encodeURIComponent(q), {method:'GET'}, sp);
   const box=document.getElementById('addresses'); box.innerHTML='';
-  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
   const arr=(data.items||[]).slice(-20);
-  if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  if(!arr.length){ box.innerHTML='<div class=\"muted\">Пусто</div>'; return; }
   for(const a of arr){
     const div=document.createElement('div'); div.className='item';
     div.style.gridTemplateColumns='220px 1fr';
-    div.innerHTML=`<div>${a.username?('@'+a.username):'—'}</div><div class="muted">${a.address||''}</div>`;
+    div.innerHTML=`<div>${a.username?('@'+a.username):'—'}</div><div class=\"muted\">${a.address||''}</div>`;
     box.appendChild(div);
   }
 }
 
-// ----- ADMINS + header avatar -----
 async function loadAdmins(sp){
   const data=await api('/api/admins',{method:'GET'}, sp);
   const box=document.getElementById('admins'); box.innerHTML='';
-  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
-  const arr=data.items||[]; if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  if(!data or data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  const arr=data.items||[]; if(!arr.length){ box.innerHTML='<div class=\"muted\">Пусто</div>'; return; }
   for(const a of arr){
     const card=document.createElement('div'); card.className='admin-card';
     const img=document.createElement('img'); img.className='avatar'; img.src=a.avatar||''; img.alt='';
     const right=document.createElement('div');
-    const title=document.createElement('div'); title.innerHTML='<b>'+a.login+'</b><span class="role">'+(a.role||'')+'</span>';
+    const title=document.createElement('div'); title.innerHTML='<b>'+a.login+'</b><span class=\"role\">'+(a.role||'')+'</span>';
     const sub=document.createElement('div'); sub.className='muted'; sub.textContent=a.created_at||'';
     right.appendChild(title); right.appendChild(sub);
     card.appendChild(img); card.appendChild(right);
@@ -614,7 +596,6 @@ async function loadMeToHeader(){
   }
 }
 
-// ----- CHAT -----
 function renderMessages(items){
   const box=document.getElementById('messages'); box.innerHTML='';
   const me='__USER__';
@@ -649,7 +630,7 @@ async function sendMsg(){
     const me='__USER__';
     const box=document.getElementById('messages');
     const row=document.createElement('div'); row.className='msg me';
-    const av=document.getElementById('header_avatar'); const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=(av && av.src)?av.src:''; row.appendChild(avatar);
+    const av=document.getElementById('header_avatar'); const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=(av and av.src)?av.src:''; row.appendChild(avatar);
     const bubble=document.createElement('div'); bubble.className='bubble sending'; bubble.textContent=text;
     const meta=document.createElement('div'); meta.className='meta'; meta.textContent=me+' · '+fmtTime(new Date().toISOString())+(ref?(' · '+ref):'');
     const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
@@ -667,21 +648,19 @@ async function sendMsg(){
     }
   } finally{ if(b) b.disabled=false; }
 }
-// Enter → отправить
 document.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){ e.preventDefault(); sendMsg(); } });
 
-// ----- NEWS (Telegram) -----
 async function loadNews(sp){
-  const box=document.getElementById('news'); if(sp){ box.innerHTML='<div class="pill">Загружаем…</div>'; }
-  const r = await api('/api/news', {method:'GET'}, sp);
-  if(!r || r.ok===false){ box.innerHTML='<div class="muted">Невозможно получить ленту. Откройте канал: t.me/seabluushop</div>'; return; }
-  const items = (r.items||[]).slice(0,5); if(!items.length){ box.innerHTML='<div class="muted">Нет новостей</div>'; return; }
+  const box=document.getElementById('news'); if(sp){ box.innerHTML='<div class=\"pill\">Загружаем…</div>'; }
+  const r = await api('/admin/api/news', {method:'GET'}, sp);
+  if(!r || r.ok===false){ box.innerHTML='<div class=\"muted\">Невозможно получить ленту. Откройте канал: t.me/seabluushop</div>'; return; }
+  const items = (r.items||[]).slice(0,5); if(!items.length){ box.innerHTML='<div class=\"muted\">Нет новостей</div>'; return; }
   box.innerHTML='';
   items.forEach(function(p){
     const card=document.createElement('div'); card.className='news-card';
     const head=document.createElement('div'); head.className='news-head';
     const ava=document.createElement('img'); ava.className='news-ava'; ava.src=p.channel_image||''; head.appendChild(ava);
-    const name=document.createElement('div'); name.innerHTML='<b>SEABLUU</b> <span class="muted" style="margin-left:6px">'+(p.date||'')+'</span>'; head.appendChild(name);
+    const name=document.createElement('div'); name.innerHTML='<b>SEABLUU</b> <span class=\"muted\" style=\"margin-left:6px\">'+(p.date||'')+'</span>'; head.appendChild(name);
     card.appendChild(head);
     const text=document.createElement('div'); text.style.marginTop='6px'; text.textContent = p.text || ''; card.appendChild(text);
     if(p.image){ const img=document.createElement('img'); img.className='news-img'; img.src=p.image; card.appendChild(img); }
@@ -689,7 +668,6 @@ async function loadNews(sp){
   });
 }
 
-// init header avatar
 loadMeToHeader();
 </script>
 </html>
@@ -700,7 +678,6 @@ loadMeToHeader();
             .replace("__OPTIONS__", options)
     )
 
-# ------------------ API ------------------
 @router.post("/api/login")
 async def api_login(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     login = str(payload.get("login", "")).strip()
@@ -772,4 +749,10 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     try:
         ok = sheets.update_order_status(order_id, new_status)
     except Exception:
-        return JSONResponse({"ok": False, "error"
+        return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
+    try:
+        subs = sheets.get_all_subscriptions()
+        for s in subs:
+            if str(s.get("order_id","")) == order_id:
+                try: sheets.set_last_sent_status(int(s.get("user_id")), order_id, "")
+              
