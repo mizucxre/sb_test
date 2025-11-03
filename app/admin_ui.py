@@ -476,10 +476,11 @@ const IS_OWNER = __IS_OWNER__;
 const STATUSES = __STATUSES__;
 let ME = {login:'', avatar:'', role:''};
 let __lastMsgId = 0;
-let __pending=0; let __chatTimer=null; let __ordersTimer=null;
-let ME = {login:'', avatar:'', role:''};
-let __lastMsgId = 0;
-const __SEEN = new Set(); // набор id уже отрисованных сообщений
+let __pending = 0;
+let __chatTimer = null;
+let __ordersTimer = null;
+const __SEEN = new Set();
+
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}, showSpinner=false){
@@ -770,6 +771,9 @@ async function loadMeToHeader(){
 
 
 loadMeToHeader();
+loadNews(false); loadOrders(false); loadClients(false); loadAddresses(false); loadAdmins(false);
+loadChat(true,false);
+setInterval(()=>loadChat(false,false), 1200);
 </script>
 </html>
 """.replace("__USER__", user_login)\
