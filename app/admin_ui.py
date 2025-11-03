@@ -1,7 +1,7 @@
 
 # -*- coding: utf-8 -*-
 from __future__ import annotations
-import base64, hashlib, hmac, json, os, time, urllib.parse, urllib.request
+import base64, hashlib, hmac, json, os, time, urllib.parse, urllib.request, re
 from typing import List, Dict, Any, Optional
 
 from fastapi import APIRouter, Body, Query, Request
@@ -48,16 +48,15 @@ def _cache_clear():
 
 def _normalize_status(raw: str) -> str:
     if not raw:
-        return "—"
+      return "—"
     s = str(raw)
     if "pick_status_id" in s:
-        import re
-        try:
-            i = int(re.sub(r"[^0-9]", "", s))
-            if 0 <= i < len(STATUSES):
-                return STATUSES[i]
-        except Exception:
-            pass
+      try:
+        i = int(re.sub(r"[^0-9]", "", s))
+        if 0 <= i < len(STATUSES):
+          return STATUSES[i]
+      except Exception:
+        pass
     return s
 
 def _secret() -> str:
@@ -268,35 +267,35 @@ async def admin_page(request: Request) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SEABLUU — Админ‑панель</title>
 <style>
-  :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; --accent:#4158d0; }
+  :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; --accent:#4f5fff; }
   * { box-sizing:border-box; }
   body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); }
   header { padding:14px 16px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; z-index:5; }
   h1 { margin:0; font-size:18px; }
   .wrap { max-width:1100px; margin:18px auto; padding:0 12px 70px; }
   .tabs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; position:sticky; top:56px; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); padding:10px 0; z-index:4; }
-  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; text-decoration:none; color:#var(--ink); }
+  .tab { padding:8px 10px; border:1px solid var(--muted); background:#1c233b; border-radius:10px; text-decoration:none; color: var(--ink); }
   .tab.active { background:#24304d; }
-  .list { margin-top:16px; display:grid; gap:10px; }
-  .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 140px 1fr; gap:10px; align-items:center; }
-  .item.home{max-width:820px;margin:12px auto 0}
+  .list { margin-top:12px; display:grid; gap:10px; }
+  .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 160px 1fr; gap:10px; align-items:center; }
+  .item.home{max-width:920px;margin:12px auto 0}
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-  .search { display:flex; gap:8px; margin-top:10px; }
+  .search { display:flex; gap:8px; margin-top:8px; }
   input, select, textarea { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:#e6ebff; }
   textarea { width:100%; min-height:60px; }
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:#e6ebff; cursor:pointer; }
   .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
-  .muted { color:#c7d2fe99; font-size:13px; }
+  .muted { color:#c7d2fecc; font-size:13px; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); z-index:100; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
-  .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50}
+  .overlay{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); display:none; align-items:center; justify-content:center; background:transparent; z-index:50}
   .overlay.show{display:flex}
-  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:10px 14px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
   /* вкладки без JS */
   .section{display:none}
   .section:target{display:block}
   #tab_home{display:block}
-  /* чат “как телега” */
+  /* чат */
   .chat-wrap{max-width:920px;margin:0 auto;display:grid;gap:8px}
   .messages{height:60vh; min-height:360px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:6px}
   .msg{display:flex; gap:8px; align-items:flex-end; max-width:80%}
@@ -306,6 +305,7 @@ async def admin_page(request: Request) -> str:
   .avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--muted); background:#0b1020}
   .meta{font-size:12px; color:#c7d2fe99; margin-top:2px}
   .composer{position:sticky; bottom:0; background:linear-gradient(0deg,rgba(11,16,32,1),rgba(11,16,32,.8)); padding-top:8px}
+  .pill{padding:6px 10px;border:1px solid var(--muted);border-radius:999px;background:#1c233b;color:var(--ink);font-size:13px}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
@@ -324,32 +324,32 @@ async def admin_page(request: Request) -> str:
   </div>
 
   <div id="tab_home" class="section">
-    <div class="item home"><div class="oid">Быстрые действия</div><div>
-      <div class="row" style="margin-top:8px">
-        <a class="tab" href="#tab_orders">Открыть «Заказы»</a>
-        <a class="tab" href="#tab_create">Создать разбор</a>
-        <a class="tab" href="#tab_clients">Список клиентов</a>
-        <a class="tab" href="#tab_chat">Чат</a>
+    <div class="item home" style="grid-template-columns: 1fr;">
+      <div style="font-weight:600">Новости магазина</div>
+      <div class="row">
+        <button class="btn" onclick="loadNews(true)">Обновить</button>
+        <span class="muted">t.me/seabluushop (если недоступно — покажем подсказку)</span>
       </div>
-      <div class="muted" style="margin-top:8px">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
-    </div></div>
+      <div id="news" class="list"></div>
+    </div>
   </div>
 
   <div id="tab_orders" class="section">
     <div class="search">
       <input id="q" placeholder="order_id / @username / телефон" />
-      <button id="btnSearch" class="btn" onclick="runSearch()">Искать</button>
+      <button id="btnSearch" class="btn" onclick="loadOrders(true)">Обновить</button>
     </div>
-    <div id="list" class="list"></div>
+    <div class="muted">Показываем до 20 записей.</div>
+    <div id="orders" class="list"></div>
   </div>
 
   <div id="tab_create" class="section">
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin-top:6px">
       <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/\D+/g,'')" />
       <select id="c_origin"> <option value="CN">CN</option> <option value="KR">KR</option> </select>
       <select id="c_status"> __OPTIONS__ </select>
     </div>
-    <div class="row" style="margin-top:10px">
+    <div class="row" style="margin-top:6px">
       <input id="c_clients" placeholder="клиенты через запятую (@user1, @user2)" style="min-width:420px" />
       <input id="c_note" placeholder="заметка" style="min-width:260px" />
       <button id="btnCreate" class="btn" onclick="createOrder()">Создать</button>
@@ -357,12 +357,16 @@ async def admin_page(request: Request) -> str:
   </div>
 
   <div id="tab_clients" class="section">
-    <div class="search"><input id="cq" placeholder="поиск по имени/телефону/username"/> <button id="btnClients" class="btn" onclick="loadClients()">Найти</button></div>
+    <div class="row"><button id="btnClients" class="btn" onclick="loadClients(true)">Обновить</button><span class="muted">До 20 записей</span></div>
     <div id="clients" class="list"></div>
   </div>
 
   <div id="tab_addresses" class="section">
-    <div class="search"><input id="aq" placeholder="username для фильтра (необязательно)"/> <button id="btnAddr" class="btn" onclick="loadAddresses()">Загрузить</button></div>
+    <div class="row">
+      <input id="aq" placeholder="username для фильтра (опц.) — без @" style="min-width:240px"/>
+      <button id="btnAddr" class="btn" onclick="loadAddresses(true)">Обновить</button>
+      <span class="muted">До 20 записей</span>
+    </div>
     <div id="addresses" class="list"></div>
   </div>
 
@@ -377,7 +381,6 @@ async def admin_page(request: Request) -> str:
         <button id="btnUpload" class="btn" onclick="uploadAvatar('a_file','a_avatar')">Загрузить аву</button>
         <button id="btnAddAdmin" class="btn" onclick="addAdmin()">Добавить</button>
       </div>
-      <div class="muted">Если загрузите файл, ссылка подставится автоматически.</div>
     </div>
     <div class="item" style="grid-template-columns: 110px 1fr;">
       <div>Мой профиль</div>
@@ -387,14 +390,18 @@ async def admin_page(request: Request) -> str:
         <input id="me_file" type="file" accept="image/*" />
         <button class="btn" onclick="uploadAvatar('me_file','me_avatar','my_avatar_preview')">Загрузить</button>
         <button class="btn" onclick="saveMyAvatar()">Сохранить</button>
+        <button class="btn" onclick="loadAdmins(true)">Обновить список</button>
       </div>
-      <div class="muted">Можно вставить ссылку или загрузить с устройства.</div>
     </div>
     <div id="admins" class="list"></div>
   </div>
 
   <div id="tab_chat" class="section">
     <div class="chat-wrap">
+      <div class="row">
+        <button class="btn" onclick="loadChat(true,true)">Обновить чат</button>
+        <label class="row pill" style="gap:6px"><input id="autoChat" type="checkbox" onchange="toggleAutoChat()"> автообновление</label>
+      </div>
       <div id="messages" class="messages"></div>
       <div class="composer row">
         <input id="ch_text" placeholder="Сообщение… (Enter — отправить)" style="flex:1" />
@@ -404,7 +411,7 @@ async def admin_page(request: Request) -> str:
     </div>
   </div>
 </div>
-<div id="overlay" class="overlay"><div class="spinner">Загрузка…</div></div>
+<div id="overlay" class="overlay"><div class="spinner" id="spinner">Загрузка…</div></div>
 <div id="toast" class="toast"></div>
 
 <script>
@@ -417,16 +424,10 @@ async def admin_page(request: Request) -> str:
       var el=document.querySelector(id); if(el){ el.style.display='block'; }
       var tabs=document.querySelectorAll('.tabs .tab');
       for(var j=0;j<tabs.length;j++){ tabs[j].classList.toggle('active', tabs[j].getAttribute('href')===id); }
-      if(id==='#tab_orders') runSearch();
-      if(id==='#tab_clients') loadClients();
-      if(id==='#tab_addresses') loadAddresses();
-      if(id==='#tab_admins') { loadAdmins(); loadMe(); }
-      if(id==='#tab_chat') { loadChat(true); startChatPolling(); }
     }catch(e){ console.error(e); }
   }
   window.addEventListener('hashchange', setActive);
   if (document.readyState === 'loading') window.addEventListener('DOMContentLoaded', setActive); else setActive();
-  window.setActiveTab = setActive;
   window.logout = function(){ fetch('/admin/api/logout',{method:'POST'}).then(function(){ location.reload(); }); };
 })();
 
@@ -436,156 +437,45 @@ let __chatTimer=null;
 let __lastCount=0;
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
-async function api(path, opts={}){
-  __pending++; if(__pending===1) overlay(true);
+async function api(path, opts={}, showSpinner=false){
+  if(showSpinner){ __pending++; if(__pending===1) overlay(true); }
   try{
     const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
-    let data=null;
-    try{ data = await r.json(); } catch(e){ data = {ok:false, error:'bad_json', status:r.status}; }
+    let text = await r.text();
+    let data;
+    try{ data = JSON.parse(text); } catch(e){ data = {ok:false, error:'bad_json', status:r.status, raw:text.slice(0,200)}; }
     if(!r.ok){ data = Object.assign({ok:false}, data||{}); if(!data.error) data.error = 'HTTP '+r.status; }
     return data;
-  } finally { __pending--; if(__pending<=0) overlay(false); }
+  } catch(e){
+    return {ok:false, error: (e && e.message) || 'network_error'};
+  } finally { if(showSpinner){ __pending--; if(__pending<=0) overlay(false); } }
 }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2000); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return s; return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
-async function runSearch(){
-  const b=document.getElementById('btnSearch'); if(b) b.disabled=true;
-  try{
-    const q = document.getElementById('q').value.trim();
-    const data = await api('/api/search?q='+encodeURIComponent(q));
-    const list = document.getElementById('list'); list.innerHTML='';
-    if(!data || data.ok===false){ list.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
-    if(!data.items || !data.items.length){ list.innerHTML='<div class="muted">Ничего не найдено.</div>'; return; }
-    for(const o of data.items){
-      const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
-      const opts = STATUSES.map((s,i)=>`<option value="\${i}" \${statusName(o.status)===s?'selected':''}>\${s}</option>`).join('');
-      div.innerHTML=`<div class="oid">\${o.order_id||''}</div><div>
-        <div>Статус: <b>\${statusName(o.status)}</b></div>
-        <div class="muted">Страна: \${(o.origin||o.country||'—').toUpperCase()} · Обновлено: \${dt||'—'} · Клиент: \${o.client_name||'—'}</div>
-        <div class="row" style="margin-top:8px">
-          <select id="pick_\${o.order_id}">\${opts}</select>
-          <button class="btn" onclick="saveStatus('\${o.order_id}', this)">Сохранить статус</button>
-        </div></div>`; list.appendChild(div);
-    }
-  } finally{ if(b) b.disabled=false; }
-}
-async function saveStatus(oid, btn){ if(btn) btn.disabled=true; try{ const sel=document.getElementById('pick_'+CSS.escape(oid)); const pick_index=parseInt(sel.value); const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}); toast(res && res.ok!==false?'Статус сохранён':(res.error||'Ошибка')); await runSearch(); } finally{ if(btn) btn.disabled=false; } }
-async function createOrder(){
-  const b=document.getElementById('btnCreate'); if(b) b.disabled=true;
-  try{
-    const origin=document.getElementById('c_origin').value;
-    const idnum=(document.getElementById('c_order_id').value.trim()).replace(/\D+/g,'');
-    if(!idnum){ toast('Введите цифры номера заказа'); return; }
-    const order_id=origin+'-'+idnum;
-    const status=document.getElementById('c_status').value;
-    const clients=document.getElementById('c_clients').value.trim();
-    const note=document.getElementById('c_note').value.trim();
-    const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})});
-    toast(r.ok?'Разбор создан':(r.error||'Ошибка'));
-  } finally{ if(b) b.disabled=false; }
-}
-async function loadClients(){ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const u of data.items){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='160px 1fr'; div.innerHTML='<div>'+ (u.username||u.name||'') +'</div><div class="muted">'+(u.phone||'')+'</div>'; box.appendChild(div);} }
-async function loadAddresses(){ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='200px 1fr'; div.innerHTML='<div>'+ (a.username?('@'+a.username):'—') +'</div><div class="muted">'+(a.address||'')+'</div>'; box.appendChild(div);} }
+async function loadOrders(sp){ const q = (document.getElementById('q')||{value:''}).value.trim(); const data = await api('/api/search?q='+encodeURIComponent(q), {}, sp); const box=document.getElementById('orders'); box.innerHTML=''; if(!data||data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(0,20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const o of arr){ const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16); const opts=STATUSES.map((s,i)=>`<option value="\${i}" \${statusName(o.status)===s?'selected':''}>\${s}</option>`).join(''); div.innerHTML=`<div class="oid">\${o.order_id||''}</div><div><div>Статус: <b>\${statusName(o.status)}</b></div><div class="muted">Страна: \${(o.origin||o.country||'—').toUpperCase()} · Обновлено: \${dt||'—'} · Клиент: \${o.client_name||'—'}</div><div class="row" style="margin-top:6px"><select id="pick_\${o.order_id}">\${opts}</select><button class="btn" onclick="saveStatus('\${o.order_id}', this)">Сохранить статус</button></div></div>`; box.appendChild(div);} }
+async function saveStatus(oid, btn){ if(btn) btn.disabled=true; try{ const sel=document.getElementById('pick_'+CSS.escape(oid)); const pick_index=parseInt(sel.value); const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}, true); toast(res && res.ok!==false?'Статус сохранён':(res.error||'Ошибка')); } finally{ if(btn) btn.disabled=false; } }
+async function createOrder(){ const b=document.getElementById('btnCreate'); if(b) b.disabled=true; try{ const origin=document.getElementById('c_origin').value; const idnum=(document.getElementById('c_order_id').value.trim()).replace(/\D+/g,''); if(!idnum){ toast('Введите цифры номера заказа'); return; } const order_id=origin+'-'+idnum; const status=document.getElementById('c_status').value; const clients=document.getElementById('c_clients').value.trim(); const note=document.getElementById('c_note').value.trim(); const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})}, true); toast(r.ok?'Разбор создан':(r.error||'Ошибка')); } finally{ if(b) b.disabled=false; } }
 
-async function loadAdmins(){
-  const data=await api('/api/admins');
-  const box=document.getElementById('admins'); box.innerHTML='';
-  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
-  if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет админов</div>'; return; }
-  for(const a of data.items){
-    const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='80px 1fr';
-    const av=a.avatar?'<img class="avatar" src="'+a.avatar+'">':'<div class="avatar" style="display:grid;place-items:center;font-size:12px">—</div>';
-    div.innerHTML= av + '<div><div><b>'+a.login+'</b> <span class="muted">('+a.role+')</span></div><div class="muted">'+(a.created_at||'')+'</div></div>';
-    box.appendChild(div);
-  }
-}
-async function uploadAvatar(fileInputId, targetInputId, previewId){
-  const fileEl=document.getElementById(fileInputId);
-  if(!fileEl || !fileEl.files || !fileEl.files[0]){ toast('Выберите файл'); return; }
-  const f = fileEl.files[0];
-  const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(f.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f });
-  let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; }
-  if(!j.ok){ toast(j.error||'Ошибка загрузки'); return; }
-  const url = j.url;
-  document.getElementById(targetInputId).value = url;
-  if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; }
-  toast('Аватар загружен');
-}
-async function saveMyAvatar(){
-  const url=document.getElementById('me_avatar').value.trim();
-  if(!url){ toast('Ссылка пуста'); return; }
-  const r=await api('/api/admins/avatar',{method:'POST',body:JSON.stringify({avatar:url})});
-  if(r.ok){ toast('Сохранено'); } else { toast(r.error||'Ошибка'); }
-}
-async function addAdmin(){
-  const login=document.getElementById('a_login').value.trim();
-  const password=document.getElementById('a_pwd').value;
-  const avatar=document.getElementById('a_avatar').value.trim();
-  if(!login || !password){ toast('Введите логин и пароль'); return; }
-  const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})});
-  if(!r.ok){ toast(r.error||'Ошибка'); return; }
-  document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; document.getElementById('a_file').value='';
-  toast('Админ добавлен'); loadAdmins();
-}
+async function loadClients(sp){ const data=await api('/api/clients',{method:'GET'}, sp); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(0,20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const u of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='200px 1fr'; div.innerHTML='<div>'+ (u.username?('@'+u.username):(u.name||'')) +'</div><div class="muted">'+(u.phone||'')+'</div>'; box.appendChild(div);} }
 
-async function loadMe(){
-  const me='__USER__';
-  const r=await api('/api/admins');
-  if(!r || !r.items) return;
-  const self=r.items.find(x=>x.login===me);
-  if(self){ const img=document.getElementById('my_avatar_preview'); if(img) img.src=self.avatar||''; const inp=document.getElementById('me_avatar'); if(inp) inp.value=self.avatar||''; }
-}
+async function loadAddresses(sp){ const q=(document.getElementById('aq')||{value:''}).value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q), {method:'GET'}, sp); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(-20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const a of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='200px 1fr'; div.innerHTML='<div>'+ (a.username?('@'+a.username):'—') +'</div><div class="muted">'+(a.address||'')+'</div>'; box.appendChild(div);} }
 
-function renderMessages(items){
-  const box=document.getElementById('messages'); box.innerHTML='';
-  const me='__USER__';
-  items.forEach(m=>{
-    const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':'');
-    const av = m.avatar?('<img class="avatar" src="'+m.avatar+'">'):'<div class="avatar" />';
-    const meta = '<div class="meta">'+(m.login||'')+' · '+fmtTime(m.created_at||'')+ (m.ref?(' · '+m.ref):'') +'</div>';
-    const bubble = '<div><div class="bubble">'+(m.text||'')+'</div>'+meta+'</div>';
-    row.innerHTML = av + bubble;
-    box.appendChild(row);
-  });
-  box.scrollTop = box.scrollHeight;
-}
+async function loadAdmins(sp){ const data=await api('/api/admins',{method:'GET'}, sp); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=data.items||[]; for(const a of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='80px 1fr'; const av=a.avatar?'<img class="avatar" src="'+a.avatar+'">':'<div class="avatar" style="display:grid;place-items:center;font-size:12px">—</div>'; div.innerHTML= av + '<div><div><b>'+a.login+'</b> <span class="muted">('+a.role+')</span></div><div class="muted">'+(a.created_at||'')+'</div></div>'; box.appendChild(div);} const me='__USER__'; const self=(arr||[]).find(x=>x.login===me); if(self){ const img=document.getElementById('my_avatar_preview'); if(img) img.src=self.avatar||''; const inp=document.getElementById('me_avatar'); if(inp) inp.value=self.avatar||''; } }
 
-async function loadChat(first){
-  const data=await api('/api/chat');
-  if(!data || data.ok===false){ const box=document.getElementById('messages'); box.innerHTML='<div class="muted">Ошибка загрузки чата</div>'; return; }
-  const items = data.items || [];
-  renderMessages(items);
-  if(first) __lastCount = items.length || 0;
-}
+async function uploadAvatar(fileInputId, targetInputId, previewId){ const fileEl=document.getElementById(fileInputId); if(!fileEl || !fileEl.files || !fileEl.files[0]){ toast('Выберите файл'); return; } const f = fileEl.files[0]; const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(f.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f }); let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; } if(!j.ok){ toast(j.error||'Ошибка загрузки'); return; } const url = j.url; document.getElementById(targetInputId).value = url; if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; } toast('Аватар загружен'); }
+async function saveMyAvatar(){ const url=document.getElementById('me_avatar').value.trim(); if(!url){ toast('Ссылка пуста'); return; } const r=await api('/api/admins/avatar',{method:'POST',body:JSON.stringify({avatar:url})}, true); if(r.ok){ toast('Сохранено'); } else { toast(r.error||'Ошибка'); } }
+async function addAdmin(){ const login=document.getElementById('a_login').value.trim(); const password=document.getElementById('a_pwd').value; const avatar=document.getElementById('a_avatar').value.trim(); if(!login || !password){ toast('Введите логин и пароль'); return; } const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})}, true); if(!r.ok){ toast(r.error||'Ошибка'); return; } document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; document.getElementById('a_file').value=''; toast('Админ добавлен'); }
 
-function startChatPolling(){
-  if(__chatTimer) return;
-  __chatTimer = setInterval(async ()=>{
-    const data=await api('/api/chat');
-    if(data && data.items && data.items.length!==__lastCount){
-      __lastCount = data.items.length;
-      renderMessages(data.items);
-    }
-  }, 4000);
-}
+function renderMessages(items){ const box=document.getElementById('messages'); box.innerHTML=''; const me='__USER__'; items.forEach(m=>{ const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':''); const av = m.avatar?('<img class="avatar" src="'+m.avatar+'">'):'<div class="avatar" />'; const meta = '<div class="meta">'+(m.login||'')+' · '+fmtTime(m.created_at||'')+ (m.ref?(' · '+m.ref):'') +'</div>'; const bubble = '<div><div class="bubble">'+(m.text||'')+'</div>'+meta+'</div>'; row.innerHTML = av + bubble; box.appendChild(row); }); box.scrollTop = box.scrollHeight; }
+async function loadChat(sp, toastOnError){ const data=await api('/api/chat',{method:'GET'}, sp); if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; } __lastCount = (data.items||[]).length; renderMessages(data.items||[]); }
+function toggleAutoChat(){ const ch=document.getElementById('autoChat'); if(!ch) return; if(__chatTimer){ clearInterval(__chatTimer); __chatTimer=null; } if(ch.checked){ __chatTimer=setInterval(()=>loadChat(false,false), 4000); } }
+async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}, true); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(false,false); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
+document.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){ e.preventDefault(); sendMsg(); } });
 
-async function sendMsg(){
-  const b=document.getElementById('btnSend'); if(b) b.disabled=true;
-  try{
-    const text=document.getElementById('ch_text').value.trim();
-    const ref=document.getElementById('ch_ref').value.trim();
-    if(!text){ toast('Введите сообщение'); return; }
-    const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})});
-    if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(); } else { toast(r.error||'Ошибка'); }
-  } finally{ if(b) b.disabled=false; }
-}
-document.addEventListener('keydown', function(e){
-  if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){
-    e.preventDefault(); sendMsg();
-  }
-});
+// Новости
+async function loadNews(sp){ const box=document.getElementById('news'); if(sp){ box.innerHTML='<div class="pill">Загружаем…</div>'; } const r = await api('/api/news', {method:'GET'}, sp); if(!r || r.ok===false || !r.items || !r.items.length){ box.innerHTML='<div class="muted">Невозможно получить ленту (требуется интернет с сервера). Откройте канал: t.me/seabluushop</div>'; return; } box.innerHTML=''; r.items.slice(0,5).forEach(p=>{ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='1fr'; div.innerHTML='<div style="white-space:pre-wrap">'+p.text+'</div><div class="muted">'+(p.date||'')+'</div>'; box.appendChild(div); }); }
 window.onerror=function(msg){ try{ const t=document.getElementById('toast'); if(t){ t.textContent='Ошибка: '+msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000);} }catch(e){} };
 </script>
 </html>
@@ -617,16 +507,17 @@ async def api_logout() -> JSONResponse:
 
 @router.get("/api/search")
 async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
+    """Заказы: если q пустой — последние 20."""
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     q = (q or "").strip()
-    cache_key = "recent" if not q else f"q:{q.lower()}"
-    cached = _cache_get(cache_key, ttl=10)
+    cache_key = "recent20" if not q else f"q:{q.lower()}"
+    cached = _cache_get(cache_key, ttl=6)
     if cached is not None:
         return JSONResponse({"items": cached})
     items: List[Dict[str, Any]] = []
     if not q:
-        items = sheets.list_recent_orders(30)
+        items = sheets.list_recent_orders(20)
     else:
         try:
             from .main import extract_order_id, _looks_like_username  # type: ignore
@@ -666,7 +557,10 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
             pass
     if not new_status:
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
-    ok = sheets.update_order_status(order_id, new_status)
+    try:
+        ok = sheets.update_order_status(order_id, new_status)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
     try:
         subs = sheets.get_all_subscriptions()
         for s in subs:
@@ -694,20 +588,26 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
         return JSONResponse({"ok": False, "error": "order_id and origin are required"}, status_code=400)
     if not (order_id.startswith("CN-") or order_id.startswith("KR-")):
         order_id = f"{origin}-{order_id.lstrip(' -')}"
-    sheets.add_order({"order_id": order_id, "origin": origin, "status": status or "", "note": note})
-    usernames = [u.strip() for u in clients_raw.split(",") if u.strip()]
-    created = sheets.ensure_clients_from_usernames(usernames)
-    if usernames:
-        sheets.ensure_participants(order_id, usernames)
+    try:
+        sheets.add_order({"order_id": order_id, "origin": origin, "status": status or "", "note": note})
+        usernames = [u.strip() for u in clients_raw.split(",") if u.strip()]
+        created = sheets.ensure_clients_from_usernames(usernames)
+        if usernames:
+            sheets.ensure_participants(order_id, usernames)
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": "create_failed"}, status_code=500)
     _cache_clear()
-    return JSONResponse({"ok": True, "order_id": order_id, "clients_created": created})
+    return JSONResponse({"ok": True, "order_id": order_id})
 
 @router.get("/api/clients")
-async def api_clients(request: Request, q: str = Query("")) -> JSONResponse:
+async def api_clients(request: Request) -> JSONResponse:
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    df = sheets.search_clients(q or None)
-    items = [] if df.empty else df.sort_values(by="updated_at", ascending=False).head(100).to_dict(orient="records")
+    try:
+        df = sheets.search_clients(None)
+        items = [] if df.empty else df.sort_values(by="updated_at", ascending=False).head(20).to_dict(orient="records")
+    except Exception:
+        items = []
     return JSONResponse({"items": items})
 
 @router.get("/api/addresses")
@@ -715,11 +615,14 @@ async def api_addresses(request: Request, q: str = Query("")) -> JSONResponse:
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     ws = sheets.get_worksheet("addresses")
-    values = ws.get_all_records()
+    try:
+        values = ws.get_all_records()
+    except Exception:
+        values = []
     if q:
-        qn = q.strip().lstrip("@").lower();
+        qn = q.strip().lstrip("@").lower()
         values = [r for r in values if str(r.get("username", "")).strip().lower() == qn]
-    return JSONResponse({"items": values[-200:]})
+    return JSONResponse({"items": values[-20:]})
 
 @router.get("/api/admins")
 async def api_admins(request: Request) -> JSONResponse:
@@ -805,8 +708,11 @@ async def api_chat_list(request: Request) -> JSONResponse:
     if not login:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     ws = _chat_ws()
-    rows = ws.get_all_records()
-    rows = rows[-120:]  # побольше истории
+    try:
+        rows = ws.get_all_records()
+    except Exception:
+        rows = []
+    rows = rows[-120:]
     admin_map = {a.get("login"): a for a in _list_admins()}
     for r in rows:
         adm = admin_map.get(r.get("login")) or {}
@@ -823,8 +729,38 @@ async def api_chat_post(request: Request, payload: Dict[str, Any] = Body(...)) -
     if not text:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
     ws = _chat_ws()
-    ws.append_row([str(int(time.time()*1000)), login, text, ref, sheets._now()])
+    try:
+        ws.append_row([str(int(time.time()*1000)), login, text, ref, sheets._now()])
+    except Exception:
+        return JSONResponse({"ok": False, "error": "write_failed"}, status_code=500)
     return JSONResponse({"ok": True})
+
+# ------------------ Новости из Telegram ------------------
+@router.get("/api/news")
+async def api_news() -> JSONResponse:
+    url = "https://t.me/s/seabluushop"
+    try:
+        html = urllib.request.urlopen(url, timeout=5).read().decode("utf-8", "ignore")
+        # очень грубый парсер: последние 5 текстовых блоков
+        items = []
+        for m in re.finditer(r'<div class="tgme_widget_message.*?>(.*?)</div>\s*</div>\s*</div>', html, re.S):
+            block = m.group(1)
+            # вытащим дату
+            dt = ""
+            md = re.search(r'datetime="([^"]+)"', block)
+            if md:
+                dt = md.group(1).replace("T"," ").replace("+00:00","")
+            # текст
+            text = re.sub(r'<[^>]+>', '', block)
+            text = re.sub(r'\s+',' ', text).strip()
+            if text:
+                items.append({"text": text, "date": dt})
+            if len(items) >= 8:
+                break
+        return JSONResponse({"ok": True, "items": items})
+    except Exception:
+        return JSONResponse({"ok": True, "items": []})
 
 def get_admin_router() -> APIRouter:
     return router
+
