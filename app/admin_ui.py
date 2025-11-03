@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Query, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+import threading
 
 from . import sheets
 
@@ -52,6 +53,55 @@ def _cache_set(k: str, data: Any):
 
 def _cache_clear():
     _CACHE.clear()
+
+# --- Fast chat storage (JSONL, без Google Sheets) ---
+CHAT_FILE = os.path.join(os.getcwd(), "media", "chat.jsonl")
+CHAT_MAX = 2000  # сколько последних сообщений держать в памяти
+
+_chat_lock = threading.RLock()
+_chat: List[Dict[str, Any]] = []
+
+def _ensure_media_dir():
+    os.makedirs(os.path.dirname(CHAT_FILE), exist_ok=True)
+
+def _chat_load():
+    global _chat
+    _ensure_media_dir()
+    items: List[Dict[str, Any]] = []
+    if os.path.isfile(CHAT_FILE):
+        with open(CHAT_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    if isinstance(obj, dict) and "id" in obj:
+                        items.append(obj)
+                except Exception:
+                    continue
+    _chat = items[-CHAT_MAX:]
+
+def _chat_next_id() -> int:
+    if not _chat:
+        return 1
+    try:
+        return int(_chat[-1]["id"]) + 1
+    except Exception:
+        return len(_chat) + 1
+
+def _chat_append(msg: Dict[str, Any]) -> None:
+    with _chat_lock:
+        _chat.append(msg)
+        if len(_chat) > CHAT_MAX:
+            _chat[:] = _chat[-CHAT_MAX:]
+        try:
+            with open(CHAT_FILE, "a", encoding="utf-8") as f:
+                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
+        except Exception:
+            pass
+
+_chat_load()
 
 def _secret() -> str:
     return (os.getenv("ADMIN_SECRET", "dev-secret") or "dev-secret").strip()
@@ -308,7 +358,7 @@ def _admin_page_html(user_login: str) -> str:
 <aside class="drawer" id="leftDrawer">
   <div class="row" style="align-items:center">
     <img id="me_preview" class="avatar lg" src="" alt=""/>
-    <div style="font-weight:600;margin-left:6px">__USER__</div>
+    <div style="font-weight:600;margin-left:6px">class="muted" id="me_login"</div>
     <button class="closeX" id="btnCloseDrawer" title="Закрыть">✕</button>
   </div>
   <div style="height:10px"></div>
@@ -427,6 +477,8 @@ def _admin_page_html(user_login: str) -> str:
 <script>
 const IS_OWNER = __IS_OWNER__;
 const STATUSES = __STATUSES__;
+let ME = {login:'', avatar:'', role:''};
+let __lastMsgId = 0;
 let __pending=0; let __chatTimer=null; let __ordersTimer=null;
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
@@ -602,30 +654,38 @@ async function loadAdmins(sp){
 
 // --- chat ---
 function renderMessages(items){
-  const box=document.getElementById('messages'); box.innerHTML='';
-  const me='__USER__';
+  const box = document.getElementById('messages');
+  const me = ME.login || '';
   items.sort(function(a,b){
     const ai=parseInt(String(a.id||'0')); const bi=parseInt(String(b.id||'0'));
     if(!isNaN(ai) && !isNaN(bi)) return ai-bi;
     return String(a.created_at||'').localeCompare(String(b.created_at||''));
   });
   items.forEach(function(m){
-    if(!m.text) return;
     const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':'');
     const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=m.avatar||''; avatar.alt='';
     const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent = String(m.text||'');
-    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=(m.login||'')+' · '+fmtTime(m.created_at||'')+(m.ref?(' · '+m.ref):'');
+    const meta=document.createElement('div'); meta.className='meta';
+    const dt = new Date(m.created_at || Date.now()).toLocaleString();
+    meta.textContent = (m.login||'')+' · '+dt+(m.ref?(' · '+m.ref):'');
     const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
     row.appendChild(avatar); row.appendChild(wrap);
     box.appendChild(row);
   });
   box.scrollTop = box.scrollHeight;
 }
+
 async function loadChat(sp, toastOnError){
-  const data=await api('/api/chat',{method:'GET'}, sp);
+  const r = await fetch('/admin/api/chat?since_id=' + __lastMsgId);
+  const data = await r.json();
   if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; }
-  renderMessages(data.items||[]);
+  const items = data.items || [];
+  if(items.length){
+    __lastMsgId = items[items.length-1].id;
+    renderMessages(items);
+  }
 }
+
 function toggleAutoChat(){ const ch=document.getElementById('autoChat'); if(!ch) return; if(__chatTimer){ clearInterval(__chatTimer); __chatTimer=null; } if(ch.checked){ __chatTimer=setInterval(()=>loadChat(false,false), 4000); } }
 async function sendMsg(){
   const b=document.getElementById('btnSend'); if(b) b.disabled=true;
@@ -633,7 +693,7 @@ async function sendMsg(){
     const text=document.getElementById('ch_text').value.trim();
     const ref=document.getElementById('ch_ref').value.trim();
     if(!text){ toast('Введите сообщение'); return; }
-    const me='__USER__';
+    const me = ME.login || '';
     const box=document.getElementById('messages');
     const row=document.createElement('div'); row.className='msg me';
     const av=document.getElementById('header_avatar'); const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=(av && av.src)?av.src:''; row.appendChild(avatar);
@@ -706,16 +766,16 @@ async function saveMyAvatar(){
   if(r.ok){ toast('Сохранено'); const img=document.getElementById('me_preview'); if(img) img.src=url; const hdr=document.getElementById('header_avatar'); if(hdr) hdr.src=url; } else { toast(r.error||'Ошибка'); }
 }
 async function loadMeToHeader(){
-  const me='__USER__';
-  const r=await api('/api/admins',{method:'GET'}, false);
-  if(!r || !r.items) return;
-  const self=(r.items.find(x=>x.login===me)) || r.items[0];
-  if(self){
-    const img=document.getElementById('me_preview'); if(img) img.src=self.avatar||'';
-    const inp=document.getElementById('me_avatar'); if(inp) inp.value=self.avatar||'';
-    const hdr=document.getElementById('header_avatar'); if(hdr) hdr.src=self.avatar||'';
-  }
+  const r = await fetch('/admin/api/me');
+  const me = await r.json();
+  if(!me || me.ok===false) return;
+  ME = me;
+  const name = document.getElementById('me_login');   if(name) name.textContent = me.login || '';
+  const hdr  = document.getElementById('header_avatar'); if(hdr) hdr.src = me.avatar || '';
+  const prev = document.getElementById('me_preview'); if(prev) prev.src = me.avatar || '';
+  const inp  = document.getElementById('me_avatar');  if(inp)  inp.value = me.avatar || '';
 }
+
 
 loadMeToHeader();
 </script>
@@ -751,6 +811,14 @@ async def api_logout() -> JSONResponse:
     r = JSONResponse({"ok": True})
     r.delete_cookie("adm_session", path="/admin")
     return r
+
+@router.get("/api/me")
+async def api_me(request: Request) -> JSONResponse:
+    login = _authed_login(request)
+    if not login:
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    adm = _get_admin(login) or {}
+    return JSONResponse({"login": login, "role": adm.get("role", ""), "avatar": adm.get("avatar", "")})
 
 # ------------------------ routes: orders & statuses ------------------------
 @router.get("/api/search")
@@ -997,28 +1065,12 @@ async def api_addresses(request: Request, q: Optional[str] = Query(default="")) 
 
 # ------------------------ routes: chat ------------------------
 @router.get("/api/chat")
-async def api_chat_list(request: Request) -> JSONResponse:
+async def api_chat_list(request: Request, since_id: int = Query(default=0)) -> JSONResponse:
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    try:
-        ws = sheets.get_worksheet("chat")
-        records = ws.get_all_records()
-        for i, r in enumerate(records, start=1):
-            if not r.get("id"):
-                r["id"] = str(i)
-        items = []
-        for r in records:
-            items.append({
-                "id": str(r.get("id") or ""),
-                "created_at": r.get("created_at") or r.get("time") or r.get("dt") or "",
-                "login": r.get("login") or r.get("user") or "",
-                "avatar": r.get("avatar") or "",
-                "text": r.get("text") or r.get("message") or "",
-                "ref": r.get("ref") or r.get("context") or ""
-            })
-        return JSONResponse({"ok": True, "items": items})
-    except Exception:
-        return JSONResponse({"ok": True, "items": []})
+    with _chat_lock:
+        items = [m for m in _chat if int(m.get("id", 0)) > int(since_id)] if since_id else _chat[-200:]
+    return JSONResponse({"ok": True, "items": items})
 
 @router.post("/api/chat")
 async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1029,21 +1081,18 @@ async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -
     ref = str(payload.get("ref", "")).strip()
     if not text:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
-    try:
-        ws = sheets.get_worksheet("chat")
-        records = ws.get_all_records()
-        next_id = 1
-        for r in records:
-            try: next_id = max(next_id, int(str(r.get("id") or "0")) + 1)
-            except Exception: pass
-        my = _get_admin(me) or {}
-        avatar = my.get("avatar", "")
-        if not ws.get_all_values():
-            ws.append_row(["id","created_at","login","avatar","text","ref"])
-        ws.append_row([str(next_id), sheets._now(), me, avatar, text, ref])
-        return JSONResponse({"ok": True, "id": str(next_id)})
-    except Exception:
-        return JSONResponse({"ok": False, "error": "chat_failed"}, status_code=500)
+    adm = _get_admin(me) or {}
+    msg = {
+        "id": _chat_next_id(),
+        "created_at": sheets._now(),  # твоя функция времени
+        "login": me,
+        "avatar": adm.get("avatar", ""),  # снапшот, чтобы все видели аву
+        "text": text,
+        "ref": ref,
+    }
+    _chat_append(msg)
+    return JSONResponse({"ok": True, "id": msg["id"]})
+
 
 # ------------------------ routes: news ------------------------
 @router.get("/api/news")
