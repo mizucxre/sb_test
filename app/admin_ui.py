@@ -251,7 +251,7 @@ async def admin_page(request: Request) -> str:
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
     html = '''
 <!doctype html>
-<html lang="ру">
+<html lang="ru">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SEABLUU — Админ‑панель</title>
@@ -270,24 +270,17 @@ async def admin_page(request: Request) -> str:
   .item.home{max-width:820px;margin:12px auto 0}
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .search { display:flex; gap:8px; margin-top:10px; }
-  input, select, textarea { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:var(--ink); }
+  input, select, textarea { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:#e6ebff; }
   textarea { width:100%; min-height:60px; }
-  button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:var(--ink); cursor:pointer; }
+  button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:#e6ebff; cursor:pointer; }
   .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
   .muted { color:#c7d2fe99; font-size:13px; }
-  .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ебff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
+  .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.25); z-index:50}
   .overlay.show{display:flex}
-  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ебff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
-  /* чат */
-  .chat{display:grid; gap:10px; max-width:900px; margin:0 auto}
-  .msg{display:grid; grid-template-columns:40px 1fr; gap:10px; align-items:flex-start}
-  .msg.me{grid-template-columns:1fr 40px}
-  .bubble{background:#1c233b; border:1px solid var(--muted); padding:8px 10px; border-radius:12px}
-  .msg.me .bubble{background:#24304d}
-  .avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--muted)}
-  /* вкладки без JS */
+  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:12px 16px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  /* вкладки без JS (фоллбек) */
   .section{display:none}
   .section:target{display:block}
   #tab_home{display:block}
@@ -318,6 +311,7 @@ async def admin_page(request: Request) -> str:
       </div>
       <div class="muted" style="margin-top:8px">Эта страница не выполняет запросов к Google Sheets и снижает нагрузку.</div>
     </div></div>
+  </div> <!-- 🔧 закрываем секцию Главная, чтобы другие секции не «прятались» -->
 
   <div id="tab_orders" class="section">
     <div class="search">
@@ -329,7 +323,7 @@ async def admin_page(request: Request) -> str:
 
   <div id="tab_create" class="section">
     <div class="row" style="margin-top:10px">
-      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/\\D+/g,'')" />
+      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/\D+/g,'')" />
       <select id="c_origin"> <option value="CN">CN</option> <option value="KR">KR</option> </select>
       <select id="c_status"> __OPTIONS__ </select>
     </div>
@@ -388,10 +382,15 @@ async def admin_page(request: Request) -> str:
       if(id==='#tab_addresses') loadAddresses();
       if(id==='#tab_admins') loadAdmins();
       if(id==='#tab_chat') loadChat();
-    }catch(e){}
+    }catch(e){ console.error(e); }
   }
   window.addEventListener('hashchange', setActive);
-  window.addEventListener('DOMContentLoaded', setActive);
+  // 🔧 гарантируем вызов при загрузке страницы (если DOMContentLoaded уже прошёл)
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', setActive);
+  } else {
+    setActive();
+  }
   window.setActiveTab = setActive;
   window.logout = function(){ fetch('/admin/api/logout',{method:'POST'}).then(function(){ location.reload(); }); };
 })();
@@ -449,11 +448,11 @@ async function createOrder(){
     toast(r.ok?'Разбор создан':(r.error||'Ошибка'));
   } finally{ if(b) b.disabled=false; }
 }
-async function loadClients(){ const b=document.getElementById('btnClients'); if(b) b.disabled=true; try{ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет записей</div>'; return; } for(const c of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${c.username||''}</div><div><div>${c.full_name||'—'} — ${c.phone||'—'}</div><div class=\"muted\">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
-async function loadAddresses(){ const b=document.getElementById('btnAddr'); if(b) b.disabled=true; try{ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class=\"oid\">${a.username||a.user_id||''}</div><div><div>${a.full_name||'—'} — ${a.phone||'—'}</div><div class=\"muted\">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
-async function loadAdmins(){ const data=await api('/api/admins'); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class=\"muted\">Нет админов</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; const av=a.avatar?`<img class=\"avatar\" src=\"${a.avatar}\" alt=\"${a.login}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; div.innerHTML=`<div>${av}</div><div><div>${a.login} — <b>${a.role}</b></div><div class=\"muted\">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);} }
+async function loadClients(){ const b=document.getElementById('btnClients'); if(b) b.disabled=true; try{ const q=document.getElementById('cq').value.trim(); const data=await api('/api/clients?q='+encodeURIComponent(q)); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const c of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class="oid">${c.username||''}</div><div><div>${c.full_name||'—'} — ${c.phone||'—'}</div><div class="muted">${c.city||'—'}, ${c.address||'—'} (${c.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAddresses(){ const b=document.getElementById('btnAddr'); if(b) b.disabled=true; try{ const q=document.getElementById('aq').value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q)); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет записей</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; div.innerHTML=`<div class="oid">${a.username||a.user_id||''}</div><div><div>${a.full_name||'—'} — ${a.phone||'—'}</div><div class="muted">${a.city||'—'}, ${a.address||'—'} (${a.postcode||'—'})</div></div>`; box.appendChild(div);} } finally{ if(b) b.disabled=false; } }
+async function loadAdmins(){ const data=await api('/api/admins'); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } if(!data.items||!data.items.length){ box.innerHTML='<div class="muted">Нет админов</div>'; return; } for(const a of data.items){ const div=document.createElement('div'); div.className='item'; const av=a.avatar?`<img class="avatar" src="${a.avatar}" alt="${a.login}">`:`<div class="avatar" style="display:grid;place-items:center;background:#101626">👤</div>`; div.innerHTML=`<div>${av}</div><div><div>${a.login} — <b>${a.role}</b></div><div class="muted">Создан: ${a.created_at||''}</div></div>`; box.appendChild(div);} }
 async function addAdmin(){ const b=document.getElementById('btnAddAdmin'); if(b) b.disabled=true; try{ const login=document.getElementById('a_login').value.trim(); const password=document.getElementById('a_pwd').value; const avatar=document.getElementById('a_avatar').value.trim(); const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})}); if(!r.ok){ toast(r.error||'Ошибка'); return; } document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; await loadAdmins(); } finally{ if(b) b.disabled=false; } }
-async function loadChat(){ const data=await api('/api/chat'); const box=document.getElementById('chat'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class=\"muted\">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } for(const m of (data.items||[])){ const me = m.login=== '__USER__'; const row=document.createElement('div'); row.className='msg'+(me?' me':''); const av=m.avatar?`<img class=\"avatar\" src=\"${m.avatar}\">`:`<div class=\"avatar\" style=\"display:grid;place-items:center;background:#101626\">👤</div>`; const ref = m.ref?`<div class=\"muted\">${m.ref}</div>`:''; if(me){ row.innerHTML=`<div></div><div class=\"bubble\"><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } else { row.innerHTML=`<div>${av}</div><div class=\"bubble\"><div><b>@${m.login}</b></div><div>${m.text}</div>${ref}<div class=\"muted\">${m.created_at||''}</div></div>`; } box.appendChild(row);} }
+async function loadChat(){ const data=await api('/api/chat'); const box=document.getElementById('chat'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } for(const m of (data.items||[])){ const me = m.login=== '__USER__'; const row=document.createElement('div'); row.className='msg'+(me?' me':''); const av=m.avatar?`<img class="avatar" src="${m.avatar}">`:`<div class="avatar" style="display:grid;place-items:center;background:#101626">👤</div>`; const ref = m.ref?`<div class="muted">${m.ref}</div>`:''; if(me){ row.innerHTML=`<div></div><div class="bubble"><div>${m.text}</div>${ref}<div class="muted">${m.created_at||''}</div></div>`; } else { row.innerHTML=`<div>${av}</div><div class="bubble"><div><b>@${m.login}</b></div><div>${m.text}</div>${ref}<div class="muted">${m.created_at||''}</div></div>`; } box.appendChild(row);} }
 async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
 async function logout(){ await api('/api/logout',{method:'POST'}); location.reload(); }
 window.runSearch=runSearch; window.saveStatus=saveStatus; window.createOrder=createOrder; window.loadClients=loadClients; window.loadAddresses=loadAddresses; window.loadAdmins=loadAdmins; window.addAdmin=addAdmin; window.loadChat=loadChat; window.sendMsg=sendMsg; window.logout=logout;
@@ -679,3 +678,4 @@ async def api_chat_post(request: Request, payload: Dict[str, Any] = Body(...)) -
 
 def get_admin_router() -> APIRouter:
     return router
+
