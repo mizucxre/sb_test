@@ -174,14 +174,26 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
         return
     try:
         subs = sheets.get_all_subscriptions()
+        chat_ids: List[int] = []
         for s in subs:
-            if str(s.get("order_id","")) == order_id:
+            if str(s.get("order_id", "")) == order_id:
                 try:
-                    sheets.set_last_sent_status(int(s.get("user_id")), order_id, "")
+                    chat_ids.append(int(s.get("user_id")))
                 except Exception:
                     pass
+        if not chat_ids:
+            return
+        text = f"Статус {order_id}: {new_status}"
+        for uid in set(chat_ids):
+            try:
+                params = urllib.parse.urlencode({"chat_id": uid, "text": text})
+                urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage?{params}", timeout=5).read()
+                sheets.set_last_sent_status(uid, order_id, new_status)
+            except Exception:
+                pass
     except Exception:
         pass
-    _notify_subscribers(order_id, new_status)
-    _cache_clear()
-    return JSONResponse({"ok": True, "order_id": order_id, "status": new_status})
+
+
+def get_admin_router() -> APIRouter:
+    return router
