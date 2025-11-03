@@ -358,7 +358,7 @@ def _admin_page_html(user_login: str) -> str:
 <aside class="drawer" id="leftDrawer">
   <div class="row" style="align-items:center">
     <img id="me_preview" class="avatar lg" src="" alt=""/>
-    <div style="font-weight:600;margin-left:6px">class="muted" id="me_login"</div>
+    <div id="me_login" class="muted" style="font-weight:600;margin-left:6px"></div>
     <button class="closeX" id="btnCloseDrawer" title="Закрыть">✕</button>
   </div>
   <div style="height:10px"></div>
