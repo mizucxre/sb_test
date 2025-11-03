@@ -21,6 +21,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 import threading
 
 from . import sheets
+from . import db_pg  # Postgres helper
 
 # Статусы (список можно расширить/подправить — индексы стабильны)
 STATUSES = [
@@ -848,14 +849,14 @@ async def api_me(request: Request) -> JSONResponse:
     login = _authed_login(request)
     if not login:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
-    adm = _get_admin(login) or {}
-    return JSONResponse({"login": login, "role": adm.get("role", ""), "avatar": adm.get("avatar", "")})
-
-# ------------------------ routes: orders & statuses ------------------------
-@router.get("/api/search")
-async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
-    if not _authed_login(request):
-        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        adm = await db_pg.admin_get(login)
+        if adm:
+            return JSONResponse({"login": login, "role": adm.get("role",""), "avatar": adm.get("avatar","")})
+    except Exception:
+        pass
+    adm2 = _get_admin(login) or {}
+    return JSONResponse({"login": login, "role": adm2.get("role", ""), "avatar": adm2.get("avatar", "")})
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
     cached = _cache_get(cache_key, ttl=6)
@@ -1044,6 +1045,17 @@ async def api_set_my_avatar(request: Request, payload: Dict[str, Any] = Body(...
     url = str(payload.get("avatar", "")).strip()
     if not url:
         return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
+    ok_pg = False; ok_sheet = False
+    try: ok_pg = await db_pg.admin_set_avatar(me, url)
+    except Exception: ok_pg = False
+    try: ok_sheet = _set_admin_avatar(me, url)
+    except Exception: ok_sheet = False
+    if ok_pg or ok_sheet:
+        return JSONResponse({"ok": True})
+    return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
+    url = str(payload.get("avatar", "")).strip()
+    if not url:
+        return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
     ok = _set_admin_avatar(me, url)
     return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "update_failed"})}, status_code=200 if ok else 500)
 
@@ -1099,6 +1111,11 @@ async def api_addresses(request: Request, q: Optional[str] = Query(default="")) 
 async def api_chat_list(request: Request, since_id: int = Query(default=0)) -> JSONResponse:
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    try:
+        items = await db_pg.chat_list(int(since_id or 0))
+        return JSONResponse({"ok": True, "items": items})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"db_error: {e}"}, status_code=500)
     with _chat_lock:
         items = [m for m in _chat if int(m.get("id", 0)) > int(since_id)] if since_id else _chat[-200:]
     return JSONResponse({"ok": True, "items": items})
@@ -1108,6 +1125,24 @@ async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -
     me = _authed_login(request)
     if not me:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+    text = str(payload.get("text", "")).strip()
+    ref  = str(payload.get("ref", "")).strip()
+    if not text:
+        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
+    avatar = ""
+    try:
+        a = await db_pg.admin_get(me)
+        if a: avatar = a.get("avatar","") or ""
+    except Exception:
+        pass
+    if not avatar:
+        s = _get_admin(me) or {}
+        avatar = s.get("avatar","") or ""
+    try:
+        row = await db_pg.chat_send(me, avatar, text, ref)
+        return JSONResponse({"ok": True, "id": row.get("id")})
+    except Exception as e:
+        return JSONResponse({"ok": False, "error": f"db_error: {e}"}, status_code=500)
     text = str(payload.get("text", "")).strip()
     ref  = str(payload.get("ref", "")).strip()
     if not text:
@@ -1178,3 +1213,4 @@ if __name__ == "__main__":
     from fastapi import FastAPI
     app = FastAPI()
     app.include_router(get_admin_router(), prefix="/admin")
+
