@@ -9,7 +9,6 @@ from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
 from . import sheets
 
-# ------------------ Статусы ------------------
 STATUSES = [
     "🛒 выкуплен",
     "📦 отправка на адрес (Корея)",
@@ -26,10 +25,9 @@ STATUSES = [
 
 router = APIRouter()
 
-# ------------------ Мини‑кэш ------------------
 _CACHE: Dict[str, Any] = {}
 
-def _cache_get(k: str, ttl: int = 10):
+def _cache_get(k: str, ttl: int = 8):
     v = _CACHE.get(k)
     if not v:
         return None
@@ -44,19 +42,17 @@ def _cache_set(k: str, data: Any):
 def _cache_clear():
     _CACHE.clear()
 
-# ------------------ Утилиты ------------------
-
 def _normalize_status(raw: str) -> str:
     if not raw:
-      return "—"
+        return "—"
     s = str(raw)
     if "pick_status_id" in s:
-      try:
-        i = int(re.sub(r"[^0-9]", "", s))
-        if 0 <= i < len(STATUSES):
-          return STATUSES[i]
-      except Exception:
-        pass
+        try:
+            i = int(re.sub(r"[^0-9]", "", s))
+            if 0 <= i < len(STATUSES):
+                return STATUSES[i]
+        except Exception:
+            pass
     return s
 
 def _secret() -> str:
@@ -71,7 +67,6 @@ def _admins_ws():
     vals = ws.get_all_values()
     if not vals:
         ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
-    # Обновить/создать владельца
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
     owner_avatar = os.getenv("ADMIN_AVATAR", "")
@@ -81,18 +76,15 @@ def _admins_ws():
     if found_rows:
         i = found_rows[0]
         try:
-            ws.update_cell(i, 2, want_hash)  # password_hash
-            ws.update_cell(i, 3, "owner")    # role
+            ws.update_cell(i, 2, want_hash)
+            ws.update_cell(i, 3, "owner")
             if owner_avatar:
-                ws.update_cell(i, 4, owner_avatar)  # avatar
+                ws.update_cell(i, 4, owner_avatar)
         except Exception:
             pass
-        # удалить дубликаты
         for extra in found_rows[1:][::-1]:
-            try:
-                ws.delete_rows(extra)
-            except Exception:
-                pass
+            try: ws.delete_rows(extra)
+            except Exception: pass
     else:
         ws.append_row([owner_login, want_hash, "owner", owner_avatar, sheets._now()])
     return ws
@@ -135,7 +127,6 @@ def _add_admin(current_login: str, new_login: str, password: str, role: str, ava
     if not new_login or _get_admin(new_login):
         return False
     ws = _admins_ws()
-    # Пишем ровно по колонкам: login, password_hash, role, avatar, created_at
     ws.append_row([new_login, _hash_pwd(new_login, password), role, avatar, sheets._now()])
     return True
 
@@ -193,12 +184,9 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
         chat_ids = []
         for s in subs:
             if str(s.get("order_id", "")) == order_id:
-                try:
-                    chat_ids.append(int(s.get("user_id")))
-                except Exception:
-                    pass
-        if not chat_ids:
-            return
+                try: chat_ids.append(int(s.get("user_id")))
+                except Exception: pass
+        if not chat_ids: return
         text = f"Статус {order_id}: {_normalize_status(new_status)}"
         for uid in set(chat_ids):
             try:
@@ -210,8 +198,7 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
     except Exception:
         pass
 
-# ------------------ HTML ------------------
-_LOGIN_HTML = '''
+_LOGIN_HTML = r'''
 <!doctype html>
 <html lang="ru">
 <meta charset="utf-8" />
@@ -260,7 +247,7 @@ async def admin_page(request: Request) -> str:
         return _LOGIN_HTML
 
     options = ''.join([f'<option value="adm:pick_status_id:{i}">{s}</option>' for i, s in enumerate(STATUSES)])
-    html = '''
+    html = r'''
 <!doctype html>
 <html lang="ru">
 <meta charset="utf-8" />
@@ -270,7 +257,7 @@ async def admin_page(request: Request) -> str:
   :root { --bg:#0b1020; --card:#151b2d; --ink:#e6ebff; --muted:#9fb0ff3a; --accent:#4f5fff; }
   * { box-sizing:border-box; }
   body { margin:0; font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial; background:var(--bg); color:var(--ink); }
-  header { padding:14px 16px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; z-index:5; }
+  header { padding:10px 12px; border-bottom:1px solid var(--muted); position:sticky; top:0; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); backdrop-filter:saturate(150%) blur(6px); display:flex; justify-content:space-between; align-items:center; z-index:5; }
   h1 { margin:0; font-size:18px; }
   .wrap { max-width:1100px; margin:18px auto; padding:0 12px 70px; }
   .tabs { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; margin-bottom:12px; position:sticky; top:56px; background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85)); padding:10px 0; z-index:4; }
@@ -278,38 +265,42 @@ async def admin_page(request: Request) -> str:
   .tab.active { background:#24304d; }
   .list { margin-top:12px; display:grid; gap:10px; }
   .item { padding:12px; border:1px solid var(--muted); border-radius:12px; background:var(--card); display:grid; grid-template-columns: 160px 1fr; gap:10px; align-items:center; }
-  .item.home{max-width:920px;margin:12px auto 0}
+  .item.home{max-width:920px;margin:12px auto 0; grid-template-columns:1fr}
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
   .search { display:flex; gap:8px; margin-top:8px; }
   input, select, textarea { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#1c233b; color:#e6ebff; }
   textarea { width:100%; min-height:60px; }
   button { padding:10px 12px; border:1px solid var(--muted); border-radius:10px; background:#2b3961; color:#e6ebff; cursor:pointer; }
-  .btn[disabled]{opacity:.6;cursor:not-allowed;filter:saturate(60%)}
+  .btn[disabled]{opacity:.7;cursor:wait}
   .muted { color:#c7d2fecc; font-size:13px; }
   .toast { position:fixed; left:50%; bottom:18px; transform:translateX(-50%) translateY(20px); opacity:0; background:#1c233b; color:#e6ebff; border:1px solid var(--muted); padding:10px 14px; border-radius:12px; transition:all .35s ease; box-shadow:0 10px 20px rgba(0,0,0,.25); z-index:100; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(0); }
   .overlay{position:fixed; left:50%; top:50%; transform:translate(-50%,-50%); display:none; align-items:center; justify-content:center; background:transparent; z-index:50}
   .overlay.show{display:flex}
   .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:10px 14px;border-radius:12px; box-shadow:0 8px 20px rgba(0,0,0,.35)}
-  /* вкладки без JS */
   .section{display:none}
   .section:target{display:block}
   #tab_home{display:block}
-  /* чат */
   .chat-wrap{max-width:920px;margin:0 auto;display:grid;gap:8px}
-  .messages{height:60vh; min-height:360px; overflow:auto; display:flex; flex-direction:column; gap:6px; padding:6px}
+  .messages{height:60vh; min-height:360px; overflow:auto; display:flex; flex-direction:column; gap:8px; padding:6px}
   .msg{display:flex; gap:8px; align-items:flex-end; max-width:80%}
-  .msg .bubble{background:#1e2a49; border:1px solid var(--muted); padding:8px 10px; border-radius:14px 14px 14px 4px; white-space:pre-wrap}
+  .msg .bubble{background:#1e2a49; border:1px solid var(--muted); padding:8px 10px; border-radius:14px 14px 14px 4px; white-space:pre-wrap; position:relative}
   .msg.me{margin-left:auto; flex-direction:row-reverse}
   .msg.me .bubble{background:#294172; border-color:#3b4f83; border-radius:14px 14px 4px 14px}
   .avatar{width:34px;height:34px;border-radius:50%;object-fit:cover;border:1px solid var(--muted); background:#0b1020}
+  .avatar.sm{width:28px;height:28px;border-radius:50%}
   .meta{font-size:12px; color:#c7d2fe99; margin-top:2px}
   .composer{position:sticky; bottom:0; background:linear-gradient(0deg,rgba(11,16,32,1),rgba(11,16,32,.8)); padding-top:8px}
   .pill{padding:6px 10px;border:1px solid var(--muted);border-radius:999px;background:#1c233b;color:var(--ink);font-size:13px}
+  .tick{position:absolute; right:6px; bottom:-16px; font-size:12px; color:#9fb0ff99}
+  .sending::after{content:'⏳'; position:absolute; right:6px; bottom:-16px; font-size:12px; opacity:.9}
+  .failed{border-color:#ff7b7b!important}
+  .news-card{display:grid; grid-template-columns: 120px 1fr; gap:10px; align-items:center}
+  .news-img{width:120px;height:80px;object-fit:cover;border-radius:10px;border:1px solid var(--muted); background:#111}
 </style>
 <header>
   <h1>SEABLUU — Админ‑панель</h1>
-  <div class="row"><span class="muted">__USER__</span> <button onclick="logout()">Выйти</button></div>
+  <div class="row"><img id="header_avatar" class="avatar sm" src="" alt=""/><span class="muted">__USER__</span> <button onclick="logout()">Выйти</button></div>
 </header>
 
 <div class="wrap">
@@ -324,34 +315,30 @@ async def admin_page(request: Request) -> str:
   </div>
 
   <div id="tab_home" class="section">
-    <div class="item home" style="grid-template-columns: 1fr;">
-      <div style="font-weight:600">Новости магазина</div>
-      <div class="row">
-        <button class="btn" onclick="loadNews(true)">Обновить</button>
-        <span class="muted">t.me/seabluushop (если недоступно — покажем подсказку)</span>
-      </div>
+    <div class="item home">
+      <div class="row"><button class="btn" onclick="loadNews(true)">Обновить новости</button><span class="muted">Покажем 5 последних постов</span></div>
       <div id="news" class="list"></div>
     </div>
   </div>
 
   <div id="tab_orders" class="section">
     <div class="search">
-      <input id="q" placeholder="order_id / @username / телефон" />
+      <input id="q" placeholder="order_id / @username / телефон" autocomplete="off" autocapitalize="off" spellcheck="false"/>
       <button id="btnSearch" class="btn" onclick="loadOrders(true)">Обновить</button>
     </div>
-    <div class="muted">Показываем до 20 записей.</div>
+    <div class="muted">До 20 записей</div>
     <div id="orders" class="list"></div>
   </div>
 
   <div id="tab_create" class="section">
     <div class="row" style="margin-top:6px">
-      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" pattern="[0-9]*" oninput="this.value=this.value.replace(/\D+/g,'')" />
+      <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" autocomplete="off" autocapitalize="off" spellcheck="false" pattern="[0-9]*" oninput="this.value=this.value.replace(/\D+/g,'')" />
       <select id="c_origin"> <option value="CN">CN</option> <option value="KR">KR</option> </select>
       <select id="c_status"> __OPTIONS__ </select>
     </div>
     <div class="row" style="margin-top:6px">
-      <input id="c_clients" placeholder="клиенты через запятую (@user1, @user2)" style="min-width:420px" />
-      <input id="c_note" placeholder="заметка" style="min-width:260px" />
+      <input id="c_clients" placeholder="клиенты через запятую (@user1, @user2)" style="min-width:420px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+      <input id="c_note" placeholder="заметка" style="min-width:260px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
       <button id="btnCreate" class="btn" onclick="createOrder()">Создать</button>
     </div>
   </div>
@@ -363,7 +350,7 @@ async def admin_page(request: Request) -> str:
 
   <div id="tab_addresses" class="section">
     <div class="row">
-      <input id="aq" placeholder="username для фильтра (опц.) — без @" style="min-width:240px"/>
+      <input id="aq" placeholder="username для фильтра (опц.) — без @" style="min-width:240px" autocomplete="off" autocapitalize="off" spellcheck="false"/>
       <button id="btnAddr" class="btn" onclick="loadAddresses(true)">Обновить</button>
       <span class="muted">До 20 записей</span>
     </div>
@@ -374,9 +361,9 @@ async def admin_page(request: Request) -> str:
     <div class="item" style="grid-template-columns: 110px 1fr;">
       <div>Добавить админа</div>
       <div class="row" style="gap:6px">
-        <input id="a_login" placeholder="новый логин" />
-        <input id="a_pwd" type="password" placeholder="пароль" />
-        <input id="a_avatar" placeholder="avatar URL (опц.)" style="min-width:320px" />
+        <input id="a_login" placeholder="новый логин" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+        <input id="a_pwd" type="password" placeholder="пароль" autocomplete="new-password"/>
+        <input id="a_avatar" placeholder="avatar URL (опц.)" style="min-width:320px" autocomplete="off"/>
         <input id="a_file" type="file" accept="image/*" />
         <button id="btnUpload" class="btn" onclick="uploadAvatar('a_file','a_avatar')">Загрузить аву</button>
         <button id="btnAddAdmin" class="btn" onclick="addAdmin()">Добавить</button>
@@ -386,7 +373,7 @@ async def admin_page(request: Request) -> str:
       <div>Мой профиль</div>
       <div class="row" style="gap:6px">
         <img id="my_avatar_preview" class="avatar" src="" alt="avatar"/>
-        <input id="me_avatar" placeholder="avatar URL" style="min-width:320px" />
+        <input id="me_avatar" placeholder="avatar URL" style="min-width:320px" autocomplete="off"/>
         <input id="me_file" type="file" accept="image/*" />
         <button class="btn" onclick="uploadAvatar('me_file','me_avatar','my_avatar_preview')">Загрузить</button>
         <button class="btn" onclick="saveMyAvatar()">Сохранить</button>
@@ -404,8 +391,8 @@ async def admin_page(request: Request) -> str:
       </div>
       <div id="messages" class="messages"></div>
       <div class="composer row">
-        <input id="ch_text" placeholder="Сообщение… (Enter — отправить)" style="flex:1" />
-        <input id="ch_ref" placeholder="Привязка: @username или CN-12345" style="min-width:220px" />
+        <input id="ch_text" placeholder="Сообщение… (Enter — отправить)" style="flex:1" autocomplete="off" autocapitalize="off" spellcheck="false"/>
+        <input id="ch_ref" placeholder="Привязка: @username или CN-12345" style="min-width:220px" autocomplete="off"/>
         <button id="btnSend" onclick="sendMsg()">Отправить</button>
       </div>
     </div>
@@ -434,14 +421,13 @@ async def admin_page(request: Request) -> str:
 const STATUSES = __STATUSES__;
 let __pending=0;
 let __chatTimer=null;
-let __lastCount=0;
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}, showSpinner=false){
   if(showSpinner){ __pending++; if(__pending===1) overlay(true); }
   try{
     const r = await fetch('/admin'+path, Object.assign({headers:{'Content-Type':'application/json'}}, opts));
-    let text = await r.text();
+    const text = await r.text();
     let data;
     try{ data = JSON.parse(text); } catch(e){ data = {ok:false, error:'bad_json', status:r.status, raw:text.slice(0,200)}; }
     if(!r.ok){ data = Object.assign({ok:false}, data||{}); if(!data.error) data.error = 'HTTP '+r.status; }
@@ -452,31 +438,210 @@ async function api(path, opts={}, showSpinner=false){
 }
 function toast(msg){ const el=document.getElementById('toast'); el.textContent=msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'), 2000); }
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
-function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return s; return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return s; return d.toLocaleString(); }
 
-async function loadOrders(sp){ const q = (document.getElementById('q')||{value:''}).value.trim(); const data = await api('/api/search?q='+encodeURIComponent(q), {}, sp); const box=document.getElementById('orders'); box.innerHTML=''; if(!data||data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(0,20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const o of arr){ const div=document.createElement('div'); div.className='item'; const dt=(o.updated_at||'').replace('T',' ').slice(0,16); const opts=STATUSES.map((s,i)=>`<option value="\${i}" \${statusName(o.status)===s?'selected':''}>\${s}</option>`).join(''); div.innerHTML=`<div class="oid">\${o.order_id||''}</div><div><div>Статус: <b>\${statusName(o.status)}</b></div><div class="muted">Страна: \${(o.origin||o.country||'—').toUpperCase()} · Обновлено: \${dt||'—'} · Клиент: \${o.client_name||'—'}</div><div class="row" style="margin-top:6px"><select id="pick_\${o.order_id}">\${opts}</select><button class="btn" onclick="saveStatus('\${o.order_id}', this)">Сохранить статус</button></div></div>`; box.appendChild(div);} }
-async function saveStatus(oid, btn){ if(btn) btn.disabled=true; try{ const sel=document.getElementById('pick_'+CSS.escape(oid)); const pick_index=parseInt(sel.value); const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}, true); toast(res && res.ok!==false?'Статус сохранён':(res.error||'Ошибка')); } finally{ if(btn) btn.disabled=false; } }
-async function createOrder(){ const b=document.getElementById('btnCreate'); if(b) b.disabled=true; try{ const origin=document.getElementById('c_origin').value; const idnum=(document.getElementById('c_order_id').value.trim()).replace(/\D+/g,''); if(!idnum){ toast('Введите цифры номера заказа'); return; } const order_id=origin+'-'+idnum; const status=document.getElementById('c_status').value; const clients=document.getElementById('c_clients').value.trim(); const note=document.getElementById('c_note').value.trim(); const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})}, true); toast(r.ok?'Разбор создан':(r.error||'Ошибка')); } finally{ if(b) b.disabled=false; } }
+// ------- ORDERS
+function renderOrders(items){
+  const list = document.getElementById('orders'); list.innerHTML='';
+  if(!items.length){ list.innerHTML='<div class="muted">Пусто</div>'; return; }
+  for(const o of items){
+    const div=document.createElement('div'); div.className='item';
+    const dt=(o.updated_at||'').replace('T',' ').slice(0,16);
+    const opts = STATUSES.map((s,i)=>`<option value="${i}" ${statusName(o.status)===s?'selected':''}>${s}</option>`).join('');
+    div.innerHTML=`<div class="oid">${o.order_id||''}</div>
+      <div>
+        <div>Статус: <b>${statusName(o.status)}</b></div>
+        <div class="muted">Страна: ${(o.origin||o.country||'—').toUpperCase()} · Обновлено: ${dt||'—'} · Клиент: ${o.client_name||'—'}</div>
+        <div class="row" style="margin-top:8px">
+          <select id="pick_${o.order_id}">${opts}</select>
+          <button class="btn" onclick="saveStatus('${o.order_id}', this)">Сохранить статус</button>
+        </div>
+      </div>`;
+    list.appendChild(div);
+  }
+}
+async function loadOrders(sp){
+  const q = (document.getElementById('q')||{value:''}).value.trim();
+  const data = await api('/api/search?q='+encodeURIComponent(q), {}, sp);
+  if(!data || data.ok===false){ document.getElementById('orders').innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  const arr=(data.items||[]).slice(0,20);
+  renderOrders(arr);
+}
+async function saveStatus(oid, btn){
+  if(btn) btn.disabled=true;
+  try{
+    const sel=document.getElementById('pick_'+CSS.escape(oid));
+    const pick_index=parseInt(sel.value);
+    const res=await api('/api/status',{method:'POST',body:JSON.stringify({order_id:oid,pick_index})}, true);
+    toast(res && res.ok!==false?'Статус сохранён':(res.error||'Ошибка'));
+  } finally { if(btn) btn.disabled=false; }
+}
 
-async function loadClients(sp){ const data=await api('/api/clients',{method:'GET'}, sp); const box=document.getElementById('clients'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(0,20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const u of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='200px 1fr'; div.innerHTML='<div>'+ (u.username?('@'+u.username):(u.name||'')) +'</div><div class="muted">'+(u.phone||'')+'</div>'; box.appendChild(div);} }
+// ------- CREATE ORDER
+async function createOrder(){
+  const b=document.getElementById('btnCreate'); if(b) b.disabled=true;
+  try{
+    const origin=document.getElementById('c_origin').value;
+    const idnum=(document.getElementById('c_order_id').value.trim()).replace(/\D+/g,'');
+    if(!idnum){ toast('Введите цифры номера заказа'); return; }
+    const order_id=origin+'-'+idnum;
+    const status=document.getElementById('c_status').value;
+    const clients=document.getElementById('c_clients').value.trim();
+    const note=document.getElementById('c_note').value.trim();
+    const r=await api('/api/orders',{method:'POST',body:JSON.stringify({order_id,origin,status,clients,note})}, true);
+    toast(r.ok?'Разбор создан':(r.error||'Ошибка'));
+  } finally{ if(b) b.disabled=false; }
+}
 
-async function loadAddresses(sp){ const q=(document.getElementById('aq')||{value:''}).value.trim(); const data=await api('/api/addresses?q='+encodeURIComponent(q), {method:'GET'}, sp); const box=document.getElementById('addresses'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=(data.items||[]).slice(-20); if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; } for(const a of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='200px 1fr'; div.innerHTML='<div>'+ (a.username?('@'+a.username):'—') +'</div><div class="muted">'+(a.address||'')+'</div>'; box.appendChild(div);} }
+// ------- CLIENTS
+async function loadClients(sp){
+  const data=await api('/api/clients',{method:'GET'}, sp);
+  const box=document.getElementById('clients'); box.innerHTML='';
+  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  const arr=(data.items||[]).slice(0,20);
+  if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  for(const u of arr){
+    const div=document.createElement('div'); div.className='item';
+    div.style.gridTemplateColumns='160px 1fr';
+    div.innerHTML=`<div>${u.username||u.name||''}</div><div class="muted">${u.phone||''}</div>`;
+    box.appendChild(div);
+  }
+}
 
-async function loadAdmins(sp){ const data=await api('/api/admins',{method:'GET'}, sp); const box=document.getElementById('admins'); box.innerHTML=''; if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; } const arr=data.items||[]; for(const a of arr){ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='80px 1fr'; const av=a.avatar?'<img class="avatar" src="'+a.avatar+'">':'<div class="avatar" style="display:grid;place-items:center;font-size:12px">—</div>'; div.innerHTML= av + '<div><div><b>'+a.login+'</b> <span class="muted">('+a.role+')</span></div><div class="muted">'+(a.created_at||'')+'</div></div>'; box.appendChild(div);} const me='__USER__'; const self=(arr||[]).find(x=>x.login===me); if(self){ const img=document.getElementById('my_avatar_preview'); if(img) img.src=self.avatar||''; const inp=document.getElementById('me_avatar'); if(inp) inp.value=self.avatar||''; } }
+// ------- ADDRESSES
+async function loadAddresses(sp){
+  const q=(document.getElementById('aq')||{value:''}).value.trim();
+  const data=await api('/api/addresses?q='+encodeURIComponent(q), {method:'GET'}, sp);
+  const box=document.getElementById('addresses'); box.innerHTML='';
+  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  const arr=(data.items||[]).slice(-20);
+  if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  for(const a of arr){
+    const div=document.createElement('div'); div.className='item';
+    div.style.gridTemplateColumns='220px 1fr';
+    div.innerHTML=`<div>${a.username?('@'+a.username):'—'}</div><div class="muted">${a.address||''}</div>`;
+    box.appendChild(div);
+  }
+}
 
-async function uploadAvatar(fileInputId, targetInputId, previewId){ const fileEl=document.getElementById(fileInputId); if(!fileEl || !fileEl.files || !fileEl.files[0]){ toast('Выберите файл'); return; } const f = fileEl.files[0]; const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(f.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f }); let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; } if(!j.ok){ toast(j.error||'Ошибка загрузки'); return; } const url = j.url; document.getElementById(targetInputId).value = url; if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; } toast('Аватар загружен'); }
-async function saveMyAvatar(){ const url=document.getElementById('me_avatar').value.trim(); if(!url){ toast('Ссылка пуста'); return; } const r=await api('/api/admins/avatar',{method:'POST',body:JSON.stringify({avatar:url})}, true); if(r.ok){ toast('Сохранено'); } else { toast(r.error||'Ошибка'); } }
-async function addAdmin(){ const login=document.getElementById('a_login').value.trim(); const password=document.getElementById('a_pwd').value; const avatar=document.getElementById('a_avatar').value.trim(); if(!login || !password){ toast('Введите логин и пароль'); return; } const r=await api('/api/admins',{method:'POST',body:JSON.stringify({login,password,avatar})}, true); if(!r.ok){ toast(r.error||'Ошибка'); return; } document.getElementById('a_login').value=''; document.getElementById('a_pwd').value=''; document.getElementById('a_avatar').value=''; document.getElementById('a_file').value=''; toast('Админ добавлен'); }
+// ------- ADMINS + MY AVATAR
+async function loadAdmins(sp){
+  const data=await api('/api/admins',{method:'GET'}, sp);
+  const box=document.getElementById('admins'); box.innerHTML='';
+  if(!data || data.ok===false){ box.innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
+  const arr=data.items||[];
+  if(!arr.length){ box.innerHTML='<div class="muted">Пусто</div>'; return; }
+  for(const a of arr){
+    const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='80px 1fr';
+    const av=a.avatar?'<img class="avatar" src="'+a.avatar+'">':'<div class="avatar" />';
+    div.innerHTML= av + '<div><div><b>'+a.login+'</b> <span class="muted">('+a.role+')</span></div><div class="muted">'+(a.created_at||'')+'</div></div>';
+    box.appendChild(div);
+  }
+}
+async function uploadAvatar(fileInputId, targetInputId, previewId){
+  const fileEl=document.getElementById(fileInputId);
+  if(!fileEl || !fileEl.files || !fileEl.files[0]){ toast('Выберите файл'); return; }
+  const f = fileEl.files[0];
+  const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(f.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': f.type || 'application/octet-stream'}, body: f });
+  let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; }
+  if(!j.ok){ toast(j.error||'Ошибка загрузки'); return; }
+  const url = j.url;
+  document.getElementById(targetInputId).value = url;
+  if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; }
+  const header=document.getElementById('header_avatar'); if(header && targetInputId==='me_avatar') header.src=url;
+  toast('Аватар загружен');
+}
+async function saveMyAvatar(){
+  const url=document.getElementById('me_avatar').value.trim();
+  if(!url){ toast('Ссылка пуста'); return; }
+  const r=await api('/api/admins/avatar',{method:'POST',body:JSON.stringify({avatar:url})}, true);
+  if(r.ok){ toast('Сохранено'); const img=document.getElementById('my_avatar_preview'); if(img) img.src=url; const hdr=document.getElementById('header_avatar'); if(hdr) hdr.src=url; } else { toast(r.error||'Ошибка'); }
+}
+async function loadMeToHeader(){
+  const me='__USER__';
+  const r=await api('/api/admins',{method:'GET'}, false);
+  if(!r || !r.items) return;
+  // если owner — вернули всех; иначе — только себя
+  const self=(r.items.find(x=>x.login===me)) || r.items[0];
+  if(self){
+    const img=document.getElementById('my_avatar_preview'); if(img) img.src=self.avatar||'';
+    const inp=document.getElementById('me_avatar'); if(inp) inp.value=self.avatar||'';
+    const hdr=document.getElementById('header_avatar'); if(hdr) hdr.src=self.avatar||'';
+  }
+}
 
-function renderMessages(items){ const box=document.getElementById('messages'); box.innerHTML=''; const me='__USER__'; items.forEach(m=>{ const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':''); const av = m.avatar?('<img class="avatar" src="'+m.avatar+'">'):'<div class="avatar" />'; const meta = '<div class="meta">'+(m.login||'')+' · '+fmtTime(m.created_at||'')+ (m.ref?(' · '+m.ref):'') +'</div>'; const bubble = '<div><div class="bubble">'+(m.text||'')+'</div>'+meta+'</div>'; row.innerHTML = av + bubble; box.appendChild(row); }); box.scrollTop = box.scrollHeight; }
-async function loadChat(sp, toastOnError){ const data=await api('/api/chat',{method:'GET'}, sp); if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; } __lastCount = (data.items||[]).length; renderMessages(data.items||[]); }
+// ------- CHAT
+function renderMessages(items){
+  const box=document.getElementById('messages'); box.innerHTML='';
+  const me='__USER__';
+  items.forEach(m=>{
+    const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':'');
+    const av = m.avatar?('<img class="avatar" src="'+m.avatar+'">'):'<div class="avatar" />';
+    const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent = (m.text||'');
+    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=(m.login||'')+' · '+fmtTime(m.created_at||'')+(m.ref?(' · '+m.ref):'');
+    const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
+    row.innerHTML = av; row.appendChild(wrap);
+    box.appendChild(row);
+  });
+  box.scrollTop = box.scrollHeight;
+}
+async function loadChat(sp, toastOnError){
+  const data=await api('/api/chat',{method:'GET'}, sp);
+  if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; }
+  renderMessages(data.items||[]);
+}
 function toggleAutoChat(){ const ch=document.getElementById('autoChat'); if(!ch) return; if(__chatTimer){ clearInterval(__chatTimer); __chatTimer=null; } if(ch.checked){ __chatTimer=setInterval(()=>loadChat(false,false), 4000); } }
-async function sendMsg(){ const b=document.getElementById('btnSend'); if(b) b.disabled=true; try{ const text=document.getElementById('ch_text').value.trim(); const ref=document.getElementById('ch_ref').value.trim(); if(!text){ toast('Введите сообщение'); return; } const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}, true); if(r.ok){ document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value=''; await loadChat(false,false); } else { toast(r.error||'Ошибка'); } } finally{ if(b) b.disabled=false; } }
+async function sendMsg(){
+  const b=document.getElementById('btnSend'); if(b) b.disabled=true;
+  try{
+    const text=document.getElementById('ch_text').value.trim();
+    const ref=document.getElementById('ch_ref').value.trim();
+    if(!text){ toast('Введите сообщение'); return; }
+    // оптимистичный рендер
+    const me='__USER__';
+    const box=document.getElementById('messages');
+    const row=document.createElement('div'); row.className='msg me';
+    const av=document.getElementById('header_avatar'); const avHtml = av && av.src ? '<img class="avatar" src="'+av.src+'">' : '<div class="avatar" />';
+    row.innerHTML = avHtml;
+    const bubble=document.createElement('div'); bubble.className='bubble sending'; bubble.textContent=text;
+    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=me+' · '+fmtTime(new Date().toISOString())+(ref?(' · '+ref):''); 
+    const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
+    row.appendChild(wrap); box.appendChild(row); box.scrollTop = box.scrollHeight;
+
+    const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}, false);
+    if(r.ok){
+      bubble.classList.remove('sending');
+      const tick=document.createElement('div'); tick.className='tick'; tick.textContent='✓✓';
+      bubble.appendChild(tick);
+      document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value='';
+    } else {
+      bubble.classList.remove('sending'); bubble.classList.add('failed');
+      const tick=document.createElement('div'); tick.className='tick'; tick.textContent='×';
+      bubble.appendChild(tick);
+      toast(r.error||'Ошибка отправки');
+    }
+  } finally{ if(b) b.disabled=false; }
+}
 document.addEventListener('keydown', function(e){ if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){ e.preventDefault(); sendMsg(); } });
 
-// Новости
-async function loadNews(sp){ const box=document.getElementById('news'); if(sp){ box.innerHTML='<div class="pill">Загружаем…</div>'; } const r = await api('/api/news', {method:'GET'}, sp); if(!r || r.ok===false || !r.items || !r.items.length){ box.innerHTML='<div class="muted">Невозможно получить ленту (требуется интернет с сервера). Откройте канал: t.me/seabluushop</div>'; return; } box.innerHTML=''; r.items.slice(0,5).forEach(p=>{ const div=document.createElement('div'); div.className='item'; div.style.gridTemplateColumns='1fr'; div.innerHTML='<div style="white-space:pre-wrap">'+p.text+'</div><div class="muted">'+(p.date||'')+'</div>'; box.appendChild(div); }); }
-window.onerror=function(msg){ try{ const t=document.getElementById('toast'); if(t){ t.textContent='Ошибка: '+msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),3000);} }catch(e){} };
+// ------- NEWS from Telegram
+async function loadNews(sp){
+  const box=document.getElementById('news'); if(sp){ box.innerHTML='<div class="pill">Загружаем…</div>'; }
+  const r = await api('/api/news', {method:'GET'}, sp);
+  if(!r || r.ok===false){ box.innerHTML='<div class="muted">Невозможно получить ленту. Откройте канал: t.me/seabluushop</div>'; return; }
+  const items = (r.items||[]).slice(0,5);
+  if(!items.length){ box.innerHTML='<div class="muted">Нет новостей</div>'; return; }
+  box.innerHTML='';
+  items.forEach(p=>{
+    const div=document.createElement('div'); div.className='item news-card';
+    const img = document.createElement('img'); img.className='news-img'; img.src = p.image || ''; img.alt='';
+    const text = document.createElement('div'); text.innerHTML = '<div class="muted">'+(p.date||'')+'</div><div>'+ (p.text||'') +'</div>';
+    div.appendChild(img); div.appendChild(text); box.appendChild(div);
+  });
+}
+
+// Init header avatar on load
+loadMeToHeader();
 </script>
 </html>
 '''
@@ -486,7 +651,6 @@ window.onerror=function(msg){ try{ const t=document.getElementById('toast'); if(
         .replace("__OPTIONS__", options)
     )
 
-# ------------------ API ------------------
 @router.post("/api/login")
 async def api_login(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     login = str(payload.get("login", "")).strip()
@@ -507,7 +671,6 @@ async def api_logout() -> JSONResponse:
 
 @router.get("/api/search")
 async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
-    """Заказы: если q пустой — последние 20."""
     if not _authed_login(request):
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     q = (q or "").strip()
@@ -530,8 +693,7 @@ async def api_search(request: Request, q: str = Query("")) -> JSONResponse:
         oid = extract_order_id(q)
         if oid:
             o = sheets.get_order(oid)
-            if o:
-                items = [o]
+            if o: items = [o]
         if not items and _looks_like_username(q):
             items = sheets.get_orders_by_username(q)
         if not items:
@@ -559,7 +721,7 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
     try:
         ok = sheets.update_order_status(order_id, new_status)
-    except Exception as e:
+    except Exception:
         return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
     try:
         subs = sheets.get_all_subscriptions()
@@ -594,7 +756,7 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
         created = sheets.ensure_clients_from_usernames(usernames)
         if usernames:
             sheets.ensure_participants(order_id, usernames)
-    except Exception as e:
+    except Exception:
         return JSONResponse({"ok": False, "error": "create_failed"}, status_code=500)
     _cache_clear()
     return JSONResponse({"ok": True, "order_id": order_id})
@@ -663,7 +825,6 @@ async def api_admins_avatar(request: Request, payload: Dict[str, Any] = Body(...
     ok = _set_admin_avatar(target, avatar)
     return JSONResponse({"ok": ok})
 
-# ---- Загрузка и раздача аватаров (без multipart) ----
 _MEDIA_DIR = os.getenv("ADMIN_MEDIA_DIR", os.path.join(os.getcwd(), "data", "avatars"))
 os.makedirs(_MEDIA_DIR, exist_ok=True)
 
@@ -694,7 +855,6 @@ async def get_avatar(name: str):
         return JSONResponse({"ok": False, "error": "not_found"}, status_code=404)
     return FileResponse(path)
 
-# ------------------ Чат ------------------
 def _chat_ws():
     ws = sheets.get_worksheet("chat")
     vals = ws.get_all_values()
@@ -735,27 +895,32 @@ async def api_chat_post(request: Request, payload: Dict[str, Any] = Body(...)) -
         return JSONResponse({"ok": False, "error": "write_failed"}, status_code=500)
     return JSONResponse({"ok": True})
 
-# ------------------ Новости из Telegram ------------------
 @router.get("/api/news")
 async def api_news() -> JSONResponse:
     url = "https://t.me/s/seabluushop"
     try:
-        html = urllib.request.urlopen(url, timeout=5).read().decode("utf-8", "ignore")
-        # очень грубый парсер: последние 5 текстовых блоков
+        html = urllib.request.urlopen(url, timeout=6).read().decode("utf-8", "ignore")
         items = []
-        for m in re.finditer(r'<div class="tgme_widget_message.*?>(.*?)</div>\s*</div>\s*</div>', html, re.S):
-            block = m.group(1)
-            # вытащим дату
-            dt = ""
+        # capture each message block
+        for m in re.finditer(r'<div class="tgme_widget_message\b.*?>.*?</div>\s*</div>\s*</div>', html, re.S):
+            block = m.group(0)
+            # time
             md = re.search(r'datetime="([^"]+)"', block)
-            if md:
-                dt = md.group(1).replace("T"," ").replace("+00:00","")
-            # текст
-            text = re.sub(r'<[^>]+>', '', block)
-            text = re.sub(r'\s+',' ', text).strip()
-            if text:
-                items.append({"text": text, "date": dt})
-            if len(items) >= 8:
+            dt = (md.group(1) if md else "").replace("T"," ").replace("+00:00","")
+            # image - background-image:url('...') OR <img src="...">
+            img = ""
+            ms = re.search(r'background-image:\s*url\(([^\)]+)\)', block)
+            if ms:
+                img = ms.group(1).strip('\'"')
+            else:
+                mi = re.search(r'<img[^>]+src="([^"]+)"', block)
+                if mi: img = mi.group(1)
+            # text
+            text_block = re.search(r'<div class="tgme_widget_message_text[^>]*>(.*?)</div>', block, re.S)
+            text = re.sub(r'<[^>]+>', '', text_block.group(1)).strip() if text_block else ""
+            if text or img:
+                items.append({"text": text, "date": dt, "image": img})
+            if len(items) >= 10:
                 break
         return JSONResponse({"ok": True, "items": items})
     except Exception:
@@ -763,4 +928,3 @@ async def api_news() -> JSONResponse:
 
 def get_admin_router() -> APIRouter:
     return router
-
