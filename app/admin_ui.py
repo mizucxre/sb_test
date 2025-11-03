@@ -454,10 +454,7 @@ def _admin_page_html(user_login: str) -> str:
 
     <section id="tab_chat" class="item" style="margin-top:12px">
       <div class="chat-wrap">
-        <div class="row">
-          <button onclick="loadChat(true,true)">Обновить чат</button>
-          <label class="row pill" style="gap:6px"><input id="autoChat" type="checkbox" onchange="toggleAutoChat()"> автообновление</label>
-        </div>
+        <div class="row"><span class="muted">Чат</span></div>
         <div id="messages" class="messages"></div>
         <div class="row" style="position:sticky;bottom:0;background:linear-gradient(0deg,rgba(11,16,32,1),rgba(11,16,32,.8));padding-top:8px">
           <input id="ch_text" placeholder="Сообщение… (Enter — отправить)" style="flex:1" autocomplete="off" />
@@ -480,6 +477,9 @@ const STATUSES = __STATUSES__;
 let ME = {login:'', avatar:'', role:''};
 let __lastMsgId = 0;
 let __pending=0; let __chatTimer=null; let __ordersTimer=null;
+let ME = {login:'', avatar:'', role:''};
+let __lastMsgId = 0;
+const __SEEN = new Set(); // набор id уже отрисованных сообщений
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}, showSpinner=false){
@@ -655,35 +655,41 @@ async function loadAdmins(sp){
 // --- chat ---
 function renderMessages(items){
   const box = document.getElementById('messages');
-  const me = ME.login || '';
+  const me  = ME.login || '';
   items.sort(function(a,b){
     const ai=parseInt(String(a.id||'0')); const bi=parseInt(String(b.id||'0'));
     if(!isNaN(ai) && !isNaN(bi)) return ai-bi;
     return String(a.created_at||'').localeCompare(String(b.created_at||''));
   });
-  items.forEach(function(m){
+  for(const m of items){
+    if(!m || __SEEN.has(m.id)) continue; // дедуп
+    __SEEN.add(m.id);
+
     const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':'');
     const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=m.avatar||''; avatar.alt='';
     const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent = String(m.text||'');
     const meta=document.createElement('div'); meta.className='meta';
     const dt = new Date(m.created_at || Date.now()).toLocaleString();
-    meta.textContent = (m.login||'')+' · '+dt+(m.ref?(' · '+m.ref):'');
+    meta.innerHTML = '<b>'+(m.login||'')+'</b> · '+dt+(m.ref?(' · '+m.ref):'');
+
     const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
     row.appendChild(avatar); row.appendChild(wrap);
     box.appendChild(row);
-  });
+  }
   box.scrollTop = box.scrollHeight;
 }
 
 async function loadChat(sp, toastOnError){
-  const r = await fetch('/admin/api/chat?since_id=' + __lastMsgId);
-  const data = await r.json();
-  if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; }
-  const items = data.items || [];
-  if(items.length){
-    __lastMsgId = items[items.length-1].id;
-    renderMessages(items);
-  }
+  try{
+    const r = await fetch('/admin/api/chat?since_id=' + __lastMsgId);
+    const data = await r.json();
+    if(!data || data.ok===false){ if(toastOnError) toast(data && data.error || 'Ошибка чата'); return; }
+    const items = data.items || [];
+    if(items.length){
+      __lastMsgId = items[items.length-1].id;
+      renderMessages(items);
+    }
+  }catch(e){ /* тихо */ }
 }
 
 function toggleAutoChat(){ const ch=document.getElementById('autoChat'); if(!ch) return; if(__chatTimer){ clearInterval(__chatTimer); __chatTimer=null; } if(ch.checked){ __chatTimer=setInterval(()=>loadChat(false,false), 4000); } }
@@ -691,28 +697,14 @@ async function sendMsg(){
   const b=document.getElementById('btnSend'); if(b) b.disabled=true;
   try{
     const text=document.getElementById('ch_text').value.trim();
-    const ref=document.getElementById('ch_ref').value.trim();
-    if(!text){ toast('Введите сообщение'); return; }
-    const me = ME.login || '';
-    const box=document.getElementById('messages');
-    const row=document.createElement('div'); row.className='msg me';
-    const av=document.getElementById('header_avatar'); const avatar=document.createElement('img'); avatar.className='avatar'; avatar.src=(av && av.src)?av.src:''; row.appendChild(avatar);
-    const bubble=document.createElement('div'); bubble.className='bubble sending'; bubble.textContent=text;
-    const meta=document.createElement('div'); meta.className='meta'; meta.textContent=me+' · '+fmtTime(new Date().toISOString())+(ref?(' · '+ref):'');
-    const wrap=document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
-    row.appendChild(wrap); box.appendChild(row); box.scrollTop = box.scrollHeight;
-
-    const r=await api('/api/chat',{method:'POST',body:JSON.stringify({text,ref})}, false);
-    if(r.ok){
-      bubble.classList.remove('sending');
-      const tick=document.createElement('div'); tick.className='tick'; tick.textContent='✓✓'; bubble.appendChild(tick);
-      document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value='';
-    } else {
-      bubble.classList.remove('sending'); bubble.classList.add('failed');
-      const tick=document.createElement('div'); tick.className='tick'; tick.textContent='×'; bubble.appendChild(tick);
-      toast(r.error||'Ошибка отправки');
-    }
-  } finally{ if(b) b.disabled=false; }
+    const ref =document.getElementById('ch_ref').value.trim();
+    if(!text) return;
+    const r = await fetch('/admin/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, ref})});
+    const j = await r.json();
+    if(j && j.id){ __lastMsgId = Math.max(__lastMsgId, j.id); }
+    document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value='';
+    await loadChat(false,false); // подтянуть только что отправленное
+  } finally { if(b) b.disabled=false; }
 }
 
 document.addEventListener('keydown', function(e){
@@ -1078,15 +1070,15 @@ async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -
     if not me:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     text = str(payload.get("text", "")).strip()
-    ref = str(payload.get("ref", "")).strip()
+    ref  = str(payload.get("ref", "")).strip()
     if not text:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
     adm = _get_admin(me) or {}
     msg = {
         "id": _chat_next_id(),
-        "created_at": sheets._now(),  # твоя функция времени
+        "created_at": sheets._now(),
         "login": me,
-        "avatar": adm.get("avatar", ""),  # снапшот, чтобы все видели аву
+        "avatar": adm.get("avatar", ""),  # снапшот — другие тоже видят твою аву
         "text": text,
         "ref": ref,
     }
