@@ -694,19 +694,46 @@ async function loadChat(sp, toastOnError){
 }
 
 function toggleAutoChat(){ const ch=document.getElementById('autoChat'); if(!ch) return; if(__chatTimer){ clearInterval(__chatTimer); __chatTimer=null; } if(ch.checked){ __chatTimer=setInterval(()=>loadChat(false,false), 4000); } }
+
 async function sendMsg(){
   const b=document.getElementById('btnSend'); if(b) b.disabled=true;
   try{
-    const text=document.getElementById('ch_text').value.trim();
-    const ref =document.getElementById('ch_ref').value.trim();
+    const text=(document.getElementById('ch_text')||{}).value.trim();
+    const ref =(document.getElementById('ch_ref')||{}).value.trim();
     if(!text) return;
+
+    // 1) Оптимистичный пузырь с индикатором отправки
+    const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+    const box = document.getElementById('messages');
+    const row = document.createElement('div'); row.className='msg me';
+    const myAvatar = (ME && ME.avatar) || (document.getElementById('header_avatar')||{}).src || '';
+    const avatar = document.createElement('img'); avatar.className='avatar'; avatar.src=myAvatar; avatar.alt='';
+    const bubble = document.createElement('div'); bubble.className='bubble sending'; bubble.textContent=text; bubble.setAttribute('data-msg-id', tempId);
+    const meta = document.createElement('div'); meta.className='meta'; meta.innerHTML = '<b>'+(ME.login||'')+'</b> · '+(new Date().toLocaleString())+(ref?(' · '+ref):'');
+    const wrap = document.createElement('div'); wrap.appendChild(bubble); wrap.appendChild(meta);
+    row.appendChild(avatar); row.appendChild(wrap); box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
+
+    // 2) Отправляем на сервер
     const r = await fetch('/admin/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, ref})});
     const j = await r.json();
-    if(j && j.id){ __lastMsgId = Math.max(__lastMsgId, j.id); }
-    document.getElementById('ch_text').value=''; document.getElementById('ch_ref').value='';
-    await loadChat(false,false); // подтянуть только что отправленное
+
+    // 3) Разбираем результат
+    (document.getElementById('ch_text')||{}).value=''; (document.getElementById('ch_ref')||{}).value='';
+    if(j && j.ok && j.id){
+      bubble.classList.remove('sending');
+      bubble.insertAdjacentHTML('beforeend','<span class="tick">✓✓</span>');
+      bubble.setAttribute('data-msg-id', String(j.id));
+      __SEEN.add(j.id);
+      __lastMsgId = Math.max(__lastMsgId, j.id);
+    } else {
+      bubble.classList.remove('sending'); bubble.classList.add('failed');
+      bubble.insertAdjacentHTML('beforeend','<span class="tick">×</span>');
+    }
+    loadChat(false,false);
   } finally { if(b) b.disabled=false; }
 }
+
 
 document.addEventListener('keydown', function(e){
   if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){ e.preventDefault(); sendMsg(); }
@@ -742,6 +769,7 @@ async function publishNews(){
 }
 
 // --- profile avatar load + header self-fill ---
+
 async function uploadAvatarRaw(file, targetInputId, previewId, updateHeader){
   const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(file.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': file.type || 'application/octet-stream'}, body: file });
   let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; }
@@ -750,8 +778,15 @@ async function uploadAvatarRaw(file, targetInputId, previewId, updateHeader){
   const input=document.getElementById(targetInputId); if(input) input.value=url;
   if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; }
   const hdr=document.getElementById('header_avatar'); if(updateHeader && hdr) hdr.src=url;
+  // Автосохранение в таблицу (чтобы другие админы сразу видели)
+  try{
+    const s = await fetch('/admin/api/admins/avatar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({avatar:url})});
+    const sj = await s.json();
+    if(!sj || sj.ok===false){ console.warn('avatar save failed', sj); }
+  }catch(e){ console.warn('avatar save error', e); }
   toast('Аватар загружен');
 }
+
 async function saveMyAvatar(){
   const url=document.getElementById('me_avatar').value.trim();
   if(!url){ toast('Ссылка пуста'); return; }
