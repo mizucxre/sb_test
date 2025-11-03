@@ -855,8 +855,10 @@ async def api_me(request: Request) -> JSONResponse:
             return JSONResponse({"login": login, "role": adm.get("role",""), "avatar": adm.get("avatar","")})
     except Exception:
         pass
-    adm2 = _get_admin(login) or {}
-    return JSONResponse({"login": login, "role": adm2.get("role", ""), "avatar": adm2.get("avatar", "")})
+    # Fallback: ENV only
+    if login.strip().lower() == (os.getenv("ADMIN_LOGIN","admin").strip().lower()):
+        return JSONResponse({"login": login, "role": "owner", "avatar": os.getenv("ADMIN_AVATAR", "")})
+    return JSONResponse({"login": login, "role": "admin", "avatar": ""})
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
     cached = _cache_get(cache_key, ttl=6)
@@ -1045,17 +1047,6 @@ async def api_set_my_avatar(request: Request, payload: Dict[str, Any] = Body(...
     url = str(payload.get("avatar", "")).strip()
     if not url:
         return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
-    ok_pg = False; ok_sheet = False
-    try: ok_pg = await db_pg.admin_set_avatar(me, url)
-    except Exception: ok_pg = False
-    try: ok_sheet = _set_admin_avatar(me, url)
-    except Exception: ok_sheet = False
-    if ok_pg or ok_sheet:
-        return JSONResponse({"ok": True})
-    return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
-    url = str(payload.get("avatar", "")).strip()
-    if not url:
-        return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
     ok = _set_admin_avatar(me, url)
     return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "update_failed"})}, status_code=200 if ok else 500)
 
@@ -1135,9 +1126,8 @@ async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -
         if a: avatar = a.get("avatar","") or ""
     except Exception:
         pass
-    if not avatar:
-        s = _get_admin(me) or {}
-        avatar = s.get("avatar","") or ""
+    if not avatar and me.strip().lower() == (os.getenv("ADMIN_LOGIN","admin").strip().lower()):
+        avatar = os.getenv("ADMIN_AVATAR", "")
     try:
         row = await db_pg.chat_send(me, avatar, text, ref)
         return JSONResponse({"ok": True, "id": row.get("id")})
@@ -1213,3 +1203,4 @@ if __name__ == "__main__":
     from fastapi import FastAPI
     app = FastAPI()
     app.include_router(get_admin_router(), prefix="/admin")
+
