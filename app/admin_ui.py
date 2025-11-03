@@ -195,5 +195,12 @@ def _notify_subscribers(order_id: str, new_status: str) -> None:
         pass
 
 
+_LOGIN_HTML = """<!doctype html><html lang=\"ru\"><meta charset=\"utf-8\" /><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" /><title>SEABLUU Admin</title><body style=\"margin:0;display:grid;place-items:center;height:100vh;background:#0b1020;color:#e6ebff;font:16px system-ui,-apple-system,Segoe UI,Roboto,Arial\"><div style=\"padding:18px 22px;border:1px solid #9fb0ff3a;border-radius:12px;background:#151b2d;box-shadow:0 10px 30px rgba(0,0,0,.25)\">SEABLUU Admin готов. Маршрут /admin работает.</div></body></html>"""
+
+@router.get("/", response_class=HTMLResponse)
+async def admin_page_root() -> HTMLResponse:
+    return HTMLResponse(_LOGIN_HTML)
+
+
 def get_admin_router() -> APIRouter:
     return router
