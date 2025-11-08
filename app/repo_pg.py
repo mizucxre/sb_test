@@ -10,14 +10,17 @@ import re
 from typing import List, Dict, Any, Optional, Tuple
 import psycopg
 from psycopg.rows import dict_row
+from psycopg_pool import ConnectionPool
 
 _DB_URL = os.getenv("DATABASE_URL") or os.getenv("NEON_DB_URL") or os.getenv("SUPABASE_DB_URL")
 if not _DB_URL:
     raise RuntimeError("DATABASE_URL (or NEON_DB_URL/SUPABASE_DB_URL) is not set")
 
+_POOL = ConnectionPool(_DB_URL, min_size=1, max_size=5, kwargs={"row_factory": dict_row})
+
 def _conn():
-    # sslmode=require should be in the URL for Neon. psycopg v3 understands it.
-    return psycopg.connect(_DB_URL, row_factory=dict_row)
+    # Возвращаем соединение из пула (контекстный менеджер)
+    return _POOL.connection()
 
 def _normalize_username(u: str) -> str:
     u = (u or "").strip()
