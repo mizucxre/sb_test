@@ -1,9 +1,11 @@
 # app/webhook.py
 import os
 import logging
+from typing import List, Dict, Any
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Query
 from fastapi.responses import Response
+from pydantic import BaseModel
 
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder
@@ -14,12 +16,18 @@ try:
 except Exception:
     register_admin_ui = None  # безопасно, если функции нет
 
+# БД/хранилище: storage сам выберет Postgres (repo_pg.py), если есть DATABASE_URL
+from . import storage as sheets
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
+
+# Подключаем UI-роутер админки как и было
 from .admin_ui import get_admin_router
 app.include_router(get_admin_router(), prefix="/admin")
+
 application: Application | None = None
 
 
@@ -142,6 +150,86 @@ async def telegram(request: Request):
         logger.exception("Error processing update: %s", e)
 
     return Response(status_code=200)
+
+
+# ------------------- ADMIN API -------------------
+
+def _dedup_by_order_id(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    seen, out = set(), []
+    for r in rows or []:
+        oid = r.get("order_id")
+        if not oid or oid in seen:
+            continue
+        seen.add(oid)
+        out.append(r)
+    return out
+
+
+@app.get("/admin/api/search")
+def admin_search(q: str = Query("", alias="q"), limit: int = 200):
+    """
+    Поиск заказов для веб-админки.
+    - пустой q -> последние заказы
+    - q == order_id (точное совпадение)
+    - q начинается с @ -> по username
+    - q содержит цифры -> по телефону
+    """
+    q = (q or "").strip()
+    rows: List[Dict[str, Any]] = []
+
+    if not q:
+        rows = sheets.list_recent_orders(limit=limit)
+    else:
+        # 1) точное совпадение по order_id
+        o = sheets.get_order(q)
+        if o:
+            rows.append(o)
+        # 2) по @username
+        if q.startswith("@"):
+            rows += sheets.get_orders_by_username(q)
+        # 3) по телефону (цифры)
+        if any(ch.isdigit() for ch in q):
+            rows += sheets.get_orders_by_phone(q)
+
+    rows = _dedup_by_order_id(rows)
+
+    # обогащаем участниками
+    items = []
+    for r in rows:
+        oid = r.get("order_id")
+        participants = sheets.get_participants(oid) if oid else []
+        items.append({
+            "order_id": oid,
+            "status": r.get("status"),
+            "client_name": r.get("client_name"),
+            "phone": r.get("phone"),
+            "participants": participants,
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+        })
+
+    return {"items": items, "count": len(items)}
+
+
+class BulkStatusReq(BaseModel):
+    ids: List[str]
+    status: str
+
+
+@app.post("/admin/api/bulk-status")
+def admin_bulk_status(req: BulkStatusReq):
+    """
+    Массовое обновление статуса заказов из админки.
+    """
+    updated = 0
+    for oid in (req.ids or []):
+        if oid:
+            sheets.update_order_status(oid, req.status)
+            updated += 1
+    return {"ok": True, "updated": updated}
+
+
+# -------------------------------------------------
 
 
 @app.get("/health")
