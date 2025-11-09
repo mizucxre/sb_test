@@ -889,8 +889,8 @@ async def api_me(request: Request) -> JSONResponse:
 
 
 # ------------------------ routes: orders search / status / create ------------------------
-@app.get("/admin/api/search")
-async def api_search(q: str = ""):
+@router.get("/api/search")
+async def api_search(q: str = "") -> JSONResponse:
     rows = repo_pg.search_orders(q)
     # если у тебя там рендер HTML-таблицы — передай rows в текущий рендерер.
     # если API уже возвращает JSON — просто:
