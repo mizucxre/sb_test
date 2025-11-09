@@ -333,7 +333,7 @@ def _owner_js_flag(login: str) -> str:
 
 
 def _admin_page_html(user_login: str) -> str:
-    # Левый drawer + контент
+    # Modern dashboard (dark gradient) + left drawer + KPI & charts like the screenshot
     return r"""
 <!doctype html>
 <html lang="ru">
@@ -341,50 +341,81 @@ def _admin_page_html(user_login: str) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>SEABLUU — Админ-панель</title>
 <style>
-  :root{--bg:#0b1020;--card:#151b2d;--ink:#e6ebff;--muted:#9fb0ff3a;--accent:#4f5fff}
+  :root{
+    --bg0:#0b1020; --bg1:#0e142a; --bg2:#12193a;
+    --card:#151c33; --ink:#e6ebff; --muted:#9fb0ff3a; --accent:#6366f1;
+    --line:#1f2a44; --ring:#334169;
+  }
   *{box-sizing:border-box}
-  body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial}
-  header{height:56px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--muted);position:sticky;top:0;background:linear-gradient(180deg,rgba(11,16,32,.95),rgba(11,16,32,.85));backdrop-filter:blur(6px);z-index:10}
-  .burger{width:28px;height:28px;border:1px solid var(--muted);border-radius:8px;display:grid;place-items:center;cursor:pointer;background:#1c233b}
-  .wrap{display:grid;grid-template-columns: 1fr;max-width:1100px;margin:0 auto;padding:12px}
+  html,body{height:100%}
+  body{
+    margin:0;color:var(--ink);font:16px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+    background:
+      radial-gradient(1200px 800px at 20% -10%, rgba(99,102,241,.25) 0%, rgba(99,102,241,0) 40%),
+      radial-gradient(1000px 600px at 110% 10%, rgba(37,99,235,.18) 0%, rgba(37,99,235,0) 35%),
+      linear-gradient(135deg, var(--bg0) 0%, var(--bg2) 60%, var(--bg1) 100%);
+  }
+  header{
+    height:56px;display:flex;align-items:center;gap:10px;padding:0 12px;
+    border-bottom:1px solid var(--muted);
+    position:sticky;top:0;
+    background:linear-gradient(180deg,rgba(11,16,32,.9),rgba(11,16,32,.7));
+    backdrop-filter:blur(6px); z-index:10;
+  }
+  .burger{width:30px;height:30px;border:1px solid var(--ring);border-radius:10px;display:grid;place-items:center;cursor:pointer;background:#1c233b}
+  .wrap{display:grid;grid-template-columns:1fr;max-width:1200px;margin:0 auto;padding:12px}
   .content{min-height:calc(100vh - 56px);padding:10px}
-  input,select,textarea{padding:10px 12px;border:1px solid var(--muted);border-radius:10px;background:#1c233b;color:#e6ebff}
-  button{padding:10px 12px;border:1px solid var(--muted);border-radius:10px;background:#2b3961;color:#e6ebff;cursor:pointer}
+  input,select,textarea{
+    padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#111a2e;color:var(--ink)
+  }
+  button{padding:10px 12px;border:1px solid var(--ring);border-radius:12px;background:#25335a;color:var(--ink);cursor:pointer}
   .muted{color:#c7d2fecc;font-size:13px}
   .list{display:grid;gap:10px}
-  .item{padding:12px;border:1px solid var(--muted);border-radius:12px;background:var(--card)}
+  .item{padding:12px;border:1px solid var(--ring);border-radius:14px;background:rgba(21,28,51,.75)}
   .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-  .avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--muted);background:#111}
+  .avatar{width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid var(--ring);background:#111}
   .avatar.lg{width:46px;height:46px}
-  .pill{padding:6px 10px;border:1px solid var(--muted);border-radius:999px;background:#1c233b;color:var(--ink);font-size:13px}
-  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);opacity:0;background:#1c233b;color:#e6ebff;border:1px solid var(--muted);padding:10px 14px;border-radius:12px;transition:all .35s ease;box-shadow:0 10px 20px rgba(0,0,0,.25);z-index:100}
+  .pill{padding:6px 10px;border:1px solid var(--ring);border-radius:999px;background:#0f1830;color:var(--ink);font-size:13px}
+  .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);opacity:0;background:#0f1830;color:#e6ebff;border:1px solid var(--ring);padding:10px 14px;border-radius:12px;transition:all .35s ease;box-shadow:0 10px 20px rgba(0,0,0,.25);z-index:100}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
   .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.35);z-index:60}
   .overlay.show{display:flex}
-  .spinner{background:#1c233b;border:1px solid var(--muted);color:#e6ebff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35)}
-  .drawer{position:fixed;left:-280px;top:0;width:260px;height:100vh;background:#141a2d;border-right:1px solid var(--muted);box-shadow:12px 0 24px rgba(0,0,0,.25);transition:left .25s ease;z-index:70;padding:12px}
+  .spinner{background:#0f1830;border:1px solid var(--ring);color:#e6ebff;padding:10px 14px;border-radius:12px;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+  .drawer{position:fixed;left:-280px;top:0;width:260px;height:100vh;background:#121936;border-right:1px solid var(--ring);box-shadow:12px 0 24px rgba(0,0,0,.25);transition:left .25s ease;z-index:70;padding:12px}
   .drawer.show{left:0}
-  .nav a{display:block;padding:10px 12px;border-radius:10px;color:#e6ebff;text-decoration:none;border:1px solid transparent}
-  .nav a.active,.nav a:hover{background:#1c233b;border-color:var(--muted)}
-  .news-card{padding:12px;border:1px solid var(--muted);border-radius:12px;background:#141a2d}
+  .nav a{display:block;padding:10px 12px;border-radius:12px;color:#e6ebff;text-decoration:none;border:1px solid transparent}
+  .nav a.active,.nav a:hover{background:#0f1830;border-color:var(--ring)}
+  .news-card{padding:12px;border:1px solid var(--ring);border-radius:12px;background:#121936}
   .news-head{display:flex;gap:10px;align-items:center}
-  .news-ava{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--muted);background:#111}
-  .news-img{width:100%;max-height:440px;object-fit:cover;border-radius:10px;border:1px solid var(--muted);background:#111;margin-top:8px}
+  .news-ava{width:40px;height:40px;border-radius:50%;object-fit:cover;border:1px solid var(--ring);background:#111}
+  .news-img{width:100%;max-height:440px;object-fit:cover;border-radius:10px;border:1px solid var(--ring);background:#111;margin-top:8px}
   .chat-wrap{max-width:920px;margin:0 auto;display:grid;gap:8px}
   .messages{height:60vh;min-height:360px;overflow:auto;display:flex;flex-direction:column;gap:8px;padding:6px}
   .msg{display:flex;gap:8px;align-items:flex-end;max-width:80%}
-  .msg .bubble{background:#1e2a49;border:1px solid var(--muted);padding:8px 10px;border-radius:14px 14px 14px 4px;white-space:pre-wrap;position:relative}
+  .msg .bubble{background:#1e2a49;border:1px solid var(--ring);padding:8px 10px;border-radius:14px 14px 14px 4px;white-space:pre-wrap;position:relative}
   .msg.me{margin-left:auto;flex-direction:row-reverse}
   .msg.me .bubble{background:#294172;border-color:#3b4f83;border-radius:14px 14px 4px 14px}
   .meta{font-size:12px;color:#c7d2fe99;margin-top:2px}
   .tick{position:absolute;right:6px;bottom:-16px;font-size:12px;color:#9fb0ff99}
   .sending::after{content:'⏳';position:absolute;right:6px;bottom:-16px;font-size:12px;opacity:.9}
   .failed{border-color:#ff7b7b!important}
-  .admin-card{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center;padding:10px;border:1px solid var(--muted);border-radius:12px;background:#1b233b}
-  .role{font-size:12px;border:1px solid var(--muted);padding:2px 6px;border-radius:999px;margin-left:6px;opacity:.9}
-  .closeX{margin-left:auto;border-radius:8px;background:#1c233b;border:1px solid var(--muted)}
+  .admin-card{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:center;padding:10px;border:1px solid var(--ring);border-radius:12px;background:#1b233b}
+  .role{font-size:12px;border:1px solid var(--ring);padding:2px 6px;border-radius:999px;margin-left:6px;opacity:.9}
+  .closeX{margin-left:auto;border-radius:10px;background:#0f1830;border:1px solid var(--ring)}
   .toolbar{display:flex;gap:8px;align-items:center;margin:8px 0}
   .checkbox{transform:scale(1.2)}
+  /* Dashboard blocks */
+  .kpi-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .kpi{background:rgba(15,24,48,.75);border:1px solid var(--ring);border-radius:16px;padding:14px}
+  .kpi .v{font-weight:700;font-size:24px}
+  .kpi .l{color:#99a7ff;font-size:12px;margin-top:4px}
+  .charts{display:grid;grid-template-columns:2fr 1fr;gap:12px;margin-top:12px}
+  .card2{background:rgba(21,28,51,.75);border:1px solid var(--ring);border-radius:16px;padding:12px}
+  .mini-orders{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:12px}
+  .mini{background:#0f1830;border:1px solid var(--ring);border-radius:12px;padding:10px}
+  .mini b{font-size:14px}
+  @media (max-width:1024px){ .charts{grid-template-columns:1fr} .kpi-grid{grid-template-columns:repeat(2,1fr)} .mini-orders{grid-template-columns:repeat(2,1fr)} }
+  @media (max-width:640px){ .kpi-grid{grid-template-columns:1fr} .mini-orders{grid-template-columns:1fr} }
 </style>
 
 <header>
@@ -426,8 +457,32 @@ def _admin_page_html(user_login: str) -> str:
 <div class="wrap">
   <div class="content">
 
+    <!-- DASHBOARD -->
     <section id="tab_home" class="item">
-      <div class="row toolbar">
+      <div class="kpi-grid">
+        <div class="kpi"><div class="v" id="kpi_orders">9526</div><div class="l">Total Orders</div></div>
+        <div class="kpi"><div class="v" id="kpi_revenue">$8323</div><div class="l">Total Revenue</div></div>
+        <div class="kpi"><div class="v" id="kpi_visitors">6200</div><div class="l">Visitors</div></div>
+        <div class="kpi"><div class="v" id="kpi_messages">5630</div><div class="l">Messages</div></div>
+      </div>
+
+      <div class="charts">
+        <div class="card2">
+          <div class="muted" style="margin-bottom:6px">Site Traffic</div>
+          <canvas id="trafficChart" height="160"></canvas>
+        </div>
+        <div class="card2">
+          <div class="muted" style="margin-bottom:6px">Weekly sales</div>
+          <canvas id="weeklyChart" height="160"></canvas>
+        </div>
+      </div>
+
+      <div class="card2" style="margin-top:12px">
+        <div class="muted" style="margin-bottom:8px">Последние заказы</div>
+        <div id="miniOrders" class="mini-orders"></div>
+      </div>
+
+      <div class="row toolbar" style="margin-top:12px">
         <button onclick="loadNews(true)">Обновить новости</button>
         <span class="muted">Покажем 5 последних постов</span>
       </div>
@@ -443,6 +498,7 @@ def _admin_page_html(user_login: str) -> str:
       </div>
     </section>
 
+    <!-- ORDERS -->
     <section id="tab_orders" class="item" style="margin-top:12px">
       <div class="row toolbar">
         <input id="q" placeholder="order_id / @username / телефон" autocomplete="off" autocapitalize="off" spellcheck="false"/>
@@ -459,6 +515,7 @@ def _admin_page_html(user_login: str) -> str:
       <div id="orders" class="list"></div>
     </section>
 
+    <!-- CREATE -->
     <section id="tab_create" class="item" style="margin-top:12px">
       <div class="row">
         <input id="c_order_id" placeholder="только цифры (например 12345)" inputmode="numeric" autocomplete="off" oninput="this.value=this.value.replace(/\D+/g,'')"/>
@@ -474,11 +531,13 @@ def _admin_page_html(user_login: str) -> str:
       </div>
     </section>
 
+    <!-- CLIENTS -->
     <section id="tab_clients" class="item" style="margin-top:12px">
       <div class="row"><button onclick="loadClients(true)">Обновить</button><span class="muted">До 20 записей</span></div>
       <div id="clients" class="list"></div>
     </section>
 
+    <!-- ADDRESSES -->
     <section id="tab_addresses" class="item" style="margin-top:12px">
       <div class="row">
         <input id="aq" placeholder="username для фильтра (опц.) — без @" autocomplete="off"/>
@@ -487,11 +546,13 @@ def _admin_page_html(user_login: str) -> str:
       <div id="addresses" class="list"></div>
     </section>
 
+    <!-- ADMINS -->
     <section id="tab_admins" class="item" style="margin-top:12px">
       <div class="row"><button onclick="loadAdmins(true)">Обновить список</button></div>
       <div id="admins" class="list"></div>
     </section>
 
+    <!-- CHAT -->
     <section id="tab_chat" class="item" style="margin-top:12px">
       <div class="chat-wrap">
         <div class="row"><span class="muted">Чат</span></div>
@@ -511,6 +572,9 @@ def _admin_page_html(user_login: str) -> str:
 <div id="backdrop" class="overlay"></div>
 <div id="toast" class="toast"></div>
 
+<!-- Chart.js for charts -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
 <script>
 const IS_OWNER = __IS_OWNER__;
 const STATUSES = __STATUSES__;
@@ -520,6 +584,7 @@ let __pending = 0;
 let __chatTimer = null;
 let __ordersTimer = null;
 const __SEEN = new Set();
+let CHARTS = {traffic:null, weekly:null};
 
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}, showSpinner=false){
@@ -538,7 +603,7 @@ function toast(msg){ const el=document.getElementById('toast'); el.textContent=S
 function statusName(x){ if(!x) return '—'; if(x.includes('pick_status_id')){ const i=parseInt(x.replace(/[^0-9]/g,'')); if(!isNaN(i)&&i>=0&&i<STATUSES.length) return STATUSES[i]; } return x; }
 function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return s; return d.toLocaleString(); }
 
-// --- left drawer & settings closing ---
+// ---- Drawer / nav / settings
 (function(){
   function setActiveFromHash(){
     var id=location.hash||'#tab_home'; var sections=document.querySelectorAll('.content > section');
@@ -573,7 +638,52 @@ function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return
   if(me_file){ me_file.onchange=function(){ if(me_file.files && me_file.files[0]) uploadAvatarRaw(me_file.files[0],'me_avatar','me_preview',true); }; }
 })();
 
-// --- orders list + bulk ---
+// ---- Dashboard helpers (KPIs + charts + mini orders)
+function initCharts(){
+  try{
+    const tctx = document.getElementById('trafficChart').getContext('2d');
+    CHARTS.traffic = new Chart(tctx, {
+      type:'line',
+      data:{ labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+        datasets:[{ label:'Visitors', data:[2.4,3.1,8.2,4.8,5.7,6.8,7.3,6.2,9.1,6.0,8.6,7.9],
+          borderWidth:2, fill:false, tension:.35 }]},
+      options:{ plugins:{legend:{display:false}}, scales:{x:{grid:{color:'#1f2937'}}, y:{grid:{color:'#1f2937'}}} }
+    });
+    const wctx = document.getElementById('weeklyChart').getContext('2d');
+    CHARTS.weekly = new Chart(wctx, {
+      type:'doughnut',
+      data:{ labels:['Direct','Affiliate','E‑mail','Other'], datasets:[{ data:[5856,2602,1802,1105] }] },
+      options:{ plugins:{legend:{position:'bottom'}}, cutout:'60%' }
+    });
+  }catch(e){ /* Chart.js failed — ignore */ }
+}
+function updateKpis(items){
+  try{
+    const total = (items && items.length) || 0;
+    const el = (id)=>document.getElementById(id);
+    if(el('kpi_orders')) el('kpi_orders').textContent = String(total);
+    if(el('kpi_revenue')) el('kpi_revenue').textContent = '$'+(8323).toLocaleString('en-US');
+    if(el('kpi_visitors')) el('kpi_visitors').textContent = '6200';
+    if(el('kpi_messages')) el('kpi_messages').textContent = '5630';
+  }catch(e){}
+}
+function renderMiniOrders(items){
+  const box=document.getElementById('miniOrders'); if(!box) return;
+  box.innerHTML = '';
+  const arr = (items||[]).slice(0,6);
+  if(!arr.length){ box.innerHTML = '<div class="muted">Нет данных</div>'; return; }
+  for(const [i,o] of arr.entries()){
+    const div = document.createElement('div'); div.className='mini';
+    div.innerHTML = '<div class="row" style="justify-content:space-between">'+
+      '<b>'+(o.order_id||('CN-'+(1000+i)))+'</b>'+
+      '<span class="muted">'+(o.origin||'CN')+'</span></div>'+
+      '<div class="muted" style="margin-top:4px">'+(o.clients||'@username')+'</div>'+
+      '<div class="pill" style="display:inline-block;margin-top:6px">'+(statusName(o.status)||'⏳ ожидание оплаты')+'</div>';
+    box.appendChild(div);
+  }
+}
+
+// ---- Orders list + bulk
 function renderOrders(items){
   const list = document.getElementById('orders'); list.innerHTML='';
   if(!items.length){ list.innerHTML='<div class="muted">Пусто</div>'; return; }
@@ -600,7 +710,11 @@ async function loadOrders(sp){
   const q = (document.getElementById('q')||{value:''}).value.trim();
   const data = await api('/api/search?q='+encodeURIComponent(q), {}, sp);
   if(!data || data.ok===false){ document.getElementById('orders').innerHTML='<div class="muted">Ошибка: '+(data&&data.error||'нет данных')+'</div>'; return; }
-  renderOrders((data.items||[]).slice(0,50));
+  const items = (data.items||[]).slice(0,50);
+  renderOrders(items);
+  // update dashboard pieces as well
+  updateKpis(items);
+  renderMiniOrders(items);
 }
 async function saveStatus(oid, btn){
   if(btn) btn.disabled=true; try{
@@ -769,7 +883,6 @@ async function sendMsg(){
   } finally { if(b) b.disabled=false; }
 }
 
-
 document.addEventListener('keydown', function(e){
   if(e.key==='Enter' && !e.shiftKey && document.getElementById('ch_text')===document.activeElement){ e.preventDefault(); sendMsg(); }
 });
@@ -836,17 +949,15 @@ async function loadMeToHeader(){
   const inp  = document.getElementById('me_avatar');  if(inp)  inp.value = me.avatar || '';
 }
 
-
 loadMeToHeader();
+initCharts();
 loadNews(false); loadOrders(false); loadClients(false); loadAddresses(false); loadAdmins(false);
 loadChat(true,false);
 setInterval(()=>loadChat(false,false), 1200);
 </script>
 </html>
-""".replace("__USER__", user_login) \
-    .replace("__IS_OWNER__", _owner_js_flag(user_login)) \
-    .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
-
+""".replace("__IS_OWNER__", _owner_js_flag(user_login)) \
+     .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
 
 # ------------------------ routes: pages ------------------------
 @router.get("/", response_class=HTMLResponse)
@@ -1293,3 +1404,4 @@ if __name__ == "__main__":
     from fastapi import FastAPI
     app = FastAPI()
     app.include_router(get_admin_router(), prefix="/admin")
+
