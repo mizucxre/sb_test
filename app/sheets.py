@@ -14,11 +14,10 @@ if _USE_PG:
     from . import repo_pg as _pg  # доступ к _pg._conn()
 
     def _now() -> str:
-        # Строка времени в UTC, как ISO без микросекунд (пример: 2025-11-09T14:23:00+00:00)
         return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def _ensure_admins_table():
-        # Создадим таблицу, если её нет
+        # Создадим таблицу, если её нет, и добавим недостающие поля/индексы
         with _pg._conn() as con, con.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.admins (
@@ -31,7 +30,6 @@ if _USE_PG:
                   created_at timestamptz DEFAULT now()
                 );
             """)
-            # Добьём недостающие колонки/индексы, если таблица уже была
             for stmt in [
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS user_id bigint",
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS username text",
@@ -79,7 +77,10 @@ if _USE_PG:
             return out
 
         def get_all_values(self):
+            """Возвращаем [] если реально нет ни одной записи (как gspread на пустом листе)."""
             recs = self.get_all_records()
+            if not recs:
+                return []
             vals = [["login", "hash", "role", "avatar", "created_at"]]
             for r in recs:
                 vals.append([r["login"], r["hash"], r["role"], r["avatar"], r["created_at"]])
@@ -113,9 +114,8 @@ else:
     from .sheets_gs import *              # noqa: F401,F403
     from .sheets_gs import get_worksheet  # оригинальная функция
     try:
-        from .sheets_gs import _now as _now  # прокинем ту же функцию, если есть
+        from .sheets_gs import _now as _now
     except Exception:
-        # запасной вариант
         from datetime import datetime, timezone
         def _now() -> str:
             return datetime.now(timezone.utc).isoformat(timespec="seconds")
