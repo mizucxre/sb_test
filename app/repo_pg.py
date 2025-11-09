@@ -275,3 +275,74 @@ def list_clients(limit:int=200) -> List[Dict[str,Any]]:
           select * from clients order by updated_at desc nulls last, created_at desc nulls last limit %s
         """, (limit,))
         return cur.fetchall() or []
+
+# --- В КОНЕЦ ФАЙЛА app/repo_pg.py ДОБАВЬ ЭТО ---
+
+from typing import Optional, Union
+
+def update_order_status(order_key: Union[int, str], new_status: str, by_login: Optional[str] = None) -> int:
+    """
+    Обновляет статус заказа (и проставляет audit-поля).
+    order_key: может быть числовым id или строковым кодом (например, order_number).
+    Возвращает количество обновлённых строк (0/1).
+    """
+    if not new_status:
+        return 0
+    with _conn() as con, con.cursor() as cur:
+        # Порядок попыток: id -> order_number -> code -> tg_order_id
+        # 1) по id (если похоже на число)
+        updated = 0
+        try:
+            oid = int(order_key)
+            cur.execute("""
+                UPDATE public.orders
+                   SET status = %s,
+                       status_updated_at = now(),
+                       status_updated_by = %s
+                 WHERE id = %s
+            """, (new_status, by_login, oid))
+            updated = cur.rowcount
+        except Exception:
+            updated = 0
+
+        if updated == 0:
+            # 2) по order_number
+            cur.execute("""
+                UPDATE public.orders
+                   SET status = %s,
+                       status_updated_at = now(),
+                       status_updated_by = %s
+                 WHERE order_number::text = %s
+            """, (new_status, by_login, str(order_key)))
+            updated = cur.rowcount
+
+        if updated == 0:
+            # 3) по code
+            try:
+                cur.execute("""
+                    UPDATE public.orders
+                       SET status = %s,
+                           status_updated_at = now(),
+                           status_updated_by = %s
+                     WHERE code::text = %s
+                """, (new_status, by_login, str(order_key)))
+                updated = cur.rowcount
+            except Exception:
+                pass
+
+        if updated == 0:
+            # 4) по tg_order_id
+            try:
+                cur.execute("""
+                    UPDATE public.orders
+                       SET status = %s,
+                           status_updated_at = now(),
+                           status_updated_by = %s
+                     WHERE tg_order_id::text = %s
+                """, (new_status, by_login, str(order_key)))
+                updated = cur.rowcount
+            except Exception:
+                pass
+
+        return updated
+
