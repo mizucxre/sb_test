@@ -904,11 +904,12 @@ async def api_search(q: str = "") -> JSONResponse:
     try:
         # repo_pg.search_orders is synchronous (blocking DB access using psycopg).
         rows = repo_pg.search_orders(q)
-        return JSONResponse({"orders": rows or []})
+        # frontend expects { ok: True, items: [...] }
+        return JSONResponse({"ok": True, "items": rows or []})
     except Exception as e:
         # Log full traceback to help debugging (includes exception type and message)
         logger.exception("Error searching orders")
-        return JSONResponse({"orders": [], "error": str(e)})
+        return JSONResponse({"ok": False, "items": [], "error": str(e)})
 
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
