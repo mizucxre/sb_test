@@ -66,6 +66,21 @@ if _USE_PG:
         """gspread-like wrapper for 'admins' sheet backed by Postgres."""
         HEADER = ["login", "password_hash", "role", "avatar", "created_at"]
 
+     # В app/sheets.py (в PG-режиме), рядом с _AdminsWS, добавь упрощённый слой:
+class _OrdersWS:
+    """Упрощённая заглушка для совместимости (если вдруг где-то вызывается)."""
+    def update_status(self, order_key, status, by_login=None):
+        from . import repo_pg as _pg
+        return _pg.update_order_status(order_key, status, by_login)
+
+def get_worksheet(name: str):
+    lname = (name or "").strip().lower()
+    if lname == "admins":
+        return _AdminsWS()
+    if lname == "orders":
+        return _OrdersWS()
+    raise AttributeError("get_worksheet is only implemented for 'admins' and 'orders' in Postgres mode")
+
         def _rows(self):
             _ensure_admins_table()
             with _conn() as con, con.cursor() as cur:
