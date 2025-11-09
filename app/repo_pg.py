@@ -211,13 +211,15 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
 
     where_sql = "(%(q)s = '' OR " + " OR ".join(where_clauses) + ")" if where_clauses else "TRUE"
 
-    sql += f"WHERE {where_sql}\nORDER BY ";
+    sql += f"WHERE {where_sql}\n"
+    # Build ORDER BY only with existing columns to avoid referencing missing ones
+    order_by_parts: List[str] = []
     if 'created_at' in orders_cols:
-        sql += "o.created_at DESC NULLS LAST, o.id DESC\n"
-    elif 'id' in orders_cols:
-        sql += "o.id DESC\n"
-    else:
-        sql += "1=1\n"
+        order_by_parts.append("o.created_at DESC NULLS LAST")
+    if 'id' in orders_cols:
+        order_by_parts.append("o.id DESC")
+    if order_by_parts:
+        sql += "ORDER BY " + ", ".join(order_by_parts) + "\n"
 
     sql += "LIMIT %(limit)s\n"
 
