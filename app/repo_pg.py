@@ -71,9 +71,20 @@ def _ensure_schema():
         );
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS orders_created_idx ON public.orders(created_at);")
-        cur.execute("CREATE INDEX IF NOT EXISTS orders_status_idx  ON public.orders(status);")
-        cur.execute("CREATE INDEX IF NOT EXISTS orders_client_idx  ON public.orders(client_id);")
-        cur.execute("CREATE INDEX IF NOT EXISTS orders_addr_idx    ON public.orders(address_id);")
+        # Create indexes only if the corresponding columns exist to avoid errors
+        def _col_exists(table: str, column: str) -> bool:
+            cur.execute(
+                "SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name=%s AND column_name=%s",
+                (table, column),
+            )
+            return cur.fetchone() is not None
+
+        if _col_exists('orders', 'status'):
+            cur.execute("CREATE INDEX IF NOT EXISTS orders_status_idx  ON public.orders(status);")
+        if _col_exists('orders', 'client_id'):
+            cur.execute("CREATE INDEX IF NOT EXISTS orders_client_idx  ON public.orders(client_id);")
+        if _col_exists('orders', 'address_id'):
+            cur.execute("CREATE INDEX IF NOT EXISTS orders_addr_idx    ON public.orders(address_id);")
 
 
 # ---------- search ----------

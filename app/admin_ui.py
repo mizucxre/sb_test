@@ -32,6 +32,9 @@ try:
     from . import repo_pg
 except ImportError:
     repo_pg = None
+from .logger import get_logger
+
+logger = get_logger(__name__)
 from . import db_pg  # Postgres helper
 
 # ------------------------ constants / statuses ------------------------
