@@ -137,7 +137,6 @@ if _USE_PG:
                     (login, pwhash, role, avatar, created),
                 )
 
-        # best-effort: чтобы не падать, если где-то вызывается точечное обновление
         def update_cell(self, row_index: int, col_index: int, value):
             try:
                 idx = row_index - 2
