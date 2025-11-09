@@ -906,9 +906,9 @@ async def api_search(q: str = "") -> JSONResponse:
         rows = repo_pg.search_orders(q)
         return JSONResponse({"orders": rows or []})
     except Exception as e:
-        logger.error(f"Error searching orders: {e}")
+        # Log full traceback to help debugging (includes exception type and message)
+        logger.exception("Error searching orders")
         return JSONResponse({"orders": [], "error": str(e)})
-    return JSONResponse(rows)
 
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
