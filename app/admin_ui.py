@@ -983,8 +983,9 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
 
     try:
         ok = sheets.update_order_status(order_id, new_status)
-    except Exception:
-        return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
+    except Exception as e:
+        logger.exception("api_set_status: failed to update status for %s", order_id)
+        return JSONResponse({"ok": False, "error": f"update_failed: {e}"}, status_code=500)
 
     _cache_clear()
     _notify_subscribers(order_id, new_status)
@@ -1014,9 +1015,12 @@ async def api_set_status_bulk(request: Request, payload: Dict[str, Any] = Body(.
         try:
             if sheets.update_order_status(str(oid), status):
                 updated += 1
-                _notify_subscribers(str(oid), status)
-        except Exception:
-            pass
+                try:
+                    _notify_subscribers(str(oid), status)
+                except Exception:
+                    logger.exception("api_set_status_bulk: notify failed for %s", oid)
+        except Exception as e:
+            logger.exception("api_set_status_bulk: failed to update status for %s", oid)
     _cache_clear()
     return JSONResponse({"ok": True, "updated": updated})
 
@@ -1100,7 +1104,8 @@ async def api_upload_avatar_raw(request: Request, filename: str = Query(default=
             f.write(raw)
         url = f"/admin/media/avatars/{fn}"
         return JSONResponse({"ok": True, "url": url})
-    except Exception:
+    except Exception as e:
+        logger.exception("api_upload_avatar_raw: upload failed")
         return JSONResponse({"ok": False, "error": "upload_failed"}, status_code=500)
 
 
@@ -1160,8 +1165,9 @@ async def api_clients(request: Request) -> JSONResponse:
                 orders = []
             items.append({"username": username, "name": r.get("name") or "", "phone": phone, "orders": orders})
         return JSONResponse({"ok": True, "items": items})
-    except Exception:
-        return JSONResponse({"ok": True, "items": []})
+    except Exception as e:
+        logger.exception("api_clients: failed to read clients worksheet")
+        return JSONResponse({"ok": False, "items": [], "error": "sheets_error"}, status_code=500)
 
 
 @router.get("/api/addresses")
@@ -1185,8 +1191,9 @@ async def api_addresses(request: Request, q: Optional[str] = Query(default="")) 
                     continue
             items.append(rec)
         return JSONResponse({"ok": True, "items": items})
-    except Exception:
-        return JSONResponse({"ok": True, "items": []})
+    except Exception as e:
+        logger.exception("api_addresses: failed to read addresses worksheet")
+        return JSONResponse({"ok": False, "items": [], "error": "sheets_error"}, status_code=500)
 
 
 # ------------------------ routes: chat ------------------------
@@ -1248,8 +1255,9 @@ async def api_news(request: Request) -> JSONResponse:
                 "channel_name": r.get("channel_name") or r.get("channel") or "SEABLUU",
             })
         return JSONResponse({"ok": True, "items": items})
-    except Exception:
-        return JSONResponse({"ok": True, "items": []})
+    except Exception as e:
+        logger.exception("api_news: failed to read news worksheet")
+        return JSONResponse({"ok": False, "items": [], "error": "sheets_error"}, status_code=500)
 
 
 @router.post("/api/news/publish")

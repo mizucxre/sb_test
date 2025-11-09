@@ -185,8 +185,30 @@ if _USE_PG:
     class _OrdersWS:
         """Упрощённая заглушка для совместимости с admin_ui."""
         def update_status(self, order_key, status, by_login=None):
-            from . import repo_pg as _pg
-            return _pg.update_order_status(order_key, status, by_login)
+            # Delegate to module-level update function implemented for PG backend
+            return update_order_status(order_key, status, by_login)
+
+    def update_order_status(order_id: str, new_status: str, by_login: str = None) -> bool:
+        """Update order status in Postgres. Matches by order_id or order_key (case-insensitive)."""
+        _ensure_admins_table()  # ensure db is ready (reuses existing helper)
+        try:
+            with _conn() as con, con.cursor() as cur:
+                # Try to match by order_id or order_key (case-insensitive)
+                cur.execute(
+                    """
+                    UPDATE public.orders
+                    SET status = %s, updated_at = now()
+                    WHERE (order_id IS NOT NULL AND lower(order_id) = lower(%s))
+                       OR (order_key IS NOT NULL AND lower(order_key) = lower(%s))
+                    RETURNING id
+                    """,
+                    (new_status, order_id, order_id),
+                )
+                row = cur.fetchone()
+                return bool(row)
+        except Exception:
+            # Let caller handle/log the exception
+            raise
 
     def get_worksheet(name: str):
         lname = (name or "").strip().lower()
