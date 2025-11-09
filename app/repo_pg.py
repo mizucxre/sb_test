@@ -145,7 +145,8 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         if col in orders_cols:
             select_parts.append(f"o.{col} AS {col}")
 
-    for c in ['id', 'order_key', 'status', 'title', 'store', 'color', 'size', 'qty', 'price', 'currency', 'comment', 'created_at']:
+    # prefer the actual schema used in production: order_id, client_name, phone, origin, note, country
+    for c in ['order_id', 'order_key', 'status', 'client_name', 'phone', 'origin', 'note', 'country', 'title', 'store', 'color', 'size', 'qty', 'price', 'currency', 'comment', 'created_at', 'updated_at']:
         add(c)
 
     join_clients = False
@@ -185,13 +186,23 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
     FROM public.orders o
     """
     if join_clients:
-        sql += "LEFT JOIN public.clients c ON c.id = o.client_id\n"
+        # prefer joining by explicit client_id if it exists; otherwise try phone or client_name heuristics
+        if 'client_id' in orders_cols and ('id' in clients_cols or 'tg_id' in clients_cols):
+            sql += "LEFT JOIN public.clients c ON c.id = o.client_id\n"
+        elif 'phone' in orders_cols and 'phone' in clients_cols:
+            sql += "LEFT JOIN public.clients c ON c.phone = o.phone\n"
+        elif 'client_name' in orders_cols and ('username' in clients_cols or 'full_name' in clients_cols):
+            # join if username or full_name matches client_name
+            sql += "LEFT JOIN public.clients c ON (c.username = o.client_name OR c.full_name = o.client_name)\n"
     if join_addresses:
         sql += "LEFT JOIN public.addresses a ON a.id = o.address_id\n"
 
     # Where clause: try to reference only existing columns
     where_clauses = []
     params = {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit}
+    # prefer exact match on order_id if user provided a likely order id
+    if 'order_id' in orders_cols and q:
+        where_clauses.append("o.order_id = %(q)s")
     if 'order_key' in orders_cols:
         where_clauses.append("o.order_key ILIKE %(q_like)s")
     if 'title' in orders_cols:
@@ -206,6 +217,7 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         where_clauses.append("c.username ILIKE %(q_like)s")
     if join_clients and 'phone' in clients_cols:
         where_clauses.append("c.phone ILIKE %(q_like)s")
+    # keep numeric id support if present
     if 'id' in orders_cols and id_exact is not None:
         where_clauses.append("o.id = %(id_exact)s")
 
@@ -214,10 +226,14 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
     sql += f"WHERE {where_sql}\n"
     # Build ORDER BY only with existing columns to avoid referencing missing ones
     order_by_parts: List[str] = []
+    # order by most-recent timestamps available, or fallback to order_id
+    if 'updated_at' in orders_cols:
+        order_by_parts.append("o.updated_at DESC NULLS LAST")
     if 'created_at' in orders_cols:
         order_by_parts.append("o.created_at DESC NULLS LAST")
-    if 'id' in orders_cols:
-        order_by_parts.append("o.id DESC")
+    # if none of timestamps exist but order_id exists, sort by order_id (lexicographically)
+    if not order_by_parts and 'order_id' in orders_cols:
+        order_by_parts.append("o.order_id DESC")
     if order_by_parts:
         sql += "ORDER BY " + ", ".join(order_by_parts) + "\n"
 
@@ -238,20 +254,17 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         get = r.get if hasattr(r, 'get') else (lambda k: None)
         out.append(
             {
-                "id": get('id'),
-                "order_key": get('order_key'),
+                "order_id": get('order_id') or get('order_key'),
                 "status": get('status'),
-                "title": get('title'),
-                "store": get('store'),
-                "color": get('color'),
-                "size": get('size'),
-                "qty": get('qty'),
-                "price": get('price'),
-                "currency": get('currency'),
-                "comment": get('comment'),
+                "client_name": get('client_name') or get('client_username'),
+                "phone": get('phone') or get('client_phone') or get('address_phone'),
+                "origin": get('origin'),
+                "note": get('note') or get('comment'),
+                "country": get('country'),
                 "created_at": get('created_at'),
+                "updated_at": get('updated_at'),
                 "client": {
-                    "id": get('client_id'),
+                    "id": get('client_id') or get('id'),
                     "username": get('client_username'),
                     "phone": get('client_phone'),
                 },
