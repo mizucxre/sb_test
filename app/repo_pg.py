@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 import psycopg
 from psycopg.rows import dict_row
 import logging
+import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -249,9 +250,20 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         return []
 
     out: List[Dict[str, Any]] = []
+    def _to_json(v):
+        # convert datetime/date to ISO strings for JSON serialization
+        if isinstance(v, (datetime.datetime, datetime.date)):
+            try:
+                return v.isoformat()
+            except Exception:
+                return str(v)
+        return v
+
     for r in rows:
         # r is dict-row (dict-like). Use .get safely.
         get = r.get if hasattr(r, 'get') else (lambda k: None)
+        created = _to_json(get('created_at'))
+        updated = _to_json(get('updated_at'))
         out.append(
             {
                 "order_id": get('order_id') or get('order_key'),
@@ -261,8 +273,8 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
                 "origin": get('origin'),
                 "note": get('note') or get('comment'),
                 "country": get('country'),
-                "created_at": get('created_at'),
-                "updated_at": get('updated_at'),
+                "created_at": created,
+                "updated_at": updated,
                 "client": {
                     "id": get('client_id') or get('id'),
                     "username": get('client_username'),
