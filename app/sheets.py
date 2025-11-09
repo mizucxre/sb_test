@@ -9,14 +9,19 @@ sheets.py — совместимый слой для admin_ui:
 import os
 from datetime import datetime, timezone
 
+
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
+
 def _pg_dsn() -> str:
-    return (os.getenv("DATABASE_URL")
-            or os.getenv("NEON_DB_URL")
-            or os.getenv("SUPABASE_DB_URL")
-            or "")
+    return (
+        os.getenv("DATABASE_URL")
+        or os.getenv("NEON_DB_URL")
+        or os.getenv("SUPABASE_DB_URL")
+        or ""
+    )
+
 
 _USE_PG = bool(_pg_dsn())
 
@@ -33,7 +38,8 @@ if _USE_PG:
 
     def _ensure_admins_table():
         with _conn() as con, con.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 CREATE TABLE IF NOT EXISTS public.admins (
                   user_id       bigint,
                   username      text,
@@ -44,47 +50,21 @@ if _USE_PG:
                   created_at    timestamptz DEFAULT now(),
                   updated_at    timestamptz
                 );
-            """)
-            stmts = [
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS user_id bigint",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS username text",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS login text",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS password_hash text",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS role text DEFAULT 'admin'",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS avatar text",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()",
-                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS updated_at timestamptz",
-                "CREATE UNIQUE INDEX IF NOT EXISTS admins_login_key ON public.admins(login)"
-            ]
-            for sql in stmts:
-                try:
-                    cur.execute(sql)
-                except Exception:
-                    pass
+                """
+            )
+            cur.execute(
+                "CREATE UNIQUE INDEX IF NOT EXISTS admins_login_key ON public.admins(login);"
+            )
 
     class _AdminsWS:
         """gspread-like wrapper for 'admins' sheet backed by Postgres."""
         HEADER = ["login", "password_hash", "role", "avatar", "created_at"]
 
-     # В app/sheets.py (в PG-режиме), рядом с _AdminsWS, добавь упрощённый слой:
-class _OrdersWS:
-    """Упрощённая заглушка для совместимости (если вдруг где-то вызывается)."""
-    def update_status(self, order_key, status, by_login=None):
-        from . import repo_pg as _pg
-        return _pg.update_order_status(order_key, status, by_login)
-
-def get_worksheet(name: str):
-    lname = (name or "").strip().lower()
-    if lname == "admins":
-        return _AdminsWS()
-    if lname == "orders":
-        return _OrdersWS()
-    raise AttributeError("get_worksheet is only implemented for 'admins' and 'orders' in Postgres mode")
-
         def _rows(self):
             _ensure_admins_table()
             with _conn() as con, con.cursor() as cur:
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT COALESCE(login, username) AS login,
                            password_hash,
                            role,
@@ -92,7 +72,8 @@ def get_worksheet(name: str):
                            created_at
                     FROM public.admins
                     ORDER BY created_at NULLS LAST, login ASC
-                """)
+                    """
+                )
                 return cur.fetchall() or []
 
         def get_all_records(self):
@@ -113,23 +94,34 @@ def get_worksheet(name: str):
                 return []
             vals = [self.HEADER[:]]
             for r in recs:
-                vals.append([r["login"], r["password_hash"], r["role"], r["avatar"], r["created_at"]])
+                vals.append(
+                    [
+                        r["login"],
+                        r["password_hash"],
+                        r["role"],
+                        r["avatar"],
+                        r["created_at"],
+                    ]
+                )
             return vals
 
         def append_row(self, values):
-            # заголовок? → игнор
+            # если прислали заголовок — игнорируем, чтобы не писать "created_at" как текст в timestamptz
             if values and isinstance(values[0], str):
                 v0 = (values[0] or "").strip().lower()
                 v1 = (values[1] or "").strip().lower() if len(values) > 1 else ""
                 if v0 == "login" and v1 in ("password_hash", "hash"):
                     return
-            login  = values[0] if len(values) > 0 else None
+
+            login = values[0] if len(values) > 0 else None
             pwhash = values[1] if len(values) > 1 else None
-            role   = values[2] if len(values) > 2 else None
+            role = values[2] if len(values) > 2 else None
             avatar = values[3] if len(values) > 3 else None
             created = values[4] if len(values) > 4 and values[4] else _now()
+
             if not login or (isinstance(login, str) and not login.strip()):
                 return
+
             _ensure_admins_table()
             with _conn() as con, con.cursor() as cur:
                 cur.execute(
@@ -142,23 +134,34 @@ def get_worksheet(name: str):
                         avatar=EXCLUDED.avatar,
                         updated_at=now()
                     """,
-                    (login, pwhash, role, avatar, created)
+                    (login, pwhash, role, avatar, created),
                 )
 
-        # best-effort версии, чтобы не падало в try/except
+        # best-effort: чтобы не падать, если где-то вызывается точечное обновление
         def update_cell(self, row_index: int, col_index: int, value):
             try:
                 idx = row_index - 2
-                if idx < 0: return
+                if idx < 0:
+                    return
                 recs = self.get_all_records()
-                if idx >= len(recs): return
+                if idx >= len(recs):
+                    return
                 login = recs[idx]["login"]
                 if col_index == 2:
-                    sql = "update public.admins set password_hash=%s, updated_at=now() where login=%s"
+                    sql = (
+                        "update public.admins "
+                        "set password_hash=%s, updated_at=now() where login=%s"
+                    )
                 elif col_index == 3:
-                    sql = "update public.admins set role=%s, updated_at=now() where login=%s"
+                    sql = (
+                        "update public.admins "
+                        "set role=%s, updated_at=now() where login=%s"
+                    )
                 elif col_index == 4:
-                    sql = "update public.admins set avatar=%s, updated_at=now() where login=%s"
+                    sql = (
+                        "update public.admins "
+                        "set avatar=%s, updated_at=now() where login=%s"
+                    )
                 else:
                     return
                 with _conn() as con, con.cursor() as cur:
@@ -169,23 +172,36 @@ def get_worksheet(name: str):
         def delete_rows(self, row_index: int):
             try:
                 idx = row_index - 2
-                if idx < 0: return
+                if idx < 0:
+                    return
                 recs = self.get_all_records()
-                if idx >= len(recs): return
+                if idx >= len(recs):
+                    return
                 login = recs[idx]["login"]
                 with _conn() as con, con.cursor() as cur:
                     cur.execute("delete from public.admins where login=%s", (login,))
             except Exception:
                 pass
 
+    class _OrdersWS:
+        """Упрощённая заглушка для совместимости с admin_ui."""
+        def update_status(self, order_key, status, by_login=None):
+            from . import repo_pg as _pg
+            return _pg.update_order_status(order_key, status, by_login)
+
     def get_worksheet(name: str):
-        if (name or "").strip().lower() == "admins":
+        lname = (name or "").strip().lower()
+        if lname == "admins":
             return _AdminsWS()
-        raise AttributeError("get_worksheet is only implemented for 'admins' in Postgres mode")
+        if lname == "orders":
+            return _OrdersWS()
+        raise AttributeError(
+            "get_worksheet is only implemented for 'admins' and 'orders' in Postgres mode"
+        )
 
 else:
     BACKEND = "sheets"
-    from .sheets_gs import *              # noqa
+    from .sheets_gs import *  # noqa
     from .sheets_gs import get_worksheet  # noqa
     try:
         from .sheets_gs import _now as _gs_now
