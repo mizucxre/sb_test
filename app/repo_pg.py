@@ -5,6 +5,9 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 import psycopg
 from psycopg.rows import dict_row
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # ---------- connection ----------
@@ -147,38 +150,74 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
     ORDER BY o.created_at DESC NULLS LAST, o.id DESC
     LIMIT %(limit)s
     """
-    with _conn() as con, con.cursor() as cur:
-        cur.execute(sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
-        rows = cur.fetchall() or []
+    # Try the full query with joins. If client's/address schema differs, fall back to orders-only query.
+    rows = []
+    try:
+        with _conn() as con, con.cursor() as cur:
+            cur.execute(sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
+            rows = cur.fetchall() or []
+    except Exception as e:
+        # Likely schema mismatch (missing client/address columns). Log and try fallback.
+        logger.warning("Full orders query failed, falling back to orders-only query: %s", e)
+        fallback_sql = """
+        SELECT
+          o.id,
+          o.order_key,
+          o.status,
+          o.title,
+          o.store,
+          o.color,
+          o.size,
+          o.qty,
+          o.price,
+          o.currency,
+          o.comment,
+          o.created_at
+        FROM public.orders o
+        WHERE (%(q)s = '' OR
+               o.order_key ILIKE %(q_like)s OR
+               o.title     ILIKE %(q_like)s OR
+               o.store     ILIKE %(q_like)s OR
+               o.color     ILIKE %(q_like)s OR
+               o.size      ILIKE %(q_like)s OR
+               (%(id_exact)s IS NOT NULL AND o.id = %(id_exact)s)
+        )
+        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+        LIMIT %(limit)s
+        """
+        with _conn() as con, con.cursor() as cur:
+            cur.execute(fallback_sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
+            rows = cur.fetchall() or []
 
     # нормализуем ключи под фронт
     out: List[Dict[str, Any]] = []
     for r in rows:
+        # Row may or may not contain joined client/address columns depending on which query ran.
         out.append(
             {
-                "id": r["id"],
-                "order_key": r["order_key"],
-                "status": r["status"],
-                "title": r["title"],
-                "store": r["store"],
-                "color": r["color"],
-                "size": r["size"],
-                "qty": r["qty"],
-                "price": r["price"],
-                "currency": r["currency"],
-                "comment": r["comment"],
-                "created_at": r["created_at"],
+                "id": r.get("id") if isinstance(r, dict) else r[0],
+                "order_key": r.get("order_key") if isinstance(r, dict) else r[1],
+                "status": r.get("status") if isinstance(r, dict) else r[2],
+                "title": r.get("title") if isinstance(r, dict) else r[3],
+                "store": r.get("store") if isinstance(r, dict) else r[4],
+                "color": r.get("color") if isinstance(r, dict) else r[5],
+                "size": r.get("size") if isinstance(r, dict) else r[6],
+                "qty": r.get("qty") if isinstance(r, dict) else r[7],
+                "price": r.get("price") if isinstance(r, dict) else r[8],
+                "currency": r.get("currency") if isinstance(r, dict) else r[9],
+                "comment": r.get("comment") if isinstance(r, dict) else r[10],
+                "created_at": r.get("created_at") if isinstance(r, dict) else r[11],
                 "client": {
-                    "id": r["client_id"],
-                    "username": r["client_username"],
-                    "phone": r["client_phone"],
+                    "id": r.get("client_id") if isinstance(r, dict) else None,
+                    "username": r.get("client_username") if isinstance(r, dict) else None,
+                    "phone": r.get("client_phone") if isinstance(r, dict) else None,
                 },
                 "address": {
-                    "id": r["address_id"],
-                    "city": r["address_city"],
-                    "address": r["address_line"],
-                    "receiver": r["address_receiver"],
-                    "phone": r["address_phone"],
+                    "id": r.get("address_id") if isinstance(r, dict) else None,
+                    "city": r.get("address_city") if isinstance(r, dict) else None,
+                    "address": r.get("address_line") if isinstance(r, dict) else None,
+                    "receiver": r.get("address_receiver") if isinstance(r, dict) else None,
+                    "phone": r.get("address_phone") if isinstance(r, dict) else None,
                 },
             }
         )
