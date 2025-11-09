@@ -2,28 +2,35 @@
 """
 SEABLUU Admin UI — v4 (mobile-friendly left drawer)
 
-Что сделано по пунктам пользователя:
-1) Чат: показ «старых» сообщений (полная лента, сортировка по id/времени), оптимистичная отправка, ✓✓, автообновление по чекбоксу.
-2) Новости: чтение из листа `news` + форма публикации новости (только роль owner), мгновенное появление в ленте.
-3) Настройки: шторка закрывается по крестику, по ESC и по клику на подложке.
-4) Навигация: все разделы перенесены в левую «телега-шторку» (бургер), удобно на телефоне.
-5) Создание разборов: рабочий POST `/admin/api/orders` — пишет в лист `orders`, сразу видно в «Заказы»; попытка подписать клиентов и отправить уведомление (мягко, без падений).
-6) Массовое изменение статусов: чекбоксы в списке заказов + форма «Применить к выбранным» → `/admin/api/status/bulk`.
-7) Адреса: к каждому адресу добавлен номер телефона (если есть).
-8) Клиенты: у клиента показываются его заказы (по username).
+Исправления в этой версии:
+- Полностью рабочий эндпоинт /admin/api/search (ранее фрагмент кода случайно попал внутрь api_me).
+- Больше не используется sheets._now() (которого могло не быть). Вместо этого локальная функция _now().
+- Инициализация владельца (owner) в листе/таблице admins корректно создаёт/обновляет запись.
+- Небольшая уборка кэша и проверок.
+
+Зависимости: модуль app.sheets (ваш адаптер к PG/Sheets) и app.db_pg (чат/админы в БД).
 """
 from __future__ import annotations
-import base64, hashlib, hmac, json, os, time, re, urllib.parse, urllib.request
+import base64
+import hashlib
+import hmac
+import json
+import os
+import re
+import threading
+import time
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Query, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
-import threading
 
 from . import sheets
 from . import db_pg  # Postgres helper
 
-# Статусы (список можно расширить/подправить — индексы стабильны)
+# ------------------------ constants / statuses ------------------------
 STATUSES = [
     "🛒 выкуплен",
     "📦 отправка на адрес (Корея)",
@@ -41,109 +48,92 @@ STATUSES = [
 router = APIRouter()
 _CACHE: Dict[str, Any] = {}
 
-# ------------------------ util / auth / cache ------------------------
+# ------------------------ util / time / cache / auth ------------------------
+
+def _now() -> str:
+    """UTC ISO timestamp for records."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 def _cache_get(k: str, ttl: int = 8):
     v = _CACHE.get(k)
-    if not v: return None
+    if not v:
+        return None
     ts, data = v
-    if time.time() - ts > ttl: return None
+    if time.time() - ts > ttl:
+        return None
     return data
+
 
 def _cache_set(k: str, data: Any):
     _CACHE[k] = (time.time(), data)
 
+
 def _cache_clear():
     _CACHE.clear()
 
-# --- Fast chat storage (JSONL, без Google Sheets) ---
-CHAT_FILE = os.path.join(os.getcwd(), "media", "chat.jsonl")
-CHAT_MAX = 2000  # сколько последних сообщений держать в памяти
-
-_chat_lock = threading.RLock()
-_chat: List[Dict[str, Any]] = []
-
-def _ensure_media_dir():
-    os.makedirs(os.path.dirname(CHAT_FILE), exist_ok=True)
-
-def _chat_load():
-    global _chat
-    _ensure_media_dir()
-    items: List[Dict[str, Any]] = []
-    if os.path.isfile(CHAT_FILE):
-        with open(CHAT_FILE, "r", encoding="utf-8") as f:
-            for line in f:
-                line = line.strip()
-                if not line:
-                    continue
-                try:
-                    obj = json.loads(line)
-                    if isinstance(obj, dict) and "id" in obj:
-                        items.append(obj)
-                except Exception:
-                    continue
-    _chat = items[-CHAT_MAX:]
-
-def _chat_next_id() -> int:
-    if not _chat:
-        return 1
-    try:
-        return int(_chat[-1]["id"]) + 1
-    except Exception:
-        return len(_chat) + 1
-
-def _chat_append(msg: Dict[str, Any]) -> None:
-    with _chat_lock:
-        _chat.append(msg)
-        if len(_chat) > CHAT_MAX:
-            _chat[:] = _chat[-CHAT_MAX:]
-        try:
-            with open(CHAT_FILE, "a", encoding="utf-8") as f:
-                f.write(json.dumps(msg, ensure_ascii=False) + "\n")
-        except Exception:
-            pass
-
-_chat_load()
 
 def _secret() -> str:
     return (os.getenv("ADMIN_SECRET", "dev-secret") or "dev-secret").strip()
 
+
 def _sign(data: str) -> str:
     return hmac.new(_secret().encode(), data.encode(), hashlib.sha256).hexdigest()
+
 
 def _make_token(login: str, ttl: int = 12 * 3600) -> str:
     payload = json.dumps({"login": login, "exp": int(time.time()) + ttl}, separators=(",", ":"))
     b = base64.urlsafe_b64encode(payload.encode()).decode()
     return b + "." + _sign(b)
 
+
 def _parse_token(token: str) -> Optional[str]:
     try:
         b, sig = token.split(".", 1)
-        if not hmac.compare_digest(_sign(b), sig): return None
+        if not hmac.compare_digest(_sign(b), sig):
+            return None
         payload = json.loads(base64.urlsafe_b64decode(b.encode()).decode())
-        if payload.get("exp", 0) < time.time(): return None
+        if payload.get("exp", 0) < time.time():
+            return None
         return payload.get("login")
     except Exception:
         return None
+
 
 def _authed_login(request: Request) -> Optional[str]:
     t = request.cookies.get("adm_session", "")
     return _parse_token(t) if t else None
 
+
 def _hash_pwd(login: str, password: str) -> str:
     base = f"{login.strip().lower()}:{password}:{_secret()}".encode()
     return hashlib.sha256(base).hexdigest()
 
+
 # ------------------------ admins helpers ------------------------
+
 def _admins_ws():
     ws = sheets.get_worksheet("admins")
-    if not ws.get_all_values():
-        ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
+    # Заголовки, если пусто
+    try:
+        if not ws.get_all_values():
+            ws.append_row(["login", "password_hash", "role", "avatar", "created_at"])
+    except Exception:
+        pass
+
     owner_login = (os.getenv("ADMIN_LOGIN", "admin") or "admin").strip()
     owner_pass = (os.getenv("ADMIN_PASSWORD", "admin") or "admin").strip()
     owner_avatar = os.getenv("ADMIN_AVATAR", "")
-    rows = ws.get_all_records()
+
+    rows = []
+    try:
+        rows = ws.get_all_records()
+    except Exception:
+        rows = []
+
     want_hash = _hash_pwd(owner_login, owner_pass)
     found = [i for i, r in enumerate(rows, start=2) if str(r.get("login", "")).strip().lower() == owner_login.lower()]
+
     if found:
         i = found[0]
         try:
@@ -153,21 +143,38 @@ def _admins_ws():
                 ws.update_cell(i, 4, owner_avatar)
         except Exception:
             pass
+        # Удалим дубликаты
         for extra in found[1:][::-1]:
-            try: ws.delete_rows(extra)
-            except Exception: pass
+            try:
+                ws.delete_rows(extra)
+            except Exception:
+                pass
     else:
-        ws.append_row([owner_login, want_hash, "owner", owner_avatar, sheets._now()])
+        # Создадим владельца
+        try:
+            ws.append_row([owner_login, want_hash, "owner", owner_avatar, _now()])
+        except Exception:
+            pass
+
     return ws
 
+
 def _get_admin(login: str) -> Optional[Dict[str, Any]]:
-    for r in _admins_ws().get_all_records():
-        if str(r.get("login", "")).strip().lower() == login.strip().lower():
-            return r
+    try:
+        for r in _admins_ws().get_all_records():
+            if str(r.get("login", "")).strip().lower() == login.strip().lower():
+                return r
+    except Exception:
+        return None
     return None
 
+
 def _list_admins() -> List[Dict[str, Any]]:
-    return _admins_ws().get_all_records()
+    try:
+        return _admins_ws().get_all_records()
+    except Exception:
+        return []
+
 
 def _add_admin(current_login: str, new_login: str, password: str, role: str, avatar: str = "") -> bool:
     cur = _get_admin(current_login)
@@ -175,8 +182,12 @@ def _add_admin(current_login: str, new_login: str, password: str, role: str, ava
         return False
     if not new_login or _get_admin(new_login):
         return False
-    _admins_ws().append_row([new_login, _hash_pwd(new_login, password), role, avatar, sheets._now()])
-    return True
+    try:
+        _admins_ws().append_row([new_login, _hash_pwd(new_login, password), role, avatar, _now()])
+        return True
+    except Exception:
+        return False
+
 
 def _set_admin_avatar(target_login: str, avatar_url: str) -> bool:
     ws = _admins_ws()
@@ -185,26 +196,33 @@ def _set_admin_avatar(target_login: str, avatar_url: str) -> bool:
         col = 4
         for idx, h in enumerate(headers, start=1):
             if h.strip().lower() == "avatar":
-                col = idx; break
+                col = idx
+                break
         rows = ws.get_all_records()
         row_index = None
         for i, r in enumerate(rows, start=2):
             if str(r.get("login", "")).strip().lower() == target_login.strip().lower():
-                row_index = i; break
-        if not row_index: return False
+                row_index = i
+                break
+        if not row_index:
+            return False
         ws.update_cell(row_index, col, avatar_url)
         return True
     except Exception:
         return False
 
+
 # ------------------------ Telegram helpers ------------------------
+
 def _bot_token() -> str:
     try:
         from .config import BOT_TOKEN as _TOK  # type: ignore
-        if _TOK: return _TOK
+        if _TOK:
+            return _TOK
     except Exception:
         pass
     return os.getenv("BOT_TOKEN", "")
+
 
 def _send_tg(uid: int, text: str) -> None:
     token = _bot_token()
@@ -212,40 +230,52 @@ def _send_tg(uid: int, text: str) -> None:
         return
     try:
         params = urllib.parse.urlencode({"chat_id": uid, "text": text})
-        urllib.request.urlopen(f"https://api.telegram.org/bot{token}/sendMessage?{params}", timeout=5).read()
+        urllib.request.urlopen(
+            f"https://api.telegram.org/bot{token}/sendMessage?{params}", timeout=5
+        ).read()
     except Exception:
         pass
 
+
 def _notify_subscribers(order_id: str, new_status: str) -> None:
     token = _bot_token()
-    if not token: return
+    if not token:
+        return
     try:
         subs = sheets.get_all_subscriptions()
         chat_ids: List[int] = []
         for s in subs:
             if str(s.get("order_id", "")) == order_id:
-                try: chat_ids.append(int(s.get("user_id")))
-                except Exception: pass
-        if not chat_ids: return
+                try:
+                    chat_ids.append(int(s.get("user_id")))
+                except Exception:
+                    pass
+        if not chat_ids:
+            return
         text = f"Статус {order_id}: {new_status}"
         for uid in set(chat_ids):
             _send_tg(uid, text)
-            try: sheets.set_last_sent_status(uid, order_id, new_status)
-            except Exception: pass
+            try:
+                sheets.set_last_sent_status(uid, order_id, new_status)
+            except Exception:
+                pass
     except Exception:
         pass
 
+
 def _resolve_username_to_uid(username: str) -> Optional[int]:
-    # мягкая попытка найти chat_id по username — если функции нет, просто None
+    # Мягкая попытка найти chat_id по username — если функции нет, просто None
     try:
         return sheets.resolve_username_to_chat_id(username)  # type: ignore[attr-defined]
     except Exception:
         try:
             rec = sheets.get_user_by_username(username)  # type: ignore[attr-defined]
-            if rec and rec.get("user_id"): return int(rec["user_id"])
+            if rec and rec.get("user_id"):
+                return int(rec["user_id"])
         except Exception:
             pass
     return None
+
 
 # ------------------------ HTML ------------------------
 _LOGIN_HTML = r"""
@@ -289,9 +319,11 @@ async function doLogin(){
 </html>
 """
 
+
 def _owner_js_flag(login: str) -> str:
-    role = (_get_admin(login) or {}).get("role","")
+    role = (_get_admin(login) or {}).get("role", "")
     return "true" if role == "owner" else "false"
+
 
 def _admin_page_html(user_login: str) -> str:
     # Левый drawer + контент
@@ -482,7 +514,6 @@ let __chatTimer = null;
 let __ordersTimer = null;
 const __SEEN = new Set();
 
-
 function overlay(show){ const ov=document.getElementById('overlay'); if(!ov) return; ov.classList[show?'add':'remove']('show'); }
 async function api(path, opts={}, showSpinner=false){
   if(showSpinner){ __pending++; if(__pending===1) overlay(true); }
@@ -506,7 +537,6 @@ function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return
     var id=location.hash||'#tab_home'; var sections=document.querySelectorAll('.content > section');
     for(var i=0;i<sections.length;i++){ sections[i].style.display='none'; }
     var el=document.querySelector(id); if(el) el.style.display='block';
-    // подсветка в навигации
     var links=document.querySelectorAll('.nav a');
     for(var j=0;j<links.length;j++){ links[j].classList.toggle('active', links[j].getAttribute('href')===id); }
   }
@@ -526,7 +556,7 @@ function fmtTime(s){ if(!s) return ''; const d=new Date(s); if(isNaN(+d)) return
   if(burger) burger.onclick=openDrawer;
   if(btnClose) btnClose.onclick=closeDrawer;
   if(backdrop) backdrop.onclick=closeDrawer;
-  if(btnSettings) btnSettings.onclick=openDrawer; // настройки теперь внутри левой шторки
+  if(btnSettings) btnSettings.onclick=openDrawer;
 
   document.addEventListener('keydown', function(e){
     if(e.key==='Escape'){ closeDrawer(); }
@@ -664,7 +694,7 @@ function renderMessages(items){
     return String(a.created_at||'').localeCompare(String(b.created_at||''));
   });
   for(const m of items){
-    if(!m || __SEEN.has(m.id)) continue; // дедуп
+    if(!m || __SEEN.has(m.id)) continue;
     __SEEN.add(m.id);
 
     const row=document.createElement('div'); row.className='msg'+(m.login===me?' me':'');
@@ -703,7 +733,6 @@ async function sendMsg(){
     const ref =(document.getElementById('ch_ref')||{}).value.trim();
     if(!text) return;
 
-    // 1) Оптимистичный пузырь с индикатором отправки
     const tempId = 'tmp-' + Date.now() + '-' + Math.random().toString(36).slice(2);
     const box = document.getElementById('messages');
     const row = document.createElement('div'); row.className='msg me';
@@ -715,11 +744,9 @@ async function sendMsg(){
     row.appendChild(avatar); row.appendChild(wrap); box.appendChild(row);
     box.scrollTop = box.scrollHeight;
 
-    // 2) Отправляем на сервер
     const r = await fetch('/admin/api/chat', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({text, ref})});
     const j = await r.json();
 
-    // 3) Разбираем результат
     (document.getElementById('ch_text')||{}).value=''; (document.getElementById('ch_ref')||{}).value='';
     if(j && j.ok && j.id){
       bubble.classList.remove('sending');
@@ -756,7 +783,6 @@ async function loadNews(sp){
     if(p.image){ const img=document.createElement('img'); img.className='news-img'; img.src=p.image; card.appendChild(img); }
     box.appendChild(card);
   });
-  // показать форму публикации только owner
   const form = document.getElementById('newsForm');
   if(form) form.style.display = (IS_OWNER ? 'block' : 'none');
 }
@@ -770,7 +796,6 @@ async function publishNews(){
 }
 
 // --- profile avatar load + header self-fill ---
-
 async function uploadAvatarRaw(file, targetInputId, previewId, updateHeader){
   const r = await fetch('/admin/api/admins/upload_avatar?filename='+encodeURIComponent(file.name||'avatar.jpg'), { method:'POST', headers:{'Content-Type': file.type || 'application/octet-stream'}, body: file });
   let j=null; try{ j=await r.json(); }catch(e){ j={ok:false,error:'bad_json'}; }
@@ -779,7 +804,6 @@ async function uploadAvatarRaw(file, targetInputId, previewId, updateHeader){
   const input=document.getElementById(targetInputId); if(input) input.value=url;
   if(previewId){ const img=document.getElementById(previewId); if(img) img.src=url; }
   const hdr=document.getElementById('header_avatar'); if(updateHeader && hdr) hdr.src=url;
-  // Автосохранение в таблицу (чтобы другие админы сразу видели)
   try{
     const s = await fetch('/admin/api/admins/avatar', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({avatar:url})});
     const sj = await s.json();
@@ -812,9 +836,10 @@ loadChat(true,false);
 setInterval(()=>loadChat(false,false), 1200);
 </script>
 </html>
-""".replace("__USER__", user_login)\
-  .replace("__IS_OWNER__", _owner_js_flag(user_login))\
-  .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
+""".replace("__USER__", user_login) \
+    .replace("__IS_OWNER__", _owner_js_flag(user_login)) \
+    .replace("__STATUSES__", json.dumps(STATUSES, ensure_ascii=False))
+
 
 # ------------------------ routes: pages ------------------------
 @router.get("/", response_class=HTMLResponse)
@@ -823,6 +848,7 @@ async def admin_page(request: Request) -> str:
     if not user:
         return _LOGIN_HTML
     return _admin_page_html(user)
+
 
 # ------------------------ routes: auth ------------------------
 @router.post("/api/login")
@@ -834,15 +860,16 @@ async def api_login(payload: Dict[str, Any] = Body(...)) -> JSONResponse:
         return JSONResponse({"ok": False, "error": "Неверные логин или пароль"}, status_code=401)
     token = _make_token(login)
     r = JSONResponse({"ok": True})
-    # На проде можно secure=True
     r.set_cookie("adm_session", token, max_age=12*3600, httponly=True, secure=False, samesite="lax", path="/admin")
     return r
+
 
 @router.post("/api/logout")
 async def api_logout() -> JSONResponse:
     r = JSONResponse({"ok": True})
     r.delete_cookie("adm_session", path="/admin")
     return r
+
 
 @router.get("/api/me")
 async def api_me(request: Request) -> JSONResponse:
@@ -852,25 +879,38 @@ async def api_me(request: Request) -> JSONResponse:
     try:
         adm = await db_pg.admin_get(login)
         if adm:
-            return JSONResponse({"login": login, "role": adm.get("role",""), "avatar": adm.get("avatar","")})
+            return JSONResponse({"login": login, "role": adm.get("role", ""), "avatar": adm.get("avatar", "")})
     except Exception:
         pass
     # Fallback: ENV only
-    if login.strip().lower() == (os.getenv("ADMIN_LOGIN","admin").strip().lower()):
+    if login.strip().lower() == (os.getenv("ADMIN_LOGIN", "admin").strip().lower()):
         return JSONResponse({"login": login, "role": "owner", "avatar": os.getenv("ADMIN_AVATAR", "")})
     return JSONResponse({"login": login, "role": "admin", "avatar": ""})
+
+
+# ------------------------ routes: orders search / status / create ------------------------
+@router.get("/api/search")
+async def api_search(request: Request, q: Optional[str] = Query(default="")) -> JSONResponse:
+    if not _authed_login(request):
+        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
     cached = _cache_get(cache_key, ttl=6)
     if cached is not None:
-        return JSONResponse({"items": cached})
+        return JSONResponse({"ok": True, "items": cached})
+
     items: List[Dict[str, Any]] = []
     if not q:
         try:
             items = sheets.list_recent_orders(50)  # если функция поддерживает лимит
         except Exception:
-            items = sheets.list_recent_orders()    # бэкап без лимита
+            try:
+                items = sheets.list_recent_orders()    # бэкап без лимита
+            except Exception:
+                items = []
     else:
+        # Помощники: извлечь CN-123 и понять @username
         try:
             from .main import extract_order_id, _looks_like_username  # type: ignore
         except Exception:
@@ -880,16 +920,29 @@ async def api_me(request: Request) -> JSONResponse:
                 return f"{m.group(1)}-{m.group(2)}" if m else None
             def _looks_like_username(s: str) -> bool:
                 return str(s or "").strip().startswith("@")
+
         oid = extract_order_id(q)
         if oid:
-            o = sheets.get_order(oid)
-            if o: items = [o]
+            try:
+                o = sheets.get_order(oid)
+                if o:
+                    items = [o]
+            except Exception:
+                items = []
         if not items and _looks_like_username(q):
-            items = sheets.get_orders_by_username(q)
+            try:
+                items = sheets.get_orders_by_username(q)
+            except Exception:
+                items = []
         if not items:
-            items = sheets.get_orders_by_phone(q)
+            try:
+                items = sheets.get_orders_by_phone(q)
+            except Exception:
+                items = []
+
     _cache_set(cache_key, items)
-    return JSONResponse({"items": items})
+    return JSONResponse({"ok": True, "items": items})
+
 
 @router.post("/api/status")
 async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -898,6 +951,7 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
     order_id = str(payload.get("order_id", "")).strip()
     new_status = str(payload.get("status", "")).strip()
     pick_index = payload.get("pick_index")
+
     if not order_id:
         return JSONResponse({"ok": False, "error": "order_id is required"}, status_code=400)
     if (not new_status) and (pick_index is not None):
@@ -909,14 +963,16 @@ async def api_set_status(request: Request, payload: Dict[str, Any] = Body(...)) 
             pass
     if not new_status:
         return JSONResponse({"ok": False, "error": "status or pick_index is required"}, status_code=400)
+
     try:
         ok = sheets.update_order_status(order_id, new_status)
     except Exception:
         return JSONResponse({"ok": False, "error": "update_failed"}, status_code=500)
+
     _cache_clear()
-    # уведомим подписчиков
     _notify_subscribers(order_id, new_status)
     return JSONResponse({"ok": True, "order_id": order_id, "status": new_status})
+
 
 @router.post("/api/status/bulk")
 async def api_set_status_bulk(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -925,6 +981,7 @@ async def api_set_status_bulk(request: Request, payload: Dict[str, Any] = Body(.
     ids = list(payload.get("order_ids") or [])
     status = str(payload.get("status") or "")
     pick_index = payload.get("pick_index")
+
     if (not status) and (pick_index is not None):
         try:
             i = int(pick_index)
@@ -934,6 +991,7 @@ async def api_set_status_bulk(request: Request, payload: Dict[str, Any] = Body(.
             pass
     if not ids or not status:
         return JSONResponse({"ok": False, "error": "order_ids and status required"}, status_code=400)
+
     updated = 0
     for oid in ids:
         try:
@@ -945,6 +1003,7 @@ async def api_set_status_bulk(request: Request, payload: Dict[str, Any] = Body(.
     _cache_clear()
     return JSONResponse({"ok": True, "updated": updated})
 
+
 @router.post("/api/orders")
 async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     if not _authed_login(request):
@@ -954,24 +1013,29 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
     status = str(payload.get("status", "")).strip()
     clients = str(payload.get("clients", "")).strip()
     note = str(payload.get("note", "")).strip()
+
     if not order_id or not origin or not status:
         return JSONResponse({"ok": False, "error": "order_id, origin, status required"}, status_code=400)
+
     try:
         ws = sheets.get_worksheet("orders")
-        if not ws.get_all_values():
-            ws.append_row(["order_id","origin","status","clients","note","created_at","updated_at"])
-        ws.append_row([order_id, origin, status, clients, note, sheets._now(), sheets._now()])
+        try:
+            if not ws.get_all_values():
+                ws.append_row(["order_id","origin","status","clients","note","created_at","updated_at"])
+        except Exception:
+            pass
+        ws.append_row([order_id, origin, status, clients, note, _now(), _now()])
     except Exception:
         return JSONResponse({"ok": False, "error": "create_failed"}, status_code=500)
-    # подпишем клиентов (если сможем) и уведомим
+
     usernames = [u.strip() for u in re.split(r"[ ,;]+", clients) if u.strip()]
     for u in usernames:
-        if not u.startswith("@"): continue
+        if not u.startswith("@"): 
+            continue
         try:
             uid = _resolve_username_to_uid(u)
             if uid:
                 try:
-                    # дадим знать и в подписки
                     if hasattr(sheets, "upsert_subscription"):
                         sheets.upsert_subscription(uid, order_id)  # type: ignore[attr-defined]
                     _send_tg(int(uid), f"Вам создан разбор {order_id}. Вы будете получать обновления статуса.")
@@ -982,13 +1046,17 @@ async def api_create_order(request: Request, payload: Dict[str, Any] = Body(...)
     _cache_clear()
     return JSONResponse({"ok": True, "order_id": order_id})
 
+
 # ------------------------ routes: admins/media ------------------------
+
 def _safe_filename(name: str) -> str:
     name = (name or "").strip().replace("\\", "/").split("/")[-1]
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name) or f"avatar_{int(time.time())}.bin"
     return name
 
+
 _MEDIA_DIR = os.path.join(os.getcwd(), "media", "avatars")
+
 
 @router.get("/media/avatars/{filename}")
 async def media_avatar(filename: str):
@@ -997,6 +1065,7 @@ async def media_avatar(filename: str):
     if not os.path.isfile(path):
         raise HTTPException(status_code=404)
     return FileResponse(path)
+
 
 @router.post("/api/admins/upload_avatar")
 async def api_upload_avatar_raw(request: Request, filename: str = Query(default="")) -> JSONResponse:
@@ -1017,6 +1086,7 @@ async def api_upload_avatar_raw(request: Request, filename: str = Query(default=
     except Exception:
         return JSONResponse({"ok": False, "error": "upload_failed"}, status_code=500)
 
+
 @router.get("/api/admins")
 async def api_admins(request: Request) -> JSONResponse:
     if not _authed_login(request):
@@ -1025,6 +1095,7 @@ async def api_admins(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "items": _list_admins()})
     except Exception:
         return JSONResponse({"ok": False, "error": "admins_error"}, status_code=500)
+
 
 @router.post("/api/admins")
 async def api_add_admin(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1039,6 +1110,7 @@ async def api_add_admin(request: Request, payload: Dict[str, Any] = Body(...)) -
     ok = _add_admin(me, login, password, role="admin", avatar=avatar)
     return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "forbidden_or_exists"})}, status_code=200 if ok else 403)
 
+
 @router.post("/api/admins/avatar")
 async def api_set_my_avatar(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
     me = _authed_login(request)
@@ -1049,6 +1121,7 @@ async def api_set_my_avatar(request: Request, payload: Dict[str, Any] = Body(...
         return JSONResponse({"ok": False, "error": "empty_url"}, status_code=400)
     ok = _set_admin_avatar(me, url)
     return JSONResponse({"ok": bool(ok), **({} if ok else {"error": "update_failed"})}, status_code=200 if ok else 500)
+
 
 # ------------------------ routes: clients & addresses ------------------------
 @router.get("/api/clients")
@@ -1062,7 +1135,6 @@ async def api_clients(request: Request) -> JSONResponse:
         for r in records:
             username = r.get("username") or r.get("login") or r.get("tg") or ""
             phone = r.get("phone") or r.get("tel") or r.get("номер") or ""
-            # подтянем заказы клиента
             orders = []
             try:
                 if username:
@@ -1073,6 +1145,7 @@ async def api_clients(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "items": items})
     except Exception:
         return JSONResponse({"ok": True, "items": []})
+
 
 @router.get("/api/addresses")
 async def api_addresses(request: Request, q: Optional[str] = Query(default="")) -> JSONResponse:
@@ -1087,15 +1160,17 @@ async def api_addresses(request: Request, q: Optional[str] = Query(default="")) 
             rec = {
                 "username": r.get("username") or r.get("login") or r.get("tg") or "",
                 "address": r.get("address") or r.get("адрес") or "",
-                "phone": r.get("phone") or r.get("tel") or r.get("номер") or ""
+                "phone": r.get("phone") or r.get("tel") or r.get("номер") or "",
             }
             if qq:
-                hay = f"{rec['username']} {rec['address']} {rec['phone']}".lower()
-                if qq not in hay: continue
+                hay = f"{rec['username']} {rec['address']} {rec['phone']}`".lower()
+                if qq not in hay:
+                    continue
             items.append(rec)
         return JSONResponse({"ok": True, "items": items})
     except Exception:
         return JSONResponse({"ok": True, "items": []})
+
 
 # ------------------------ routes: chat ------------------------
 @router.get("/api/chat")
@@ -1107,9 +1182,7 @@ async def api_chat_list(request: Request, since_id: int = Query(default=0)) -> J
         return JSONResponse({"ok": True, "items": items})
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"db_error: {e}"}, status_code=500)
-    with _chat_lock:
-        items = [m for m in _chat if int(m.get("id", 0)) > int(since_id)] if since_id else _chat[-200:]
-    return JSONResponse({"ok": True, "items": items})
+
 
 @router.post("/api/chat")
 async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1117,40 +1190,26 @@ async def api_chat_send(request: Request, payload: Dict[str, Any] = Body(...)) -
     if not me:
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     text = str(payload.get("text", "")).strip()
-    ref  = str(payload.get("ref", "")).strip()
+    ref = str(payload.get("ref", "")).strip()
     if not text:
         return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
     avatar = ""
     try:
         a = await db_pg.admin_get(me)
-        if a: avatar = a.get("avatar","") or ""
+        if a:
+            avatar = a.get("avatar", "") or ""
     except Exception:
         pass
-    if not avatar and me.strip().lower() == (os.getenv("ADMIN_LOGIN","admin").strip().lower()):
+    if not avatar and me.strip().lower() == (os.getenv("ADMIN_LOGIN", "admin").strip().lower()):
         avatar = os.getenv("ADMIN_AVATAR", "")
     try:
         row = await db_pg.chat_send(me, avatar, text, ref)
         return JSONResponse({"ok": True, "id": row.get("id")})
     except Exception as e:
         return JSONResponse({"ok": False, "error": f"db_error: {e}"}, status_code=500)
-    text = str(payload.get("text", "")).strip()
-    ref  = str(payload.get("ref", "")).strip()
-    if not text:
-        return JSONResponse({"ok": False, "error": "empty"}, status_code=400)
-    adm = _get_admin(me) or {}
-    msg = {
-        "id": _chat_next_id(),
-        "created_at": sheets._now(),
-        "login": me,
-        "avatar": adm.get("avatar", ""),  # снапшот — другие тоже видят твою аву
-        "text": text,
-        "ref": ref,
-    }
-    _chat_append(msg)
-    return JSONResponse({"ok": True, "id": msg["id"]})
 
 
-# ------------------------ routes: news ------------------------
+# ------------------------ news ------------------------
 @router.get("/api/news")
 async def api_news(request: Request) -> JSONResponse:
     if not _authed_login(request):
@@ -1162,18 +1221,19 @@ async def api_news(request: Request) -> JSONResponse:
         for r in records:
             txt = str(r.get("text") or "").strip()
             img = r.get("image") or r.get("photo") or ""
-            if not txt and not img:  # пропускаем пустые строки
+            if not txt and not img:
                 continue
             items.append({
                 "date": r.get("date") or r.get("created_at") or r.get("dt") or "",
                 "text": txt,
                 "image": img,
                 "channel_image": r.get("channel_image") or r.get("avatar") or "",
-                "channel_name": r.get("channel_name") or r.get("channel") or "SEABLUU"
+                "channel_name": r.get("channel_name") or r.get("channel") or "SEABLUU",
             })
         return JSONResponse({"ok": True, "items": items})
     except Exception:
         return JSONResponse({"ok": True, "items": []})
+
 
 @router.post("/api/news/publish")
 async def api_news_publish(request: Request, payload: Dict[str, Any] = Body(...)) -> JSONResponse:
@@ -1182,25 +1242,29 @@ async def api_news_publish(request: Request, payload: Dict[str, Any] = Body(...)
         return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
     if (_get_admin(me) or {}).get("role") != "owner":
         return JSONResponse({"ok": False, "error": "only_owner"}, status_code=403)
-    text = str(payload.get("text","")).strip()
-    image = str(payload.get("image","")).strip()
+    text = str(payload.get("text", "")).strip()
+    image = str(payload.get("image", "")).strip()
     if not text:
         return JSONResponse({"ok": False, "error": "text_required"}, status_code=400)
     try:
         ws = sheets.get_worksheet("news")
-        if not ws.get_all_values():
-            ws.append_row(["date","text","image","channel_image","channel_name"])
-        ws.append_row([sheets._now(), text, image, "", "SEABLUU"])
+        try:
+            if not ws.get_all_values():
+                ws.append_row(["date","text","image","channel_image","channel_name"])
+        except Exception:
+            pass
+        ws.append_row([_now(), text, image, "", "SEABLUU"])
         return JSONResponse({"ok": True})
     except Exception:
         return JSONResponse({"ok": False, "error": "publish_failed"}, status_code=500)
+
 
 # ------------------------ export ------------------------
 def get_admin_router() -> APIRouter:
     return router
 
+
 if __name__ == "__main__":
     from fastapi import FastAPI
     app = FastAPI()
     app.include_router(get_admin_router(), prefix="/admin")
-
