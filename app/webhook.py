@@ -1,7 +1,6 @@
 # app/webhook.py
 import os
-import logging
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Callable
 
 from fastapi import FastAPI, Request, Query
 from fastapi.responses import Response
@@ -10,36 +9,50 @@ from pydantic import BaseModel
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder
 
+from .logger import get_logger, setup_logging
+
+# Set up logging for the application
+setup_logging()
+logger = get_logger(__name__)
+
+# Core imports
 from .main import register_handlers
+
+# Optional functionality imports
 try:
     from .main import register_admin_ui
-except Exception:
-    register_admin_ui = None  # безопасно, если функции нет
+except ImportError:
+    register_admin_ui: Optional[Callable] = None
+    logger.info("Admin UI registration not available")
 
-# БД/хранилище: storage сам выберет Postgres (repo_pg.py), если есть DATABASE_URL
+# Storage layer - will use Postgres if DATABASE_URL is set
 from . import storage as sheets
 
-logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.INFO)
+app = FastAPI(title="Telegram Bot API", version="1.0.0")
 
-app = FastAPI()
-
-# Подключаем UI-роутер админки как и было
+# Add admin router
 from .admin_ui import get_admin_router
 app.include_router(get_admin_router(), prefix="/admin")
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for container orchestration."""
+    return {"status": "healthy"}
 
 application: Application | None = None
 
 
 def _get_bot_token() -> str:
-    # 1) из config.py
+    """Get bot token from config or environment variables."""
+    # Try config.py first
     try:
-        from .config import BOT_TOKEN as _TOK  # type: ignore
-        if _TOK:
-            return _TOK
-    except Exception:
-        pass
-    # 2) из окружения
+        from .config import BOT_TOKEN
+        if BOT_TOKEN:
+            return BOT_TOKEN
+    except ImportError:
+        logger.debug("No BOT_TOKEN in config.py, trying environment")
+    
+    # Fallback to environment
     env_tok = os.getenv("BOT_TOKEN", "")
     if not env_tok:
         raise RuntimeError("BOT_TOKEN is not set (neither in app.config nor in environment)")
@@ -47,14 +60,16 @@ def _get_bot_token() -> str:
 
 
 def _get_public_url() -> str:
-    # 1) из config.py
+    """Get public URL from config or environment variables."""
+    # Try config.py first
     try:
-        from .config import PUBLIC_URL as _URL  # type: ignore
-        if _URL:
-            return _URL
-    except Exception:
-        pass
-    # 2) из окружения
+        from .config import PUBLIC_URL
+        if PUBLIC_URL:
+            return PUBLIC_URL
+    except ImportError:
+        logger.debug("No PUBLIC_URL in config.py, trying environment")
+    
+    # Fallback to environment
     return os.getenv("PUBLIC_URL", "")
 
 
