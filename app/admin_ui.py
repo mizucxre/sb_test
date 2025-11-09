@@ -902,7 +902,8 @@ async def api_search(q: str = "") -> JSONResponse:
         # Если PostgreSQL не настроен, используем sheets
         return JSONResponse({"orders": []})
     try:
-        rows = await repo_pg.search_orders(q)
+        # repo_pg.search_orders is synchronous (blocking DB access using psycopg).
+        rows = repo_pg.search_orders(q)
         return JSONResponse({"orders": rows or []})
     except Exception as e:
         logger.error(f"Error searching orders: {e}")
