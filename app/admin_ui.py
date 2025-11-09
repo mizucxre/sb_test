@@ -28,6 +28,10 @@ from fastapi import APIRouter, Body, Query, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 
 from . import sheets
+try:
+    from . import repo_pg
+except ImportError:
+    repo_pg = None
 from . import db_pg  # Postgres helper
 
 # ------------------------ constants / statuses ------------------------
@@ -891,9 +895,12 @@ async def api_me(request: Request) -> JSONResponse:
 # ------------------------ routes: orders search / status / create ------------------------
 @router.get("/api/search")
 async def api_search(q: str = "") -> JSONResponse:
-    rows = repo_pg.search_orders(q)
-    # если у тебя там рендер HTML-таблицы — передай rows в текущий рендерер.
-    # если API уже возвращает JSON — просто:
+    if repo_pg is None:
+        # Если PostgreSQL не настроен, используем sheets
+        return JSONResponse({"orders": []})
+    try:
+        rows = await repo_pg.search_orders(q)
+        return JSONResponse({"orders": rows or []})
     return JSONResponse(rows)
 
     q = (q or "").strip()
