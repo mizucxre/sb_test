@@ -87,13 +87,23 @@ if _USE_PG:
             return vals
 
         def append_row(self, values):
-            # ожидается [login, hash, role, avatar, created_at]
+            # ожидается [login, hash|password_hash, role, avatar, created_at]
             _ensure_admins_table()
+
+            # --- 1) Заголовок листа: просто игнорируем ---
+            if values and isinstance(values[0], str):
+                v0 = (values[0] or "").strip().lower()
+                v1 = (values[1] or "").strip().lower() if len(values) > 1 else ""
+                if v0 == "login" and v1 in ("hash", "password_hash"):
+                    return  # header row -> no-op
+
+            # --- 2) Обычная строка данных ---
             login   = values[0] if len(values) > 0 else None
             hash_v  = values[1] if len(values) > 1 else None
             role    = values[2] if len(values) > 2 else None
             avatar  = values[3] if len(values) > 3 else None
             created = values[4] if len(values) > 4 and values[4] else _now()
+
             with _pg._conn() as con, con.cursor() as cur:
                 cur.execute("""
                     INSERT INTO public.admins (login, hash, role, avatar, created_at)
@@ -104,18 +114,3 @@ if _USE_PG:
                           avatar = EXCLUDED.avatar;
                 """, (login, hash_v, role, avatar, created))
 
-    def get_worksheet(name: str):
-        if (name or "").strip().lower() == "admins":
-            return _AdminsWS()
-        raise AttributeError("get_worksheet is only implemented for 'admins' in Postgres mode")
-
-else:
-    BACKEND = "sheets"
-    from .sheets_gs import *              # noqa: F401,F403
-    from .sheets_gs import get_worksheet  # оригинальная функция
-    try:
-        from .sheets_gs import _now as _now
-    except Exception:
-        from datetime import datetime, timezone
-        def _now() -> str:
-            return datetime.now(timezone.utc).isoformat(timespec="seconds")
