@@ -1,348 +1,201 @@
 # -*- coding: utf-8 -*-
-"""repo_pg.py — synchronous Postgres storage with the SAME function names as sheets.py
-Drop this file into app/repo_pg.py and then in main.py replace `import sheets as sheets`
-with `from . import storage as sheets` (see storage.py in instructions).
-Requires: psycopg[binary] >= 3.2, python-dotenv (optional)
-"""
-from __future__ import annotations
 import os
 import re
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
+
 import psycopg
 from psycopg.rows import dict_row
-from psycopg_pool import ConnectionPool
 
-_DB_URL = os.getenv("DATABASE_URL") or os.getenv("NEON_DB_URL") or os.getenv("SUPABASE_DB_URL")
-if not _DB_URL:
-    raise RuntimeError("DATABASE_URL (or NEON_DB_URL/SUPABASE_DB_URL) is not set")
 
-_POOL = ConnectionPool(_DB_URL, min_size=1, max_size=5, kwargs={"row_factory": dict_row})
+# ---------- connection ----------
+
+def _dsn() -> str:
+    return (
+        os.getenv("DATABASE_URL")
+        or os.getenv("NEON_DB_URL")
+        or os.getenv("SUPABASE_DB_URL")
+        or ""
+    )
 
 def _conn():
-    # Возвращаем соединение из пула (контекстный менеджер)
-    return _POOL.connection()
+    dsn = _dsn()
+    if not dsn:
+        raise RuntimeError("DATABASE_URL/NEON_DB_URL is not set")
+    return psycopg.connect(dsn, row_factory=dict_row)
 
-def _normalize_username(u: str) -> str:
-    u = (u or "").strip()
-    if u.startswith("@"):
-        u = u[1:]
-    return u.lower()
 
-def _digits_only(s: str) -> str:
-    return re.sub(r"\D+", "", s or "")
+# ---------- helpers / DDL (idempotent) ----------
 
-# === Orders ===
-
-def get_order(order_id: str) -> Optional[Dict[str, Any]]:
+def _ensure_schema():
     with _conn() as con, con.cursor() as cur:
+        # clients
         cur.execute("""
-            select * from orders where lower(order_id) = lower(%s)
-        """, (order_id, ))
-        return cur.fetchone()
-
-def add_order(order: Dict[str, Any]) -> None:
-    order = dict(order or {})
-    oid = order.get("order_id")
-    if not oid:
-        raise ValueError("order_id required")
-    cols = ["order_id","client_name","phone","origin","status","note","country"]
-    vals = [order.get(c) for c in cols]
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""            insert into orders(order_id, client_name, phone, origin, status, note, country)
-            values(%s,%s,%s,%s,%s,%s,%s)
-            on conflict (order_id) do update set
-              client_name = excluded.client_name,
-              phone = excluded.phone,
-              origin = excluded.origin,
-              status = excluded.status,
-              note = excluded.note,
-              country = excluded.country,
-              updated_at = now()
-        """, vals)
-        con.commit()
-
-def update_order_status(order_id: str, status: str) -> None:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          update orders set status=%s, updated_at=now() where lower(order_id)=lower(%s)
-        """, (status, order_id))
-        con.commit()
-
-def list_recent_orders(limit:int=50) -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select * from orders order by updated_at desc nulls last, created_at desc nulls last limit %s
-        """, (limit,))
-        return cur.fetchall() or []
-
-def list_orders_by_status(status: str, limit:int=200) -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select * from orders where status=%s order by updated_at desc nulls last limit %s
-        """, (status, limit))
-        return cur.fetchall() or []
-
-# === Participants / Clients / Subscriptions ===
-
-def ensure_clients_from_usernames(usernames: List[str]) -> None:
-    usernames = [u for u in map(_normalize_username, usernames) if u]
-    if not usernames:
-        return
-    with _conn() as con, con.cursor() as cur:
-        for u in usernames:
-            cur.execute("""
-              insert into clients(user_id, username)
-              values(gen_random_uuid()::text::bigint, %s)
-              on conflict (user_id) do nothing
-            """, (u,))
-        con.commit()
-
-def ensure_participants(order_id: str, usernames: List[str]) -> None:
-    usernames = [u for u in map(_normalize_username, usernames) if u]
-    if not usernames:
-        return
-    with _conn() as con, con.cursor() as cur:
-        for u in usernames:
-            cur.execute("""
-              insert into participants(order_id, username)
-              values(%s,%s)
-              on conflict (order_id, username) do nothing
-            """, (order_id, u))
-        con.commit()
-
-def get_participants(order_id: str) -> List[str]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select username from participants where lower(order_id)=lower(%s) order by created_at asc
-        """, (order_id,))
-        return [r["username"] for r in cur.fetchall() or []]
-
-def orders_for_username(username: str) -> List[Dict[str,Any]]:
-    u = _normalize_username(username)
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select o.*
-          from orders o
-          join participants p on p.order_id = o.order_id
-          where lower(p.username)=lower(%s)
-          order by o.updated_at desc nulls last, o.created_at desc nulls last
-        """, (u,))
-        return cur.fetchall() or []
-
-def get_orders_by_username(username: str) -> List[Dict[str,Any]]:
-    return orders_for_username(username)
-
-def get_orders_by_phone(phone: str) -> List[Dict[str,Any]]:
-    d = _digits_only(phone)
-    if not d:
-        return []
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select * from orders where regexp_replace(coalesce(phone,''),'\D','','g') = %s
-          order by updated_at desc nulls last
-        """, (d,))
-        return cur.fetchall() or []
-
-def subscribe(user_id:int, order_id:str) -> None:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          insert into subscriptions(user_id, order_id) values(%s,%s)
-          on conflict (user_id, order_id) do nothing
-        """, (user_id, order_id))
-        con.commit()
-
-def unsubscribe(user_id:int, order_id:str) -> None:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          delete from subscriptions where user_id=%s and lower(order_id)=lower(%s)
-        """, (user_id, order_id))
-        con.commit()
-
-def is_subscribed(user_id:int, order_id:str) -> bool:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select 1 from subscriptions where user_id=%s and lower(order_id)=lower(%s)
-        """, (user_id, order_id))
-        return cur.fetchone() is not None
-
-def list_subscriptions(user_id:int) -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select s.order_id, o.status, s.created_at, s.updated_at
-          from subscriptions s left join orders o on o.order_id=s.order_id
-          where s.user_id=%s
-          order by s.created_at desc
-        """, (user_id,))
-        return cur.fetchall() or []
-
-def get_all_subscriptions() -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select user_id, order_id, last_sent_status from subscriptions
+        CREATE TABLE IF NOT EXISTS public.clients (
+          id          bigserial PRIMARY KEY,
+          tg_id       bigint,
+          username    text,
+          phone       text,
+          created_at  timestamptz DEFAULT now()
+        );
         """)
-        return cur.fetchall() or []
-
-def set_last_sent_status(user_id:int, order_id:str, status:str) -> None:
-    with _conn() as con, con.cursor() as cur:
+        # addresses
         cur.execute("""
-          update subscriptions set last_sent_status=%s, updated_at=now()
-          where user_id=%s and lower(order_id)=lower(%s)
-        """, (status, user_id, order_id))
-        con.commit()
-
-# === Addresses / Clients ===
-
-def upsert_client(user_id:int, username:str=None, full_name:str=None, phone:str=None, **kwargs):
-    with _conn() as con, con.cursor() as cur:
+        CREATE TABLE IF NOT EXISTS public.addresses (
+          id          bigserial PRIMARY KEY,
+          client_id   bigint REFERENCES public.clients(id),
+          city        text,
+          address     text,
+          receiver    text,
+          phone       text,
+          created_at  timestamptz DEFAULT now()
+        );
+        """)
+        # orders (минимально необходимые поля)
         cur.execute("""
-          insert into clients(user_id, username, full_name, phone)
-          values(%s,%s,%s,%s)
-          on conflict (user_id) do update set
-            username=excluded.username,
-            full_name=excluded.full_name,
-            phone=excluded.phone,
-            updated_at=now()
-        """, (user_id, (username or None), (full_name or None), (phone or None)))
-        con.commit()
+        CREATE TABLE IF NOT EXISTS public.orders (
+          id           bigserial PRIMARY KEY,
+          order_key    text UNIQUE,        -- может быть NULL/дубликаты, но лучше уникальный
+          client_id    bigint REFERENCES public.clients(id),
+          address_id   bigint REFERENCES public.addresses(id),
+          status       text,
+          title        text,
+          store        text,
+          color        text,
+          size         text,
+          qty          numeric,
+          price        numeric,
+          currency     text,
+          comment      text,
+          created_at   timestamptz DEFAULT now(),
+          updated_at   timestamptz
+        );
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS orders_created_idx ON public.orders(created_at);")
+        cur.execute("CREATE INDEX IF NOT EXISTS orders_status_idx  ON public.orders(status);")
+        cur.execute("CREATE INDEX IF NOT EXISTS orders_client_idx  ON public.orders(client_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS orders_addr_idx    ON public.orders(address_id);")
 
-def upsert_address(user_id:int, username:str, full_name:str, phone:str, city:str, address:str, postcode:str) -> bool:
-    upsert_client(user_id=user_id, username=username, full_name=full_name, phone=phone)
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          insert into addresses(user_id, full_name, phone, city, address, postcode)
-          values(%s,%s,%s,%s,%s,%s)
-        """, (user_id, full_name or None, phone or None, city or None, address or None, postcode or None))
-        con.commit()
-        return True
 
-def list_addresses(user_id:int) -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select id, full_name, phone, city, address, postcode, created_at, updated_at
-          from addresses where user_id=%s order by created_at desc
-        """, (user_id,))
-        return cur.fetchall() or []
+# ---------- search ----------
 
-def delete_address(user_id:int, address_text:str) -> bool:
-    # delete by exact address text match; adjust if you store IDs on the UI
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          delete from addresses where user_id=%s and address=%s
-        """, (user_id, address_text))
-        con.commit()
-        return cur.rowcount > 0
+def _like(s: str) -> str:
+    return f"%{s.strip()}%" if s else "%"
 
-def get_addresses_by_usernames(usernames: List[str]) -> List[Dict[str,Any]]:
-    usernames = [u for u in map(_normalize_username, usernames) if u]
-    if not usernames:
-        return []
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select a.*, c.username
-          from addresses a join clients c on c.user_id=a.user_id
-          where lower(c.username) = any(%s)
-        """, (usernames,))
-        return cur.fetchall() or []
-
-def get_user_ids_by_usernames(usernames: List[str]) -> List[int]:
-    usernames = [u for u in map(_normalize_username, usernames) if u]
-    if not usernames:
-        return []
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select user_id from clients where lower(username) = any(%s)
-        """, (usernames,))
-        return [r["user_id"] for r in cur.fetchall() or []]
-
-def search_clients(q:str, limit:int=50) -> List[Dict[str,Any]]:
-    q = (q or "").strip().lower()
-    if not q:
-        return []
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select * from clients
-          where lower(coalesce(username,'')) like %s
-             or lower(coalesce(full_name,'')) like %s
-             or regexp_replace(coalesce(phone,''),'\D','','g') like %s
-          order by updated_at desc nulls last
-          limit %s
-        """, (f"%{q}%", f"%{q}%", f"%{_digits_only(q)}%", limit))
-        return cur.fetchall() or []
-
-def list_clients(limit:int=200) -> List[Dict[str,Any]]:
-    with _conn() as con, con.cursor() as cur:
-        cur.execute("""
-          select * from clients order by updated_at desc nulls last, created_at desc nulls last limit %s
-        """, (limit,))
-        return cur.fetchall() or []
-
-# --- В КОНЕЦ ФАЙЛА app/repo_pg.py ДОБАВЬ ЭТО ---
-
-from typing import Optional, Union
-
-def update_order_status(order_key: Union[int, str], new_status: str, by_login: Optional[str] = None) -> int:
+def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
     """
-    Обновляет статус заказа (и проставляет audit-поля).
-    order_key: может быть числовым id или строковым кодом (например, order_number).
-    Возвращает количество обновлённых строк (0/1).
+    Возвращает последние заказы. Если q задан — ищем по id/order_key/username/phone/title/store/color/size.
     """
-    if not new_status:
-        return 0
-    with _conn() as con, con.cursor() as cur:
-        # Порядок попыток: id -> order_number -> code -> tg_order_id
-        # 1) по id (если похоже на число)
-        updated = 0
+    _ensure_schema()
+    q = (q or "").strip()
+    q_like = _like(q)
+
+    # если q — чисто число, попробуем матчер по id
+    id_exact: Optional[int] = None
+    if re.fullmatch(r"\d+", q or ""):
         try:
-            oid = int(order_key)
-            cur.execute("""
-                UPDATE public.orders
-                   SET status = %s,
-                       status_updated_at = now(),
-                       status_updated_by = %s
-                 WHERE id = %s
-            """, (new_status, by_login, oid))
-            updated = cur.rowcount
+            id_exact = int(q)
         except Exception:
-            updated = 0
+            id_exact = None
 
-        if updated == 0:
-            # 2) по order_number
-            cur.execute("""
-                UPDATE public.orders
-                   SET status = %s,
-                       status_updated_at = now(),
-                       status_updated_by = %s
-                 WHERE order_number::text = %s
-            """, (new_status, by_login, str(order_key)))
-            updated = cur.rowcount
+    sql = """
+    SELECT
+      o.id,
+      o.order_key,
+      o.status,
+      o.title,
+      o.store,
+      o.color,
+      o.size,
+      o.qty,
+      o.price,
+      o.currency,
+      o.comment,
+      o.created_at,
+      c.id        AS client_id,
+      c.username  AS client_username,
+      c.phone     AS client_phone,
+      a.id        AS address_id,
+      a.city      AS address_city,
+      a.address   AS address_line,
+      a.receiver  AS address_receiver,
+      a.phone     AS address_phone
+    FROM public.orders o
+    LEFT JOIN public.clients   c ON c.id = o.client_id
+    LEFT JOIN public.addresses a ON a.id = o.address_id
+    WHERE
+      (%(q)s = '' OR
+       o.order_key ILIKE %(q_like)s OR
+       o.title     ILIKE %(q_like)s OR
+       o.store     ILIKE %(q_like)s OR
+       o.color     ILIKE %(q_like)s OR
+       o.size      ILIKE %(q_like)s OR
+       c.username  ILIKE %(q_like)s OR
+       c.phone     ILIKE %(q_like)s OR
+       (%(id_exact)s IS NOT NULL AND o.id = %(id_exact)s)
+      )
+    ORDER BY o.created_at DESC NULLS LAST, o.id DESC
+    LIMIT %(limit)s
+    """
+    with _conn() as con, con.cursor() as cur:
+        cur.execute(sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
+        rows = cur.fetchall() or []
 
-        if updated == 0:
-            # 3) по code
-            try:
-                cur.execute("""
-                    UPDATE public.orders
-                       SET status = %s,
-                           status_updated_at = now(),
-                           status_updated_by = %s
-                     WHERE code::text = %s
-                """, (new_status, by_login, str(order_key)))
-                updated = cur.rowcount
-            except Exception:
-                pass
+    # нормализуем ключи под фронт
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        out.append(
+            {
+                "id": r["id"],
+                "order_key": r["order_key"],
+                "status": r["status"],
+                "title": r["title"],
+                "store": r["store"],
+                "color": r["color"],
+                "size": r["size"],
+                "qty": r["qty"],
+                "price": r["price"],
+                "currency": r["currency"],
+                "comment": r["comment"],
+                "created_at": r["created_at"],
+                "client": {
+                    "id": r["client_id"],
+                    "username": r["client_username"],
+                    "phone": r["client_phone"],
+                },
+                "address": {
+                    "id": r["address_id"],
+                    "city": r["address_city"],
+                    "address": r["address_line"],
+                    "receiver": r["address_receiver"],
+                    "phone": r["address_phone"],
+                },
+            }
+        )
+    return out
 
-        if updated == 0:
-            # 4) по tg_order_id
-            try:
-                cur.execute("""
-                    UPDATE public.orders
-                       SET status = %s,
-                           status_updated_at = now(),
-                           status_updated_by = %s
-                     WHERE tg_order_id::text = %s
-                """, (new_status, by_login, str(order_key)))
-                updated = cur.rowcount
-            except Exception:
-                pass
 
-        return updated
+# ---------- status update ----------
 
+def update_order_status(order_key_or_id: Any, new_status: str, by_login: Optional[str] = None) -> int:
+    """
+    Обновляет статус заказа. Возвращает кол-во изменённых строк.
+    order_key_or_id — либо числовой id, либо текстовый order_key.
+    """
+    _ensure_schema()
+    if new_status is None or (isinstance(new_status, str) and not new_status.strip()):
+        return 0
+
+    where = "id = %s"
+    params: List[Any] = [order_key_or_id]
+    if isinstance(order_key_or_id, str) and not re.fullmatch(r"\d+", order_key_or_id):
+        where = "order_key = %s"
+
+    sql = f"""
+    UPDATE public.orders
+       SET status = %s,
+           updated_at = now()
+     WHERE {where}
+    """
+    with _conn() as con, con.cursor() as cur:
+        cur.execute(sql, [new_status] + params)
+        return cur.rowcount
