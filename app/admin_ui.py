@@ -889,10 +889,12 @@ async def api_me(request: Request) -> JSONResponse:
 
 
 # ------------------------ routes: orders search / status / create ------------------------
-@router.get("/api/search")
-async def api_search(request: Request, q: Optional[str] = Query(default="")) -> JSONResponse:
-    if not _authed_login(request):
-        return JSONResponse({"ok": False, "error": "auth"}, status_code=401)
+@app.get("/admin/api/search")
+async def api_search(q: str = ""):
+    rows = repo_pg.search_orders(q)
+    # если у тебя там рендер HTML-таблицы — передай rows в текущий рендерер.
+    # если API уже возвращает JSON — просто:
+    return JSONResponse(rows)
 
     q = (q or "").strip()
     cache_key = "recent50" if not q else f"q:{q.lower()}"
