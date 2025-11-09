@@ -188,6 +188,166 @@ if _USE_PG:
             # Delegate to module-level update function implemented for PG backend
             return update_order_status(order_key, status, by_login)
 
+    class _ClientsWS:
+        """Wrapper to provide gspread-like clients worksheet backed by Postgres."""
+        HEADER = ["user_id", "username", "full_name", "phone", "city", "address", "postcode", "created_at", "updated_at"]
+
+        def _rows(self):
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COALESCE(user_id, id) AS user_id,
+                           username,
+                           full_name,
+                           phone,
+                           NULL::text AS city,
+                           NULL::text AS address,
+                           NULL::text AS postcode,
+                           created_at,
+                           updated_at
+                    FROM public.clients
+                    ORDER BY created_at NULLS LAST, username ASC
+                    """
+                )
+                return cur.fetchall() or []
+
+        def get_all_records(self):
+            return [
+                {
+                    "user_id": r.get("user_id") or "",
+                    "username": r.get("username") or "",
+                    "full_name": r.get("full_name") or "",
+                    "phone": r.get("phone") or "",
+                    "city": r.get("city") or "",
+                    "address": r.get("address") or "",
+                    "postcode": r.get("postcode") or "",
+                    "created_at": r.get("created_at"),
+                    "updated_at": r.get("updated_at"),
+                }
+                for r in self._rows()
+            ]
+
+        def get_all_values(self):
+            recs = self.get_all_records()
+            if not recs:
+                return []
+            vals = [self.HEADER[:]]
+            for r in recs:
+                vals.append([r.get(h) for h in self.HEADER])
+            return vals
+
+        def append_row(self, values):
+            # best-effort: append to clients table if possible
+            try:
+                user_id = values[0] if len(values) > 0 else None
+                username = values[1] if len(values) > 1 else None
+                full_name = values[2] if len(values) > 2 else None
+                phone = values[3] if len(values) > 3 else None
+                now = _now()
+                with _conn() as con, con.cursor() as cur:
+                    cur.execute(
+                        """
+                        INSERT INTO public.clients (tg_id, username, phone, created_at)
+                        VALUES (%s,%s,%s,%s)
+                        """,
+                        (user_id, username, phone, now),
+                    )
+            except Exception:
+                pass
+
+    class _AddressesWS:
+        HEADER = ["user_id", "username", "full_name", "phone", "city", "address", "postcode", "created_at", "updated_at"]
+
+        def _rows(self):
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT COALESCE(user_id, id) AS user_id,
+                           username,
+                           full_name,
+                           phone,
+                           city,
+                           address,
+                           postcode,
+                           created_at,
+                           updated_at
+                    FROM public.addresses
+                    ORDER BY created_at NULLS LAST
+                    """
+                )
+                return cur.fetchall() or []
+
+        def get_all_records(self):
+            return [
+                {
+                    "user_id": r.get("user_id") or "",
+                    "username": r.get("username") or "",
+                    "full_name": r.get("full_name") or "",
+                    "phone": r.get("phone") or "",
+                    "city": r.get("city") or "",
+                    "address": r.get("address") or "",
+                    "postcode": r.get("postcode") or "",
+                    "created_at": r.get("created_at"),
+                    "updated_at": r.get("updated_at"),
+                }
+                for r in self._rows()
+            ]
+
+        def get_all_values(self):
+            recs = self.get_all_records()
+            if not recs:
+                return []
+            vals = [self.HEADER[:]]
+            for r in recs:
+                vals.append([r.get(h) for h in self.HEADER])
+            return vals
+
+    class _NewsWS:
+        HEADER = ["date", "text", "image", "channel_image", "channel_name", "created_at"]
+
+        def _ensure(self):
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(
+                    """
+                    CREATE TABLE IF NOT EXISTS public.news (
+                      id bigserial PRIMARY KEY,
+                      date text,
+                      text text,
+                      image text,
+                      channel_image text,
+                      channel_name text,
+                      created_at timestamptz DEFAULT now()
+                    )
+                    """
+                )
+
+        def get_all_records(self):
+            self._ensure()
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(
+                    "SELECT date, text, image, channel_image, channel_name, created_at FROM public.news ORDER BY created_at DESC"
+                )
+                rows = cur.fetchall() or []
+                return [
+                    {"date": r.get("date") or "", "text": r.get("text") or "", "image": r.get("image") or "", "channel_image": r.get("channel_image") or "", "channel_name": r.get("channel_name") or "", "created_at": r.get("created_at")} for r in rows
+                ]
+
+        def append_row(self, values):
+            try:
+                self._ensure()
+                date = values[0] if len(values) > 0 else None
+                text = values[1] if len(values) > 1 else None
+                image = values[2] if len(values) > 2 else None
+                channel_image = values[3] if len(values) > 3 else None
+                channel_name = values[4] if len(values) > 4 else None
+                with _conn() as con, con.cursor() as cur:
+                    cur.execute(
+                        "INSERT INTO public.news (date, text, image, channel_image, channel_name) VALUES (%s,%s,%s,%s,%s)",
+                        (date, text, image, channel_image, channel_name),
+                    )
+            except Exception:
+                pass
+
     def update_order_status(order_id: str, new_status: str, by_login: str = None) -> bool:
         """Update order status in Postgres. Matches by order_id or order_key (case-insensitive)."""
         _ensure_admins_table()  # ensure db is ready (reuses existing helper)
@@ -216,6 +376,12 @@ if _USE_PG:
             return _AdminsWS()
         if lname == "orders":
             return _OrdersWS()
+        if lname == "clients":
+            return _ClientsWS()
+        if lname == "addresses":
+            return _AddressesWS()
+        if lname == "news":
+            return _NewsWS()
         raise AttributeError(
             "get_worksheet is only implemented for 'admins' and 'orders' in Postgres mode"
         )
