@@ -245,6 +245,18 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         with _conn() as con, con.cursor() as cur:
             cur.execute(sql, params)
             rows = cur.fetchall() or []
+            try:
+                logger.info("search_orders: fetched %d rows", len(rows))
+                if rows:
+                    # log keys of the first row to help debugging schema mapping
+                    first = rows[0]
+                    if hasattr(first, 'keys'):
+                        logger.debug("search_orders: first row keys: %s", list(first.keys()))
+                    else:
+                        logger.debug("search_orders: first row sample: %s", str(first))
+            except Exception:
+                # never fail the query because of logging
+                logger.exception("search_orders: failed to log rows")
     except Exception as e:
         logger.error("Final orders query failed: %s", e)
         return []
