@@ -1,15 +1,21 @@
 # app/sheets.py
 # Если есть DATABASE_URL — работаем через Postgres, иначе Google Sheets.
 # Совместимость с admin_ui: get_worksheet("admins") поддерживает
-# get_all_records(), get_all_values(), append_row([...]).
+# get_all_records(), get_all_values(), append_row([...]); также есть _now().
 import os
 
 _USE_PG = bool(os.getenv("DATABASE_URL") or os.getenv("NEON_DB_URL"))
 
 if _USE_PG:
     BACKEND = "pg"
+    from datetime import datetime, timezone
+
     from .repo_pg import *        # noqa: F401,F403
     from . import repo_pg as _pg  # доступ к _pg._conn()
+
+    def _now() -> str:
+        # Строка времени в UTC, как ISO без микросекунд (пример: 2025-11-09T14:23:00+00:00)
+        return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
     def _ensure_admins_table():
         # Создадим таблицу, если её нет
@@ -25,7 +31,7 @@ if _USE_PG:
                   created_at timestamptz DEFAULT now()
                 );
             """)
-            # Добьём недостающие колонки и индексы, если таблица уже была
+            # Добьём недостающие колонки/индексы, если таблица уже была
             for stmt in [
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS user_id bigint",
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS username text",
@@ -86,11 +92,11 @@ if _USE_PG:
             hash_v  = values[1] if len(values) > 1 else None
             role    = values[2] if len(values) > 2 else None
             avatar  = values[3] if len(values) > 3 else None
-            created = values[4] if len(values) > 4 else None
+            created = values[4] if len(values) > 4 and values[4] else _now()
             with _pg._conn() as con, con.cursor() as cur:
                 cur.execute("""
                     INSERT INTO public.admins (login, hash, role, avatar, created_at)
-                    VALUES (%s, %s, COALESCE(%s,'admin'), %s, COALESCE(%s, now()))
+                    VALUES (%s, %s, COALESCE(%s,'admin'), %s, %s)
                     ON CONFLICT (login) DO UPDATE
                       SET hash   = EXCLUDED.hash,
                           role   = EXCLUDED.role,
@@ -106,3 +112,10 @@ else:
     BACKEND = "sheets"
     from .sheets_gs import *              # noqa: F401,F403
     from .sheets_gs import get_worksheet  # оригинальная функция
+    try:
+        from .sheets_gs import _now as _now  # прокинем ту же функцию, если есть
+    except Exception:
+        # запасной вариант
+        from datetime import datetime, timezone
+        def _now() -> str:
+            return datetime.now(timezone.utc).isoformat(timespec="seconds")
