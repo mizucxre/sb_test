@@ -12,8 +12,7 @@ if _USE_PG:
     from . import repo_pg as _pg  # доступ к _pg._conn()
 
     def _ensure_admins_table():
-        # Гибкая схема: поддерживаем и "листовую" модель (login/hash/role/avatar/created_at),
-        # и то, что могло быть раньше (user_id/username).
+        # Создадим таблицу, если её нет
         with _pg._conn() as con, con.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.admins (
@@ -26,15 +25,22 @@ if _USE_PG:
                   created_at timestamptz DEFAULT now()
                 );
             """)
-            # индексы для upsert по login и по user_id (если они используются)
-            try:
-                cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS admins_login_key ON public.admins(login)")
-            except Exception:
-                pass
-            try:
-                cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS admins_user_id_key ON public.admins(user_id)")
-            except Exception:
-                pass
+            # Добьём недостающие колонки и индексы, если таблица уже была
+            for stmt in [
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS user_id bigint",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS username text",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS login text",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS hash text",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS role text DEFAULT 'admin'",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS avatar text",
+                "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS created_at timestamptz DEFAULT now()",
+                "CREATE UNIQUE INDEX IF NOT EXISTS admins_login_key   ON public.admins(login)",
+                "CREATE UNIQUE INDEX IF NOT EXISTS admins_user_id_key ON public.admins(user_id)"
+            ]:
+                try:
+                    cur.execute(stmt)
+                except Exception:
+                    pass
 
     class _AdminsWS:
         """Эмуляция листа 'admins' (gspread-совместимый интерфейс)."""
