@@ -1,24 +1,40 @@
 # app/sheets.py
-# Если есть DATABASE_URL — работаем через Postgres, иначе Google Sheets.
-# Совместимость с admin_ui: get_worksheet("admins") поддерживает
-# get_all_records(), get_all_values(), append_row([...]); также есть _now().
-import os
+# Унифицированный слой работы с "листами":
+# - если есть DATABASE_URL/NEON_DB_URL -> используем Postgres (Neon) через repo_pg
+# - иначе используем Google Sheets (старый backend)
+#
+# Совместимость с admin_ui:
+#  - sheets.get_worksheet("admins") возвращает объект с методами:
+#       get_all_values(), get_all_records(), append_row([...])
+#  - sheets._now() доступен в обоих режимах
 
-_USE_PG = bool(os.getenv("DATABASE_URL") or os.getenv("NEON_DB_URL"))
+import os
+from datetime import datetime, timezone
+
+# Всегда есть sheets._now()
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+_USE_PG = bool(
+    os.getenv("DATABASE_URL")
+    or os.getenv("NEON_DB_URL")
+    or os.getenv("PGHOST")
+    or os.getenv("PG_DSN")
+)
 
 if _USE_PG:
+    # -------------------- Postgres backend (Neon) --------------------
     BACKEND = "pg"
-    from datetime import datetime, timezone
 
+    # Экспортируем все функции репозитория (бот/админка их используют)
     from .repo_pg import *        # noqa: F401,F403
-    from . import repo_pg as _pg  # доступ к _pg._conn()
-
-    def _now() -> str:
-        return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    from . import repo_pg as _pg  # низкоуровневый коннект
 
     def _ensure_admins_table():
-        # Создадим таблицу, если её нет, и добавим недостающие поля/индексы
+        """Создаёт/поправляет таблицу public.admins до ожидаемой схемы."""
         with _pg._conn() as con, con.cursor() as cur:
+            # если таблицы нет — создадим целиком
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS public.admins (
                   user_id    bigint,
@@ -30,6 +46,7 @@ if _USE_PG:
                   created_at timestamptz DEFAULT now()
                 );
             """)
+            # а если была — аккуратно добавим недостающие поля/индексы
             for stmt in [
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS user_id bigint",
                 "ALTER TABLE public.admins ADD COLUMN IF NOT EXISTS username text",
@@ -44,6 +61,7 @@ if _USE_PG:
                 try:
                     cur.execute(stmt)
                 except Exception:
+                    # если поле уже есть/индекс есть — просто продолжаем
                     pass
 
     class _AdminsWS:
@@ -52,6 +70,7 @@ if _USE_PG:
         def _rows(self):
             _ensure_admins_table()
             with _pg._conn() as con, con.cursor() as cur:
+                # login берём из login, а если его нет — из username (совместимость)
                 cur.execute("""
                     SELECT
                       COALESCE(login, username) AS login,
@@ -65,6 +84,7 @@ if _USE_PG:
                 return cur.fetchall() or []
 
         def get_all_records(self):
+            """Список словарей, как у gspread.get_all_records()."""
             out = []
             for r in self._rows():
                 out.append({
@@ -77,7 +97,10 @@ if _USE_PG:
             return out
 
         def get_all_values(self):
-            """Возвращаем [] если реально нет ни одной записи (как gspread на пустом листе)."""
+            """
+            ВАЖНО: если таблица пуста — вернуть [] (как gspread на пустом листе),
+            чтобы в admin_ui сработал "посев" владельца из ENV.
+            """
             recs = self.get_all_records()
             if not recs:
                 return []
@@ -87,22 +110,30 @@ if _USE_PG:
             return vals
 
         def append_row(self, values):
-            # ожидается [login, hash|password_hash, role, avatar, created_at]
+            """
+            Принимаем либо заголовок, либо реальную строку:
+              ["login","password_hash"/"hash","role","avatar","created_at"]
+            Заголовок игнорируем (no-op), реальные данные — upsert по login.
+            """
             _ensure_admins_table()
 
-            # --- 1) Заголовок листа: просто игнорируем ---
+            # 1) Заголовок — ничего не делаем
             if values and isinstance(values[0], str):
                 v0 = (values[0] or "").strip().lower()
                 v1 = (values[1] or "").strip().lower() if len(values) > 1 else ""
                 if v0 == "login" and v1 in ("hash", "password_hash"):
-                    return  # header row -> no-op
+                    return
 
-            # --- 2) Обычная строка данных ---
+            # 2) Данные
             login   = values[0] if len(values) > 0 else None
             hash_v  = values[1] if len(values) > 1 else None
             role    = values[2] if len(values) > 2 else None
             avatar  = values[3] if len(values) > 3 else None
             created = values[4] if len(values) > 4 and values[4] else _now()
+
+            if login is None or (isinstance(login, str) and not login.strip()):
+                # некорректный логин — пропускаем
+                return
 
             with _pg._conn() as con, con.cursor() as cur:
                 cur.execute("""
@@ -114,3 +145,22 @@ if _USE_PG:
                           avatar = EXCLUDED.avatar;
                 """, (login, hash_v, role, avatar, created))
 
+    def get_worksheet(name: str):
+        if (name or "").strip().lower() == "admins":
+            return _AdminsWS()
+        # других листов в PG-режиме пока не эмулируем
+        raise AttributeError("get_worksheet is only implemented for 'admins' in Postgres mode")
+
+else:
+    # -------------------- Google Sheets backend --------------------
+    BACKEND = "sheets"
+    from .sheets_gs import *              # noqa: F401,F403
+    from .sheets_gs import get_worksheet  # оригинальная функция
+
+    # Пробрасываем _now из sheets_gs, если он там есть.
+    try:
+        from .sheets_gs import _now as _gs_now  # type: ignore
+        _now = _gs_now  # переопределим на «родной» для GS
+    except Exception:
+        # оставим наш универсальный _now()
+        pass
