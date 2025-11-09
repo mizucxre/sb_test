@@ -119,7 +119,20 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
                 "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=%s",
                 (table,),
             )
-            return [r[0] for r in cur.fetchall() or []]
+            rows = cur.fetchall() or []
+            cols: List[str] = []
+            for r in rows:
+                # dict_row returns mapping-like rows, otherwise use tuple access
+                if hasattr(r, 'get'):
+                    name = r.get('column_name')
+                else:
+                    try:
+                        name = r[0]
+                    except Exception:
+                        name = None
+                if name:
+                    cols.append(name)
+            return cols
 
     orders_cols = set(_get_columns('orders'))
     clients_cols = set(_get_columns('clients'))
