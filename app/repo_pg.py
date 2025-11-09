@@ -150,102 +150,159 @@ def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
     ORDER BY o.created_at DESC NULLS LAST, o.id DESC
     LIMIT %(limit)s
     """
-    # Try the full query with joins. If client's/address schema differs, fall back to orders-only query.
-    rows = []
-    try:
-        with _conn() as con, con.cursor() as cur:
-            cur.execute(sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
-            rows = cur.fetchall() or []
-    except Exception as e:
-        # Likely schema mismatch (missing client/address columns). Log and try fallback.
-        logger.warning("Full orders query failed, falling back to orders-only query: %s", e)
-        fallback_sql = """
-        SELECT
-          o.id,
-          o.order_key,
-          o.status,
-          o.title,
-          o.store,
-          o.color,
-          o.size,
-          o.qty,
-          o.price,
-          o.currency,
-          o.comment,
-          o.created_at
-        FROM public.orders o
-        WHERE (%(q)s = '' OR
-               o.order_key ILIKE %(q_like)s OR
-               o.title     ILIKE %(q_like)s OR
-               o.store     ILIKE %(q_like)s OR
-               o.color     ILIKE %(q_like)s OR
-               o.size      ILIKE %(q_like)s OR
-               (%(id_exact)s IS NOT NULL AND o.id = %(id_exact)s)
-        )
-        ORDER BY o.created_at DESC NULLS LAST, o.id DESC
-        LIMIT %(limit)s
+    def search_orders(q: str = "", limit: int = 200) -> List[Dict[str, Any]]:
         """
-        with _conn() as con, con.cursor() as cur:
-            cur.execute(fallback_sql, {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit})
-            rows = cur.fetchall() or []
+        Возвращает последние заказы. Строит запрос динамически, основываясь на доступных колонках
+        в таблицах public.orders, public.clients и public.addresses — это позволяет работать
+        с базой, где схема отличается от ожидаемой.
+        """
+        _ensure_schema()
+        q = (q or "").strip()
+        q_like = _like(q)
 
-    # нормализуем ключи под фронт
-    out: List[Dict[str, Any]] = []
-    for r in rows:
-        # Row may or may not contain joined client/address columns depending on which query ran.
-        out.append(
-            {
-                "id": r.get("id") if isinstance(r, dict) else r[0],
-                "order_key": r.get("order_key") if isinstance(r, dict) else r[1],
-                "status": r.get("status") if isinstance(r, dict) else r[2],
-                "title": r.get("title") if isinstance(r, dict) else r[3],
-                "store": r.get("store") if isinstance(r, dict) else r[4],
-                "color": r.get("color") if isinstance(r, dict) else r[5],
-                "size": r.get("size") if isinstance(r, dict) else r[6],
-                "qty": r.get("qty") if isinstance(r, dict) else r[7],
-                "price": r.get("price") if isinstance(r, dict) else r[8],
-                "currency": r.get("currency") if isinstance(r, dict) else r[9],
-                "comment": r.get("comment") if isinstance(r, dict) else r[10],
-                "created_at": r.get("created_at") if isinstance(r, dict) else r[11],
-                "client": {
-                    "id": r.get("client_id") if isinstance(r, dict) else None,
-                    "username": r.get("client_username") if isinstance(r, dict) else None,
-                    "phone": r.get("client_phone") if isinstance(r, dict) else None,
-                },
-                "address": {
-                    "id": r.get("address_id") if isinstance(r, dict) else None,
-                    "city": r.get("address_city") if isinstance(r, dict) else None,
-                    "address": r.get("address_line") if isinstance(r, dict) else None,
-                    "receiver": r.get("address_receiver") if isinstance(r, dict) else None,
-                    "phone": r.get("address_phone") if isinstance(r, dict) else None,
-                },
-            }
-        )
-    return out
+        # если q — чисто число, попробуем матчер по id
+        id_exact: Optional[int] = None
+        if re.fullmatch(r"\d+", q or ""):
+            try:
+                id_exact = int(q)
+            except Exception:
+                id_exact = None
 
+        # Получаем доступные колонки для таблиц
+        def _get_columns(table: str) -> List[str]:
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_schema='public' AND table_name=%s",
+                    (table,),
+                )
+                return [r[0] for r in cur.fetchall() or []]
 
-# ---------- status update ----------
+        orders_cols = set(_get_columns('orders'))
+        clients_cols = set(_get_columns('clients'))
+        addresses_cols = set(_get_columns('addresses'))
 
-def update_order_status(order_key_or_id: Any, new_status: str, by_login: Optional[str] = None) -> int:
-    """
-    Обновляет статус заказа. Возвращает кол-во изменённых строк.
-    order_key_or_id — либо числовой id, либо текстовый order_key.
-    """
-    _ensure_schema()
-    if new_status is None or (isinstance(new_status, str) and not new_status.strip()):
-        return 0
+        select_parts = []
+        # Map of alias -> column expression and output key
+        # We'll always try to include common order fields if present
+        def add(col, alias=None):
+            if col in orders_cols:
+                select_parts.append(f"o.{col} AS {col}")
 
-    where = "id = %s"
-    params: List[Any] = [order_key_or_id]
-    if isinstance(order_key_or_id, str) and not re.fullmatch(r"\d+", order_key_or_id):
-        where = "order_key = %s"
+        for c in ['id', 'order_key', 'status', 'title', 'store', 'color', 'size', 'qty', 'price', 'currency', 'comment', 'created_at']:
+            add(c)
 
-    sql = f"""
-    UPDATE public.orders
-       SET status = %s,
-           updated_at = now()
-     WHERE {where}
-    """
-    with _conn() as con, con.cursor() as cur:
-        cur.execute(sql, [new_status] + params)
-        return cur.rowcount
+        join_clients = False
+        if 'client_id' in orders_cols and ('id' in clients_cols or 'tg_id' in clients_cols):
+            # We will join clients if it seems to exist
+            join_clients = True
+            if 'id' in clients_cols:
+                select_parts.append("c.id AS client_id")
+            if 'username' in clients_cols:
+                select_parts.append("c.username AS client_username")
+            if 'phone' in clients_cols:
+                select_parts.append("c.phone AS client_phone")
+
+        join_addresses = False
+        if 'address_id' in orders_cols and ('id' in addresses_cols):
+            join_addresses = True
+            if 'id' in addresses_cols:
+                select_parts.append("a.id AS address_id")
+            if 'city' in addresses_cols:
+                select_parts.append("a.city AS address_city")
+            if 'address' in addresses_cols:
+                select_parts.append("a.address AS address_line")
+            if 'receiver' in addresses_cols:
+                select_parts.append("a.receiver AS address_receiver")
+            if 'phone' in addresses_cols:
+                select_parts.append("a.phone AS address_phone")
+
+        if not select_parts:
+            # No columns found in orders — return empty
+            return []
+
+        select_clause = ",\n      ".join(select_parts)
+
+        sql = f"""
+        SELECT
+          {select_clause}
+        FROM public.orders o
+        """
+        if join_clients:
+            sql += "LEFT JOIN public.clients c ON c.id = o.client_id\n"
+        if join_addresses:
+            sql += "LEFT JOIN public.addresses a ON a.id = o.address_id\n"
+
+        # Where clause: try to reference only existing columns
+        where_clauses = []
+        params = {"q": q, "q_like": q_like, "id_exact": id_exact, "limit": limit}
+        if 'order_key' in orders_cols:
+            where_clauses.append("o.order_key ILIKE %(q_like)s")
+        if 'title' in orders_cols:
+            where_clauses.append("o.title ILIKE %(q_like)s")
+        if 'store' in orders_cols:
+            where_clauses.append("o.store ILIKE %(q_like)s")
+        if 'color' in orders_cols:
+            where_clauses.append("o.color ILIKE %(q_like)s")
+        if 'size' in orders_cols:
+            where_clauses.append("o.size ILIKE %(q_like)s")
+        if join_clients and 'username' in clients_cols:
+            where_clauses.append("c.username ILIKE %(q_like)s")
+        if join_clients and 'phone' in clients_cols:
+            where_clauses.append("c.phone ILIKE %(q_like)s")
+        if 'id' in orders_cols and id_exact is not None:
+            where_clauses.append("o.id = %(id_exact)s")
+
+        where_sql = "(%(q)s = '' OR " + " OR ".join(where_clauses) + ")" if where_clauses else "TRUE"
+
+        sql += f"WHERE {where_sql}\nORDER BY ";
+        if 'created_at' in orders_cols:
+            sql += "o.created_at DESC NULLS LAST, o.id DESC\n"
+        elif 'id' in orders_cols:
+            sql += "o.id DESC\n"
+        else:
+            sql += "1=1\n"
+
+        sql += "LIMIT %(limit)s\n"
+
+        rows: List[Any] = []
+        try:
+            with _conn() as con, con.cursor() as cur:
+                cur.execute(sql, params)
+                rows = cur.fetchall() or []
+        except Exception as e:
+            logger.error("Final orders query failed: %s", e)
+            return []
+
+        out: List[Dict[str, Any]] = []
+        for r in rows:
+            # r is dict-row (dict-like). Use .get safely.
+            get = r.get if hasattr(r, 'get') else (lambda k: None)
+            out.append(
+                {
+                    "id": get('id'),
+                    "order_key": get('order_key'),
+                    "status": get('status'),
+                    "title": get('title'),
+                    "store": get('store'),
+                    "color": get('color'),
+                    "size": get('size'),
+                    "qty": get('qty'),
+                    "price": get('price'),
+                    "currency": get('currency'),
+                    "comment": get('comment'),
+                    "created_at": get('created_at'),
+                    "client": {
+                        "id": get('client_id'),
+                        "username": get('client_username'),
+                        "phone": get('client_phone'),
+                    },
+                    "address": {
+                        "id": get('address_id'),
+                        "city": get('address_city'),
+                        "address": get('address_line'),
+                        "receiver": get('address_receiver'),
+                        "phone": get('address_phone'),
+                    },
+                }
+            )
+        return out
