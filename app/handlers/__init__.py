@@ -4,6 +4,7 @@ def register_handlers(application: Application):
     """Регистрация всех хэндлеров"""
     from . import client_handlers, admin_handlers, callback_handlers
     
-    client_handlers.register(application)
-    admin_handlers.register(application) 
+    # Регистрируем в правильном порядке - сначала колбэки, потом сообщения
     callback_handlers.register(application)
+    client_handlers.register(application)
+    admin_handlers.register(application)
