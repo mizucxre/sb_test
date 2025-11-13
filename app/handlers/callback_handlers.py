@@ -1,5 +1,5 @@
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from app.config import ADMIN_IDS, STATUSES
@@ -28,8 +28,11 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await _handle_subscription_callbacks(update, context, data)
         elif data.startswith("pp:"):
             await _handle_participant_callbacks(update, context, data)
+        else:
+            logger.warning(f"Необработанный callback: {data}")
+            await reply_animated(update, context, "❌ Неизвестный запрос")
     except Exception as e:
-        logger.error(f"Error handling callback {data}: {e}")
+        logger.error(f"Ошибка обработки callback {data}: {e}")
         await reply_animated(update, context, "❌ Произошла ошибка при обработке запроса")
 
 async def _handle_address_callbacks(update: Update, context: ContextTypes.DEFAULT_TYPE, data: str):
@@ -53,7 +56,6 @@ async def _handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_
     if data.startswith("adm:status_menu:"):
         # Меню смены статуса
         order_id = data.split(":", 2)[2]
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         rows = [[InlineKeyboardButton(s, callback_data=f"adm:set_status_val:{order_id}:{i}")] 
                 for i, s in enumerate(STATUSES)]
         await reply_animated(update, context, "Выберите новый статус:", 
@@ -76,7 +78,7 @@ async def _handle_admin_callbacks(update: Update, context: ContextTypes.DEFAULT_
             try:
                 await _notify_subscribers(context.application, order_id, new_status)
             except Exception as e:
-                logger.error(f"Failed to notify subscribers: {e}")
+                logger.error(f"Ошибка уведомления подписчиков: {e}")
         else:
             await reply_animated(update, context, "❌ Заказ не найден")
 
@@ -125,7 +127,6 @@ async def _handle_subscription_callbacks(update: Update, context: ContextTypes.D
         order_id = data.split(":", 1)[1]
         success = await SubscriptionService.subscribe(user_id, order_id)
         if success:
-            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
             await update.callback_query.edit_message_reply_markup(
                 InlineKeyboardMarkup([[InlineKeyboardButton("🔕 Отписаться", callback_data=f"unsub:{order_id}")]])
             )
@@ -135,7 +136,6 @@ async def _handle_subscription_callbacks(update: Update, context: ContextTypes.D
         order_id = data.split(":", 1)[1]
         success = await SubscriptionService.unsubscribe(user_id, order_id)
         if success:
-            from telegram import InlineKeyboardMarkup, InlineKeyboardButton
             await update.callback_query.edit_message_reply_markup(
                 InlineKeyboardMarkup([[InlineKeyboardButton("🔔 Подписаться", callback_data=f"sub:{order_id}")]])
             )
@@ -201,8 +201,9 @@ async def _notify_subscribers(application, order_id: str, new_status: str):
             )
             await SubscriptionService.set_last_sent_status(sub.user_id, order_id, new_status)
         except Exception as e:
-            logger.warning(f"Failed to notify subscriber {sub.user_id}: {e}")
+            logger.warning(f"Не удалось уведомить подписчика {sub.user_id}: {e}")
 
 def register(application):
     """Регистрация callback хэндлеров"""
     application.add_handler(CallbackQueryHandler(handle_callback))
+    logger.info("✅ Callback хэндлеры зарегистрированы")
