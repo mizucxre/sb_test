@@ -47,6 +47,8 @@ async def handle_client_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
     user_id = update.effective_user.id
     raw_text = (update.message.text or "").strip()
     text = raw_text.lower()
+    
+    logger.info(f"📨 Received message from {user_id}: {raw_text}")
 
     # Проверка на админа - если админ, не обрабатываем здесь
     if _is_admin(user_id, ADMIN_IDS):
