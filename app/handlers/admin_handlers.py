@@ -1,15 +1,16 @@
 import logging
 import re
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
 
 from app.config import ADMIN_IDS, STATUSES
 from app.utils.helpers import reply_animated, reply_markdown_animated, _is_admin
-from app.utils.keyboards import ADMIN_MENU_KB
+from app.utils.keyboards import ADMIN_MENU_KB, status_keyboard, order_card_kb, build_participants_kb
 from app.services.order_service import OrderService, ParticipantService
 from app.services.user_service import AddressService, SubscriptionService
 from app.models import Order
 from app.utils.validators import extract_order_id, extract_usernames, is_valid_status
+from app.utils.helpers import build_participants_text
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,10 @@ async def admin_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop(key, None)
     
     await reply_animated(update, context, "🛠 Открываю админ-панель…", reply_markup=ADMIN_MENU_KB)
+
+def _is_text(text: str, group: set[str]) -> bool:
+    """Проверка соответствия текста группе алиасов"""
+    return text.strip().lower() in {x.lower() for x in group}
 
 async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка текстовых сообщений админа"""
@@ -73,10 +78,23 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Обработка режимов админки
-    await _handle_admin_modes(update, context, raw_text, text)
+    # Заглушки для остальных функций
+    if _is_text(text, ADMIN_MENU_ALIASES["admin_send"]):
+        await reply_animated(update, context, "📣 Раздел «Рассылка» в разработке")
+        return
 
-async def _handle_admin_modes(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_text: str, text: str):
+    if _is_text(text, ADMIN_MENU_ALIASES["admin_addrs"]):
+        await reply_animated(update, context, "📇 Раздел «Адреса» в разработке")
+        return
+
+    if _is_text(text, ADMIN_MENU_ALIASES["admin_reports"]):
+        await reply_animated(update, context, "📊 Раздел «Отчёты» в разработке")
+        return
+
+    # Обработка режимов админки
+    await _handle_admin_modes(update, context, raw_text)
+
+async def _handle_admin_modes(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_text: str):
     """Обработка различных режимов админки"""
     mode = context.user_data.get("adm_mode")
     
@@ -95,7 +113,7 @@ async def _handle_admin_modes(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif mode == "mass_update_status_ids":
         await _handle_mass_update_status(update, context, raw_text)
     else:
-        # Если режим не распознан, показываем админ-меню
+        logger.warning(f"Неизвестный режим админа: {mode}")
         await reply_animated(update, context, "Вы в админ-панели. Выберите действие:", reply_markup=ADMIN_MENU_KB)
 
 async def _handle_add_order_id(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_text: str):
@@ -119,14 +137,12 @@ async def _handle_add_order_country(update: Update, context: ContextTypes.DEFAUL
     
     context.user_data["adm_buf"]["country"] = country
     context.user_data["adm_mode"] = "add_order_status"
-    from app.utils.keyboards import status_keyboard
     await reply_animated(update, context, "Выбери стартовый статус кнопкой ниже или напиши точный:", 
                         reply_markup=status_keyboard(2))
 
 async def _handle_add_order_status(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_text: str):
     """Обработка ввода статуса при добавлении заказа"""
     if not is_valid_status(raw_text, STATUSES):
-        from app.utils.keyboards import status_keyboard
         await reply_animated(update, context, "Выбери статус кнопкой ниже или напиши точный:", 
                             reply_markup=status_keyboard(2))
         return
@@ -163,6 +179,7 @@ async def _handle_add_order_note(update: Update, context: ContextTypes.DEFAULT_T
             await reply_animated(update, context, "❌ Ошибка при добавлении заказа")
             
     except Exception as e:
+        logger.error(f"Ошибка добавления заказа: {e}")
         await reply_animated(update, context, f"❌ Ошибка: {e}")
     finally:
         # Очищаем режим
@@ -193,14 +210,10 @@ async def _handle_find_order(update: Update, context: ContextTypes.DEFAULT_TYPE,
     if order.updated_at:
         lines.append(f"*updated_at:* {order.updated_at}")
 
-    from app.utils.keyboards import order_card_kb
     await reply_markdown_animated(update, context, "\n".join(lines), reply_markup=order_card_kb(order.order_id))
 
     # Показываем участников
     participants = await ParticipantService.get_participants(order.order_id)
-    from app.utils.helpers import build_participants_text
-    from app.utils.keyboards import build_participants_kb
-    
     part_text = build_participants_text(order.order_id, participants, 0, 8)
     kb = build_participants_kb(order.order_id, participants, 0, 8)
     
@@ -242,12 +255,13 @@ async def _handle_mass_update_status(update: Update, context: ContextTypes.DEFAU
                 # Уведомляем подписчиков
                 try:
                     await notify_subscribers(context.application, oid, new_status)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Ошибка уведомления подписчиков {oid}: {e}")
             else:
                 fail += 1
                 failed_ids.append(oid)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Ошибка обновления статуса {oid}: {e}")
             fail += 1
             failed_ids.append(oid)
 
@@ -284,11 +298,7 @@ async def notify_subscribers(application, order_id: str, new_status: str):
             )
             await SubscriptionService.set_last_sent_status(sub.user_id, order_id, new_status)
         except Exception as e:
-            logger.warning(f"Failed to notify {sub.user_id}: {e}")
-
-def _is_text(text: str, group: set[str]) -> bool:
-    """Проверка соответствия текста группе алиасов"""
-    return text.strip().lower() in {x.lower() for x in group}
+            logger.warning(f"Не удалось уведомить {sub.user_id}: {e}")
 
 def register(application):
     """Регистрация админских хэндлеров"""
@@ -297,3 +307,4 @@ def register(application):
         filters.TEXT & (~filters.COMMAND) & filters.User(ADMIN_IDS), 
         handle_admin_text
     ))
+    logger.info("✅ Админские хэндлеры зарегистрированы")
