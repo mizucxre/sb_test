@@ -6,7 +6,7 @@ from app.config import ADMIN_IDS
 from app.utils.helpers import reply_animated, reply_markdown_animated, _is_admin
 from app.utils.keyboards import MAIN_KB
 from app.services.user_service import AddressService, SubscriptionService
-from app.services.order_service import OrderService
+from app.services.order_service import OrderService, ParticipantService  # Добавьте этот импорт
 from app.utils.validators import extract_order_id, extract_usernames, normalize_phone, validate_postcode
 
 logger = logging.getLogger(__name__)
