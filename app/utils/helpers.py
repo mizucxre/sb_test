@@ -1,7 +1,8 @@
 import asyncio
 import logging
 from typing import List, Tuple
-from telegram import Update, ChatAction
+from telegram import Update
+from telegram.constants import ChatAction  # Импорт из constants!
 from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
@@ -35,8 +36,6 @@ def _slice_page(items: List, page: int, per_page: int) -> Tuple[List, int]:
 
 def build_participants_text(order_id: str, participants: List, page: int, per_page: int = 8) -> str:
     """Текст списка участников с пагинацией"""
-    from app.utils.helpers import _slice_page
-    
     slice_, total_pages = _slice_page(participants, page, per_page)
     lines = [f"*Разбор* `{order_id}` — участники ({page+1}/{total_pages}):"]
     
