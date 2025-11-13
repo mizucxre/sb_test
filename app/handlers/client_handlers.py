@@ -1,13 +1,14 @@
 import logging
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
 
 from app.config import ADMIN_IDS
 from app.utils.helpers import reply_animated, reply_markdown_animated, _is_admin
 from app.utils.keyboards import MAIN_KB
 from app.services.user_service import AddressService, SubscriptionService
-from app.services.order_service import OrderService, ParticipantService  # Добавьте этот импорт
+from app.services.order_service import OrderService, ParticipantService
 from app.utils.validators import extract_order_id, extract_usernames, normalize_phone, validate_postcode
+from app.models import Address
 
 logger = logging.getLogger(__name__)
 
@@ -42,13 +43,17 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /admin — админ-панель (для админов)"
     )
 
+def _is_text(text: str, group: set[str]) -> bool:
+    """Проверка соответствия текста группе алиасов"""
+    return text.strip().lower() in {x.lower() for x in group}
+
 async def handle_client_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка текстовых сообщений от пользователей"""
     user_id = update.effective_user.id
     raw_text = (update.message.text or "").strip()
     text = raw_text.lower()
     
-    logger.info(f"📨 Received message from {user_id}: {raw_text}")
+    logger.info(f"📨 Получено сообщение от {user_id}: {raw_text}")
 
     # Проверка на админа - если админ, не обрабатываем здесь
     if _is_admin(user_id, ADMIN_IDS):
@@ -119,6 +124,7 @@ async def handle_client_text(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
 
     # Если ничего не подошло
+    logger.info(f"❓ Не распознано сообщение от {user_id}: {raw_text}")
     await reply_animated(
         update, context,
         "Хмм, не понял. Выберите кнопку ниже или введите номер заказа. Если что — «Отмена».",
@@ -141,8 +147,6 @@ async def query_status(update: Update, context: ContextTypes.DEFAULT_TYPE, order
         txt += f"\nСтрана/источник: {origin}"
 
     # Проверка подписки
-    from app.utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
-    
     is_subscribed = await SubscriptionService.is_subscribed(update.effective_user.id, order_id)
     if is_subscribed:
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔕 Отписаться", callback_data=f"unsub:{order_id}")]])
@@ -158,7 +162,6 @@ async def show_addresses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     addrs = await AddressService.list_addresses(user_id)
     
     if not addrs:
-        from app.utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
         await reply_animated(
             update, context,
             "У вас пока нет адреса. Добавим?",
@@ -170,7 +173,6 @@ async def show_addresses(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for a in addrs:
         lines.append(f"• {a.full_name} — {a.phone}\n{a.city}, {a.address}, {a.postcode}")
     
-    from app.utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
     kb = InlineKeyboardMarkup([
         [InlineKeyboardButton("✏️ Изменить адрес", callback_data="addr:add")],
         [InlineKeyboardButton("🗑 Удалить адрес", callback_data="addr:del")],
@@ -182,7 +184,6 @@ async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Сохранить адрес пользователя"""
     u = update.effective_user
     
-    from app.models import Address
     address = Address(
         user_id=u.id,
         username=u.username or "",
@@ -203,7 +204,7 @@ async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 for order_id in orders:
                     await SubscriptionService.subscribe(u.id, order_id)
             except Exception as e:
-                logger.warning(f"Auto-subscribe failed: {e}")
+                logger.warning(f"Автоподписка не удалась: {e}")
 
         context.user_data.clear()
         msg = (
@@ -227,8 +228,6 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await reply_animated(update, context, "Пока нет подписок. Отследите заказ и нажмите «Подписаться».")
         return
     
-    from app.utils.keyboards import InlineKeyboardMarkup, InlineKeyboardButton
-    
     txt_lines = []
     kb_rows = []
     
@@ -241,12 +240,9 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await reply_animated(update, context, "🔔 Ваши подписки:\n" + "\n".join(txt_lines), 
                         reply_markup=InlineKeyboardMarkup(kb_rows))
 
-def _is_text(text: str, group: set[str]) -> bool:
-    """Проверка соответствия текста группе алиасов"""
-    return text.strip().lower() in {x.lower() for x in group}
-
 def register(application):
     """Регистрация клиентских хэндлеров"""
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_cmd))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_client_text))
+    logger.info("✅ Клиентские хэндлеры зарегистрированы")
