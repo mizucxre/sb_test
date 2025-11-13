@@ -11,8 +11,11 @@ RUN apt-get update && apt-get install -y \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копирование приложения
+# Копирование приложения (исключая старый main.py)
 COPY app ./app
+
+# УДАЛЯЕМ старый main.py если он существует
+RUN rm -f /app/app/main.py
 
 # Переменные окружения
 ENV PORT=8080
