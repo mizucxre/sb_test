@@ -1,221 +1,154 @@
 {% extends "base.html" %}
 
-{% block page_title %}Настройки системы{% endblock %}
+{% block page_title %}Настройки{% endblock %}
 
 {% block content %}
-<div x-data="settings()" class="max-w-4xl mx-auto space-y-6">
-    <!-- General Settings -->
+<div class="max-w-4xl mx-auto space-y-6">
+    <!-- System Settings -->
     <div class="glass-effect rounded-2xl p-6">
-        <h3 class="text-lg font-semibold mb-6">Основные настройки</h3>
-        
-        <div class="space-y-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <h3 class="text-lg font-semibold mb-4">Системные настройки</h3>
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Название бота</label>
-                    <input type="text" x-model="settings.bot_name"
-                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Статусы заказов</label>
+                    <div class="bg-white/5 rounded-2xl p-4">
+                        <ul class="space-y-2">
+                            {% for status in statuses %}
+                            <li class="flex items-center justify-between py-2 border-b border-white/10 last:border-0">
+                                <span class="text-gray-300">{{ status }}</span>
+                                <button class="text-red-400 hover:text-red-300 p-1">
+                                    <i class="fas fa-trash"></i>
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                    </div>
                 </div>
                 
                 <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Времяzone</label>
-                    <select x-model="settings.timezone"
-                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
-                        <option value="Europe/Moscow">Москва (UTC+3)</option>
-                        <option value="Asia/Almaty">Алматы (UTC+6)</option>
-                    </select>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Добавить статус</label>
+                    <div class="flex space-x-2">
+                        <input type="text" placeholder="Новый статус..." 
+                               class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <button class="btn-primary px-4 py-2 rounded-2xl">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
                 </div>
-            </div>
-            
-            <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Описание бота</label>
-                <textarea x-model="settings.bot_description"
-                          class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
-                          rows="3"></textarea>
             </div>
         </div>
     </div>
 
-    <!-- Status Management -->
+    <!-- Bot Settings -->
     <div class="glass-effect rounded-2xl p-6">
-        <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold">Управление статусами заказов</h3>
-            <button @click="addStatus()" class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
-                <i class="fas fa-plus mr-2"></i>Добавить статус
-            </button>
-        </div>
-        
-        <div class="space-y-3">
-            <template x-for="(status, index) in settings.statuses" :key="index">
-                <div class="flex items-center space-x-4 p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-200">
-                    <input type="text" x-model="settings.statuses[index]"
-                           class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
-                    <button @click="removeStatus(index)" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            </template>
-        </div>
-    </div>
-
-    <!-- Notification Settings -->
-    <div class="glass-effect rounded-2xl p-6">
-        <h3 class="text-lg font-semibold mb-6">Настройки уведомлений</h3>
-        
+        <h3 class="text-lg font-semibold mb-4">Настройки бота</h3>
         <div class="space-y-4">
-            <label class="flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-200 cursor-pointer">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <p class="font-medium">Уведомления о новых заказах</p>
-                    <p class="text-sm text-gray-400">Отправлять уведомления при создании новых заказов</p>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Токен бота</label>
+                    <input type="password" value="••••••••••••••••••••••" 
+                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                 </div>
-                <input type="checkbox" x-model="settings.notifications.new_orders" class="rounded text-blue-500">
-            </label>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Webhook URL</label>
+                    <input type="text" readonly value="https://your-domain.com/telegram" 
+                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-gray-400">
+                </div>
+            </div>
             
-            <label class="flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-200 cursor-pointer">
+            <div class="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
                 <div>
-                    <p class="font-medium">Уведомления об изменении статусов</p>
-                    <p class="text-sm text-gray-400">Отправлять уведомления при изменении статусов заказов</p>
+                    <p class="font-medium">Автоматические уведомления</p>
+                    <p class="text-sm text-gray-400">Отправлять уведомления при изменении статуса</p>
                 </div>
-                <input type="checkbox" x-model="settings.notifications.status_changes" class="rounded text-blue-500">
-            </label>
+                <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" class="sr-only peer" checked>
+                    <div class="w-11 h-6 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <!-- Database Settings -->
+    <div class="glass-effect rounded-2xl p-6">
+        <h3 class="text-lg font-semibold mb-4">База данных</h3>
+        <div class="space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="text-center p-4 bg-white/5 rounded-2xl">
+                    <p class="text-2xl font-bold text-blue-400" id="total-orders">0</p>
+                    <p class="text-sm text-gray-400">Всего заказов</p>
+                </div>
+                
+                <div class="text-center p-4 bg-white/5 rounded-2xl">
+                    <p class="text-2xl font-bold text-green-400" id="total-participants">0</p>
+                    <p class="text-sm text-gray-400">Участников</p>
+                </div>
+                
+                <div class="text-center p-4 bg-white/5 rounded-2xl">
+                    <p class="text-2xl font-bold text-purple-400" id="total-subscriptions">0</p>
+                    <p class="text-sm text-gray-400">Подписок</p>
+                </div>
+            </div>
             
-            <label class="flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-200 cursor-pointer">
-                <div>
-                    <p class="font-medium">Ежедневные отчеты</p>
-                    <p class="text-sm text-gray-400">Отправлять ежедневные отчеты о деятельности</p>
-                </div>
-                <input type="checkbox" x-model="settings.notifications.daily_reports" class="rounded text-blue-500">
-            </label>
+            <div class="flex space-x-4">
+                <button class="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl transition-all duration-200">
+                    <i class="fas fa-download mr-2"></i>Экспорт данных
+                </button>
+                
+                <button class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 border border-red-500/20 hover:border-red-500/30 rounded-2xl transition-all duration-200 text-red-400">
+                    <i class="fas fa-trash mr-2"></i>Очистить кэш
+                </button>
+            </div>
         </div>
     </div>
 
     <!-- Danger Zone -->
     <div class="glass-effect rounded-2xl p-6 border border-red-500/20">
         <h3 class="text-lg font-semibold mb-4 text-red-400">Опасная зона</h3>
-        
         <div class="space-y-4">
-            <div class="flex items-center justify-between p-4 rounded-2xl bg-red-500/10">
+            <p class="text-gray-400 text-sm">Эти действия нельзя отменить. Будьте осторожны.</p>
+            
+            <div class="flex items-center justify-between p-4 bg-red-500/10 rounded-2xl">
                 <div>
-                    <p class="font-medium text-red-300">Очистить кэш</p>
-                    <p class="text-sm text-red-400/80">Удалить все кэшированные данные</p>
+                    <p class="font-medium text-red-400">Удалить все данные</p>
+                    <p class="text-sm text-red-300">Полностью очистить базу данных</p>
                 </div>
-                <button @click="clearCache()" class="px-4 py-2 rounded-2xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 hover:border-red-500/50 transition-all duration-200">
-                    Очистить
+                <button class="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-2xl transition-all duration-200">
+                    Удалить
                 </button>
             </div>
             
-            <div class="flex items-center justify-between p-4 rounded-2xl bg-red-500/10">
+            <div class="flex items-center justify-between p-4 bg-red-500/10 rounded-2xl">
                 <div>
-                    <p class="font-medium text-red-300">Экспорт всех данных</p>
-                    <p class="text-sm text-red-400/80">Скачать полную резервную копию базы данных</p>
+                    <p class="font-medium text-red-400">Пересоздать базу данных</p>
+                    <p class="text-sm text-red-300">Удалить и создать все таблицы заново</p>
                 </div>
-                <button @click="exportData()" class="px-4 py-2 rounded-2xl bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 hover:border-red-500/50 transition-all duration-200">
-                    Экспорт
-                </button>
-            </div>
-            
-            <div class="flex items-center justify-between p-4 rounded-2xl bg-red-500/10">
-                <div>
-                    <p class="font-medium text-red-300">Сброс настроек</p>
-                    <p class="text-sm text-red-400/80">Вернуть все настройки к значениям по умолчанию</p>
-                </div>
-                <button @click="resetSettings()" class="px-4 py-2 rounded-2xl bg-red-500 hover:bg-red-600 text-white transition-all duration-200">
-                    Сбросить
+                <button class="px-4 py-2 bg-red-500 hover:bg-red-600 rounded-2xl transition-all duration-200">
+                    Пересоздать
                 </button>
             </div>
         </div>
-    </div>
-
-    <!-- Save Actions -->
-    <div class="flex items-center justify-end space-x-4">
-        <button @click="resetForm()" class="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
-            Отменить изменения
-        </button>
-        <button @click="saveSettings()" class="btn-primary px-6 py-3 rounded-2xl font-medium">
-            <i class="fas fa-save mr-2"></i>Сохранить настройки
-        </button>
     </div>
 </div>
 
 <script>
 document.addEventListener('alpine:init', () => {
-    Alpine.data('settings', () => ({
-        settings: {
-            bot_name: 'SEABLUU Helper',
-            bot_description: 'Telegram бот для управления разборами SEABLUU',
-            timezone: 'Europe/Moscow',
-            statuses: JSON.parse(JSON.stringify({{ statuses|tojson }})),
-            notifications: {
-                new_orders: true,
-                status_changes: true,
-                daily_reports: false
-            }
-        },
-        
-        init() {
-            // Загрузка текущих настроек
-            this.loadSettings();
-        },
-        
-        async loadSettings() {
-            try {
-                // В реальном приложении здесь будет запрос к API
-                // const response = await fetch('/admin/api/settings');
-                // this.settings = await response.json();
-            } catch (error) {
-                console.error('Error loading settings:', error);
-            }
-        },
-        
-        addStatus() {
-            this.settings.statuses.push('Новый статус');
-        },
-        
-        removeStatus(index) {
-            if (this.settings.statuses.length > 1) {
-                this.settings.statuses.splice(index, 1);
-            } else {
-                alert('Должен остаться хотя бы один статус');
-            }
-        },
-        
-        async saveSettings() {
-            try {
-                // В реальном приложении здесь будет запрос к API
-                // await fetch('/admin/api/settings', {
-                //     method: 'POST',
-                //     headers: {'Content-Type': 'application/json'},
-                //     body: JSON.stringify(this.settings)
-                // });
-                
-                alert('Настройки успешно сохранены!');
-            } catch (error) {
-                console.error('Error saving settings:', error);
-                alert('Ошибка при сохранении настроек');
-            }
-        },
-        
-        resetForm() {
-            if (confirm('Отменить все изменения?')) {
-                this.loadSettings();
-            }
-        },
-        
-        clearCache() {
-            if (confirm('Очистить весь кэш? Это действие нельзя отменить.')) {
-                alert('Кэш очищен');
-            }
-        },
-        
-        exportData() {
-            alert('Экспорт данных начат');
-        },
-        
-        resetSettings() {
-            if (confirm('ВЕРНУТЬ ВСЕ НАСТРОЙКИ К ЗНАЧЕНИЯМ ПО УМОЛЧАНИЮ? Это действие нельзя отменить.')) {
-                alert('Настройки сброшены');
-            }
+    // Загрузка статистики для страницы настроек
+    async function loadStats() {
+        try {
+            const response = await fetch('/admin/api/stats');
+            const data = await response.json();
+            
+            document.getElementById('total-orders').textContent = data.total_orders || 0;
+            document.getElementById('total-participants').textContent = data.total_participants || 0;
+            document.getElementById('total-subscriptions').textContent = data.total_subscriptions || 0;
+        } catch (error) {
+            console.error('Error loading stats:', error);
         }
-    }));
+    }
+    
+    loadStats();
 });
 </script>
 {% endblock %}
