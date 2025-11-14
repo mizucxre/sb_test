@@ -11,11 +11,11 @@ from app.database import db
 from app.services.order_service import OrderService, ParticipantService
 from app.services.user_service import AddressService, SubscriptionService
 from app.services.admin_service import AdminService
-from app.services.admin_chat_service import AdminChatService  # Исправленный импорт
+from app.services.admin_chat_service import AdminChatService
 from app.models import Order, AdminUserCreate, AdminUserUpdate, AdminChatMessageCreate
 from app.config import STATUSES
 from app.utils.security import verify_password, create_access_token, verify_token, generate_avatar_url
-from app.utils.session import get_current_admin, require_permission, require_super_admin
+from app.utils.session import get_current_admin  # Убираем require_super_admin
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +37,13 @@ def serialize_model(model):
         except AttributeError:
             # Если не Pydantic модель, используем __dict__
             return model.__dict__
+
+# Вспомогательная функция для проверки супер-админа
+def check_super_admin(current_admin: dict):
+    """Проверка что пользователь супер-админ"""
+    if current_admin.get("role") != "super_admin":
+        raise HTTPException(status_code=403, detail="Super admin access required")
+    return current_admin
 
 # Страница входа
 @app.get("/login", response_class=HTMLResponse)
@@ -172,8 +179,10 @@ async def settings_page(request: Request, current_admin: dict = Depends(get_curr
 
 # Новые страницы для управления администраторами
 @app.get("/admin-users", response_class=HTMLResponse)
-@require_super_admin
 async def admin_users_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    # Проверяем права супер-админа вручную
+    check_super_admin(current_admin)
+    
     return templates.TemplateResponse("admin_users.html", {
         "request": request,
         "current_admin": current_admin,
@@ -197,16 +206,11 @@ async def profile_page(request: Request, current_admin: dict = Depends(get_curre
     })
 
 # API endpoints для администраторов
-# В импортах оставляем как есть
-from app.utils.session import get_current_admin, require_permission, require_super_admin
-
-# ... остальной код без изменений до API endpoints ...
-
-# API endpoints для администраторов - ИСПРАВЛЕННЫЕ
 @app.get("/api/admin/users")
-async def get_admin_users(current_admin: dict = Depends(require_super_admin())):  # Добавлены скобки
+async def get_admin_users(current_admin: dict = Depends(get_current_admin)):
     """Получение списка администраторов"""
     try:
+        check_super_admin(current_admin)
         users = await AdminService.get_all_users()
         return {"users": users}
     except Exception as e:
@@ -214,12 +218,10 @@ async def get_admin_users(current_admin: dict = Depends(require_super_admin())):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/admin/users")
-async def create_admin_user(
-    request: Request, 
-    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
-):
+async def create_admin_user(request: Request, current_admin: dict = Depends(get_current_admin)):
     """Создание нового администратора"""
     try:
+        check_super_admin(current_admin)
         data = await request.json()
         user_data = AdminUserCreate(**data)
         
@@ -238,13 +240,10 @@ async def create_admin_user(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.put("/api/admin/users/{user_id}")
-async def update_admin_user(
-    user_id: int, 
-    request: Request, 
-    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
-):
+async def update_admin_user(user_id: int, request: Request, current_admin: dict = Depends(get_current_admin)):
     """Обновление администратора"""
     try:
+        check_super_admin(current_admin)
         data = await request.json()
         user_data = AdminUserUpdate(**data)
         
@@ -261,12 +260,10 @@ async def update_admin_user(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.delete("/api/admin/users/{user_id}")
-async def delete_admin_user(
-    user_id: int, 
-    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
-):
+async def delete_admin_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
     """Удаление администратора"""
     try:
+        check_super_admin(current_admin)
         if user_id == current_admin["user_id"]:
             raise HTTPException(400, "Нельзя удалить самого себя")
         
@@ -281,8 +278,6 @@ async def delete_admin_user(
     except Exception as e:
         logger.error(f"Error deleting admin user: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
-
-# ... остальной код без изменений ...
 
 # API для чата администраторов
 @app.get("/api/admin/chat/messages")
@@ -361,7 +356,7 @@ async def change_password(request: Request, current_admin: dict = Depends(get_cu
         logger.error(f"Error changing password: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
-# ... остальной код остается без изменений ...
+# ... остальной код без изменений (существующие API endpoints для заказов, участников и т.д.) ...
 # Существующие API endpoints (остаются без изменений, но добавляем проверку авторизации)
 @app.get("/api/stats")
 async def get_stats(current_admin: dict = Depends(get_current_admin)):
