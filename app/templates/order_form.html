@@ -57,7 +57,7 @@
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус *</label>
                 <select x-model="formData.status" required
-                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                        class="styled-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Выберите статус...</option>
                     {% for status in statuses %}
                     <option value="{{ status }}">{{ status }}</option>
@@ -132,6 +132,9 @@ document.addEventListener('alpine:init', () => {
         async loadOrder(orderId) {
             try {
                 const response = await fetch(`/admin/api/orders/${orderId}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 
                 if (data.order) {
@@ -154,11 +157,8 @@ document.addEventListener('alpine:init', () => {
             this.hideMessages();
             
             try {
-                const url = this.isEdit() ? 
-                    `/admin/api/orders/${this.formData.order_id}` : 
-                    '/admin/api/orders/create';
-                
-                const method = this.isEdit() ? 'PUT' : 'POST';
+                const url = '/admin/api/orders/create';
+                const method = 'POST';
                 
                 const response = await fetch(url, {
                     method: method,
@@ -171,12 +171,12 @@ document.addEventListener('alpine:init', () => {
                 const data = await response.json();
                 
                 if (response.ok) {
-                    this.showSuccess(data.message || 'Заказ успешно сохранен');
+                    this.showSuccess(data.message || 'Заказ успешно создан');
                     setTimeout(() => {
                         window.location.href = '/admin/orders';
                     }, 2000);
                 } else {
-                    this.showError(data.detail || 'Ошибка при сохранении заказа');
+                    this.showError(data.detail || 'Ошибка при создании заказа');
                 }
                 
             } catch (error) {
@@ -185,10 +185,6 @@ document.addEventListener('alpine:init', () => {
             } finally {
                 this.loading = false;
             }
-        },
-        
-        isEdit() {
-            return new URLSearchParams(window.location.search).has('edit');
         },
         
         showSuccess(message) {
