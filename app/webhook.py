@@ -8,12 +8,11 @@ from telegram.ext import Application, ApplicationBuilder
 from app.database import db
 from app.handlers import register_handlers
 from app.config import BOT_TOKEN, PUBLIC_URL
-from app.web_admin import app as admin_app  # Импортируем веб-админку
+from app.web_admin import app as admin_app
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
-# Основное приложение
 app = FastAPI()
 
 # Подключаем веб-админку
