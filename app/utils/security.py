@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
-import jwt
+from jose import JWTError, jwt  # Исправленный импорт
 from passlib.context import CryptContext
 
 # Конфигурация для хэширования паролей
@@ -43,7 +43,7 @@ def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except jwt.PyJWTError:
+    except JWTError:  # Исправлено с PyJWTError на JWTError
         return None
 
 def generate_avatar_url(username: str, email: Optional[str] = None, size: int = 64) -> str:
