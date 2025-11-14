@@ -501,20 +501,51 @@ async def broadcast_all(
 ):
     """Рассылка сообщения всем пользователям"""
     try:
-        from app.services.broadcast_service import BroadcastService
+        body = await request.body()
+        if not body:
+            raise HTTPException(400, "Empty request body")
         
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}")
+            raise HTTPException(400, "Invalid JSON format")
+            
         message = data.get('message', '')
         
         if not message:
             raise HTTPException(400, "Сообщение не может быть пустым")
         
-        result = await BroadcastService.broadcast_to_all_users(message)
+        # Получаем всех пользователей с адресами
+        async with db.pool.acquire() as conn:
+            rows = await conn.fetch("SELECT DISTINCT user_id FROM addresses")
+            user_ids = [row['user_id'] for row in rows]
+        
+        sent_count = 0
+        failed_count = 0
+        
+        # Отправляем сообщения через Telegram бота
+        for user_id in user_ids:
+            try:
+                from app.main import bot
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Error sending message to {user_id}: {e}")
+                failed_count += 1
         
         return {
             "success": True, 
             "message": "Рассылка завершена",
-            "result": result
+            "result": {
+                "sent": sent_count,
+                "failed": failed_count,
+                "total": len(user_ids)
+            }
         }
         
     except HTTPException:
