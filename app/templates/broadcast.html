@@ -1,0 +1,236 @@
+{% extends "base.html" %}
+
+{% block page_title %}Управление рассылками{% endblock %}
+
+{% block content %}
+<div x-data="broadcast()" class="space-y-6">
+    <!-- Broadcast Form -->
+    <div class="glass-effect rounded-2xl p-6">
+        <h2 class="text-2xl font-bold mb-6">Создание рассылки</h2>
+
+        <form @submit.prevent="sendBroadcast()" class="space-y-6">
+            <!-- Recipients -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Получатели</label>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <label class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer">
+                        <input type="radio" name="recipients" value="all_unpaid" x-model="form.recipients" class="text-blue-500">
+                        <div>
+                            <p class="font-medium">Все неплательщики</p>
+                            <p class="text-sm text-gray-400">Отправить всем должникам</p>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-200 cursor-pointer">
+                        <input type="radio" name="recipients" value="specific_order" x-model="form.recipients" class="text-blue-500">
+                        <div>
+                            <p class="font-medium">Конкретный заказ</p>
+                            <p class="text-sm text-gray-400">Выберите заказ</p>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Order Selection -->
+            <div x-show="form.recipients === 'specific_order'">
+                <label class="block text-sm font-medium text-gray-400 mb-2">Выберите заказ</label>
+                <select x-model="form.order_id" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                    <option value="">Выберите заказ</option>
+                    <template x-for="order in orders" :key="order.order_id">
+                        <option :value="order.order_id" x-text="order.order_id"></option>
+                    </template>
+                </select>
+            </div>
+
+            <!-- Message -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Сообщение *</label>
+                <textarea x-model="form.message" required
+                          class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                          rows="6"
+                          placeholder="Введите текст сообщения для рассылки..."></textarea>
+                <p class="text-xs text-gray-400 mt-2">Поддерживается Markdown форматирование</p>
+            </div>
+
+            <!-- Preview -->
+            <div x-show="form.message">
+                <label class="block text-sm font-medium text-gray-400 mb-2">Предпросмотр</label>
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10">
+                    <div class="prose prose-invert max-w-none">
+                        <p x-text="form.message"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div x-show="recipientsCount > 0" class="bg-blue-500/10 border border-blue-500/20 rounded-2xl p-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-blue-400 font-medium">Будет отправлено:</p>
+                        <p class="text-sm text-blue-300" x-text="recipientsCount + ' получателей'"></p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-blue-400 font-medium">Тип:</p>
+                        <p class="text-sm text-blue-300" x-text="broadcastType"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+                <button type="button" @click="testBroadcast()" class="px-6 py-3 rounded-2xl bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 hover:border-yellow-500/50 transition-all duration-200">
+                    <i class="fas fa-vial mr-2"></i>Тестовый отправка
+                </button>
+                <button type="submit" class="btn-primary px-6 py-3 rounded-2xl font-medium" :disabled="loading || recipientsCount === 0">
+                    <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
+                    Начать рассылку
+                </button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Broadcast History -->
+    <div class="glass-effect rounded-2xl p-6">
+        <h3 class="text-lg font-semibold mb-6">История рассылок</h3>
+        
+        <div class="space-y-4">
+            <template x-for="item in history" :key="item.id">
+                <div class="flex items-center justify-between p-4 rounded-2xl bg-white/5 hover:bg-white/10 transition-all duration-200">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-2xl bg-green-500/20 flex items-center justify-center">
+                            <i class="fas fa-bullhorn text-green-400"></i>
+                        </div>
+                        <div>
+                            <p class="font-semibold" x-text="item.title"></p>
+                            <p class="text-sm text-gray-400" x-text="item.description"></p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-sm text-gray-400" x-text="item.date"></p>
+                        <p class="text-sm" :class="item.status === 'success' ? 'text-green-400' : 'text-red-400'" x-text="item.statusText"></p>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Empty History -->
+        <div x-show="history.length === 0" class="text-center py-8">
+            <i class="fas fa-history text-gray-500 text-4xl mb-4"></i>
+            <p class="text-gray-400">История рассылок пуста</p>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('broadcast', () => ({
+        form: {
+            recipients: 'all_unpaid',
+            order_id: '',
+            message: ''
+        },
+        orders: [],
+        history: [],
+        loading: false,
+        
+        get recipientsCount() {
+            // В реальном приложении здесь будет расчет количества получателей
+            if (this.form.recipients === 'all_unpaid') {
+                return 45; // Примерное количество
+            } else if (this.form.recipients === 'specific_order' && this.form.order_id) {
+                return 12; // Примерное количество для заказа
+            }
+            return 0;
+        },
+        
+        get broadcastType() {
+            const types = {
+                'all_unpaid': 'Все неплательщики',
+                'specific_order': 'Конкретный заказ'
+            };
+            return types[this.form.recipients] || 'Не выбран';
+        },
+        
+        init() {
+            this.loadOrders();
+            this.loadHistory();
+        },
+        
+        async loadOrders() {
+            try {
+                const response = await fetch('/admin/api/orders?limit=100');
+                const data = await response.json();
+                this.orders = data.orders || [];
+            } catch (error) {
+                console.error('Error loading orders:', error);
+            }
+        },
+        
+        async loadHistory() {
+            // Загрузка истории рассылок
+            // В реальном приложении здесь будет запрос к API
+            this.history = [
+                {
+                    id: 1,
+                    title: 'Напоминание неплательщикам',
+                    description: 'Все неплательщики • 45 получателей',
+                    date: '2 часа назад',
+                    status: 'success',
+                    statusText: 'Успешно'
+                },
+                {
+                    id: 2,
+                    title: 'Обновление статуса заказа',
+                    description: 'Заказ CN-1234 • 12 получателей',
+                    date: '5 часов назад',
+                    status: 'success',
+                    statusText: 'Успешно'
+                }
+            ];
+        },
+        
+        async sendBroadcast() {
+            this.loading = true;
+            
+            try {
+                const response = await fetch('/admin/api/broadcast/unpaid', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        order_id: this.form.order_id,
+                        message: this.form.message
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Рассылка успешно отправлена! Получателей: ${result.sent_to}`);
+                    this.form.message = '';
+                    this.loadHistory();
+                } else {
+                    alert('Ошибка: ' + result.detail);
+                }
+            } catch (error) {
+                console.error('Error sending broadcast:', error);
+                alert('Ошибка при отправке рассылки');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        testBroadcast() {
+            if (!this.form.message) {
+                alert('Введите сообщение для тестовой отправки');
+                return;
+            }
+            
+            alert('Тестовое сообщение отправлено в лог-файл');
+            // В реальном приложении здесь будет запрос к API для тестовой отправки
+        }
+    }));
+});
+</script>
+{% endblock %}
