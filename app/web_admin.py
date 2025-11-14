@@ -468,3 +468,52 @@ async def delete_order_api(
     except Exception as e:
         logger.error(f"Error deleting order: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.put("/api/participants/{order_id}/{username}/paid")
+async def update_participant_paid(
+    order_id: str,
+    username: str,
+    paid: bool = Form(...),
+    username_auth: str = Depends(authenticate_admin)
+):
+    """Изменение статуса оплаты участника"""
+    try:
+        success = await ParticipantService.toggle_participant_paid(order_id, username)
+        if not success:
+            raise HTTPException(400, "Не удалось обновить статус оплаты")
+        
+        return {"success": True, "message": "Статус оплаты обновлен"}
+        
+    except Exception as e:
+        logger.error(f"Error updating participant payment: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.get("/api/participants/stats")
+async def get_participants_stats(username: str = Depends(authenticate_admin)):
+    """Статистика по участникам"""
+    try:
+        # Общее количество участников
+        all_participants = []
+        orders = await OrderService.list_recent_orders(1000)
+        
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            all_participants.extend(participants)
+        
+        total_participants = len(set(p.username for p in all_participants))
+        paid_participants = len([p for p in all_participants if p.paid])
+        unpaid_participants = total_participants - paid_participants
+        
+        # Неплательщики по заказам
+        unpaid_grouped = await ParticipantService.get_all_unpaid_grouped()
+        
+        return {
+            "total_participants": total_participants,
+            "paid_participants": paid_participants,
+            "unpaid_participants": unpaid_participants,
+            "unpaid_by_order": unpaid_grouped
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting participants stats: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
