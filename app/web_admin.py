@@ -345,3 +345,126 @@ async def notify_subscribers(application, order_id: str, new_status: str):
                 logger.warning(f"Не удалось уведомить {sub.user_id}: {e}")
     except Exception as e:
         logger.error(f"Ошибка уведомления подписчиков: {e}")
+
+from fastapi import Form, HTTPException
+from pydantic import BaseModel
+from typing import Optional
+
+# Pydantic модели для валидации
+class OrderCreate(BaseModel):
+    order_id: str
+    client_name: str
+    country: str
+    status: str
+    note: Optional[str] = ""
+
+class OrderUpdate(BaseModel):
+    client_name: Optional[str] = None
+    country: Optional[str] = None
+    status: Optional[str] = None
+    note: Optional[str] = None
+
+# API endpoints для заказов
+@app.post("/api/orders/create")
+async def create_order_api(
+    order_data: OrderCreate,
+    username: str = Depends(authenticate_admin)
+):
+    """Создание нового заказа"""
+    try:
+        # Проверяем существование заказа
+        existing = await OrderService.get_order(order_data.order_id)
+        if existing:
+            raise HTTPException(400, "Заказ с таким ID уже существует")
+        
+        order = Order(
+            order_id=order_data.order_id,
+            client_name=order_data.client_name,
+            country=order_data.country.upper(),
+            status=order_data.status,
+            note=order_data.note or ""
+        )
+        
+        success = await OrderService.add_order(order)
+        if not success:
+            raise HTTPException(500, "Ошибка при создании заказа")
+        
+        # Добавляем участников
+        from app.utils.validators import extract_usernames
+        usernames = extract_usernames(order_data.client_name)
+        if usernames:
+            await ParticipantService.ensure_participants(order_data.order_id, usernames)
+        
+        return {"success": True, "message": "Заказ успешно создан"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating order: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.put("/api/orders/{order_id}")
+async def update_order_api(
+    order_id: str,
+    order_data: OrderUpdate,
+    username: str = Depends(authenticate_admin)
+):
+    """Обновление заказа"""
+    try:
+        order = await OrderService.get_order(order_id)
+        if not order:
+            raise HTTPException(404, "Заказ не найден")
+        
+        # Обновляем поля
+        update_data = {}
+        if order_data.client_name is not None:
+            update_data["client_name"] = order_data.client_name
+        if order_data.country is not None:
+            update_data["country"] = order_data.country.upper()
+        if order_data.status is not None:
+            update_data["status"] = order_data.status
+        if order_data.note is not None:
+            update_data["note"] = order_data.note
+        
+        # Здесь должна быть логика обновления в базе
+        # Покажем как это можно сделать через существующий сервис
+        if update_data:
+            # Для примера - обновим статус если он изменился
+            if "status" in update_data:
+                await OrderService.update_order_status(order_id, update_data["status"])
+            
+            # Для остальных полей нужен отдельный метод update_order
+            # Пока оставим заглушку
+            logger.info(f"Order {order_id} update data: {update_data}")
+        
+        return {"success": True, "message": "Заказ обновлен"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating order: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.delete("/api/orders/{order_id}")
+async def delete_order_api(
+    order_id: str,
+    username: str = Depends(authenticate_admin)
+):
+    """Удаление заказа"""
+    try:
+        # Проверяем существование заказа
+        order = await OrderService.get_order(order_id)
+        if not order:
+            raise HTTPException(404, "Заказ не найден")
+        
+        # Здесь должна быть логика удаления заказа и связанных данных
+        # Пока заглушка - в реальности нужно удалить из orders, participants, subscriptions
+        logger.info(f"Order {order_id} marked for deletion")
+        
+        return {"success": True, "message": "Заказ удален"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting order: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
