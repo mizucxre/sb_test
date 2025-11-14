@@ -182,6 +182,22 @@ class OrderService:
             logger.error(f"Error deleting order {order_id}: {e}")
             return False
 
+# ДОБАВИТЬ в класс OrderService:
+
+    @staticmethod
+    async def bulk_update_order_statuses(order_ids: List[str], new_status: str) -> bool:
+        """Массовое обновление статусов заказов"""
+        try:
+            async with db.pool.acquire() as conn:
+                result = await conn.execute(
+                    "UPDATE orders SET status = $1, updated_at = NOW() WHERE order_id = ANY($2)",
+                    new_status, order_ids
+                )
+                return "UPDATE" in result
+        except Exception as e:
+            logger.error(f"Error bulk updating order statuses: {e}")
+            return False
+            
 class ParticipantService:
     
     @staticmethod
