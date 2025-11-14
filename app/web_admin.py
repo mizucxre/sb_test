@@ -517,3 +517,147 @@ async def get_participants_stats(username: str = Depends(authenticate_admin)):
     except Exception as e:
         logger.error(f"Error getting participants stats: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
+
+class BroadcastRequest(BaseModel):
+    order_id: Optional[str] = None
+    message: str
+    target: str  # all_unpaid, order_unpaid, all_users
+
+@app.post("/api/broadcast/send")
+async def send_broadcast(
+    broadcast_data: BroadcastRequest,
+    username: str = Depends(authenticate_admin)
+):
+    """Отправка рассылки"""
+    try:
+        from app.webhook import application
+        
+        sent_count = 0
+        failed_count = 0
+        
+        if broadcast_data.target == "all_unpaid":
+            # Рассылка всем неплательщикам
+            grouped = await ParticipantService.get_all_unpaid_grouped()
+            
+            for order_id, usernames in grouped.items():
+                for username in usernames:
+                    try:
+                        user_ids = await AddressService.get_user_ids_by_usernames([username])
+                        if user_ids:
+                            await application.bot.send_message(
+                                chat_id=user_ids[0],
+                                text=broadcast_data.message,
+                                parse_mode="Markdown"
+                            )
+                            sent_count += 1
+                    except Exception as e:
+                        logger.warning(f"Failed to send to {username}: {e}")
+                        failed_count += 1
+                        
+        elif broadcast_data.target == "order_unpaid" and broadcast_data.order_id:
+            # Рассылка неплательщикам конкретного заказа
+            usernames = await ParticipantService.get_unpaid_usernames(broadcast_data.order_id)
+            
+            for username in usernames:
+                try:
+                    user_ids = await AddressService.get_user_ids_by_usernames([username])
+                    if user_ids:
+                        await application.bot.send_message(
+                            chat_id=user_ids[0],
+                            text=broadcast_data.message,
+                            parse_mode="Markdown"
+                        )
+                        sent_count += 1
+                except Exception as e:
+                    logger.warning(f"Failed to send to {username}: {e}")
+                    failed_count += 1
+        
+        return {
+            "success": True,
+            "message": f"Рассылка отправлена: {sent_count} успешно, {failed_count} ошибок",
+            "sent_count": sent_count,
+            "failed_count": failed_count
+        }
+        
+    except Exception as e:
+        logger.error(f"Error sending broadcast: {e}")
+        raise HTTPException(500, "Ошибка при отправке рассылки")
+
+from fastapi.responses import StreamingResponse
+import io
+import csv
+
+@app.get("/api/reports/orders/csv")
+async def export_orders_csv(
+    status: Optional[str] = None,
+    country: Optional[str] = None,
+    username: str = Depends(authenticate_admin)
+):
+    """Экспорт заказов в CSV"""
+    try:
+        if status:
+            orders = await OrderService.list_orders_by_status([status])
+        else:
+            orders = await OrderService.list_recent_orders(1000)
+        
+        if country:
+            orders = [o for o in orders if o.country == country.upper()]
+        
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Заголовки
+        writer.writerow([
+            'Order ID', 'Client Name', 'Status', 'Country', 
+            'Note', 'Updated At', 'Participants Count'
+        ])
+        
+        # Данные
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            writer.writerow([
+                order.order_id,
+                order.client_name,
+                order.status,
+                order.country,
+                order.note or '',
+                order.updated_at or '',
+                len(participants)
+            ])
+        
+        output.seek(0)
+        
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}")
+        raise HTTPException(500, "Ошибка при экспорте")
+
+@app.get("/api/reports/participants/unpaid")
+async def export_unpaid_participants(username: str = Depends(authenticate_admin)):
+    """Отчет по неплательщикам"""
+    try:
+        grouped = await ParticipantService.get_all_unpaid_grouped()
+        
+        report_data = []
+        for order_id, usernames in grouped.items():
+            order = await OrderService.get_order(order_id)
+            report_data.append({
+                "order_id": order_id,
+                "order_status": order.status if order else "Не найден",
+                "unpaid_count": len(usernames),
+                "usernames": ", ".join([f"@{u}" for u in usernames])
+            })
+        
+        return {"unpaid_report": report_data}
+        
+    except Exception as e:
+        logger.error(f"Error generating unpaid report: {e}")
+        raise HTTPException(500, "Ошибка при генерации отчета")
