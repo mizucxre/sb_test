@@ -48,10 +48,6 @@ def build_participants_text(order_id: str, participants: List, page: int, per_pa
     
     return "\n".join(lines)
 
-def _is_admin(uid, admin_ids) -> bool:
-    """Проверка является ли пользователь админом"""
-    return uid in admin_ids or str(uid) in {str(x) for x in admin_ids}
-
 def _err_reason(e: Exception) -> str:
     """Определение причины ошибки отправки сообщения"""
     s = str(e).lower()
