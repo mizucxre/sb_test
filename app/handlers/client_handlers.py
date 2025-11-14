@@ -2,12 +2,11 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
 
-from app.config import ADMIN_IDS
-from app.utils.helpers import reply_animated, reply_markdown_animated, _is_admin
+from app.utils.helpers import reply_animated, reply_markdown_animated
 from app.utils.keyboards import MAIN_KB
 from app.services.user_service import AddressService, SubscriptionService
-from app.services.order_service import OrderService, ParticipantService
-from app.utils.validators import extract_order_id, extract_usernames, normalize_phone, validate_postcode
+from app.services.order_service import OrderService
+from app.utils.validators import extract_order_id, normalize_phone, validate_postcode
 from app.models import Address
 
 logger = logging.getLogger(__name__)
@@ -40,26 +39,37 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• 🔍 Отследить разбор — статус по номеру\n"
         "• 🏠 Мои адреса — добавить/изменить адрес\n"
         "• 🔔 Мои подписки — список подписок\n"
-        "• /admin — админ-панель (для админов)"
+        "• /admin — веб-админка (для админов)"
     )
+
+async def admin_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Информация о веб-админке"""
+    admin_url = "https://your-domain.com/admin"  # Замените на ваш URL
+    message = (
+        "🛠 *Веб-админка SEABLUU*\n\n"
+        "Для управления заказами используйте веб-интерфейс:\n"
+        f"{admin_url}\n\n"
+        "Там вы можете:\n"
+        "• Добавлять и редактировать заказы\n"
+        "• Управлять статусами\n"
+        "• Просматривать участников\n"
+        "• Делать массовые операции\n"
+        "• Выгружать отчеты"
+    )
+    await reply_markdown_animated(update, context, message)
 
 def _is_text(text: str, group: set[str]) -> bool:
     """Проверка соответствия текста группе алиасов"""
     return text.strip().lower() in {x.lower() for x in group}
 
 async def handle_client_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработка текстовых сообщений от пользователей (только не-админы)"""
+    """Обработка текстовых сообщений от пользователей"""
     user_id = update.effective_user.id
     raw_text = (update.message.text or "").strip()
     text = raw_text.lower()
     
     logger.info(f"👤 Клиентский обработчик: сообщение от {user_id}: {raw_text}")
 
-    # Проверка на админа - если админ, не должны сюда попадать
-    if _is_admin(user_id, ADMIN_IDS):
-        logger.warning(f"❌ Клиентский обработчик: сообщение от админа {user_id} попало в клиентский обработчик!")
-        return
-    
     # Обработка кнопок
     if _is_text(text, CLIENT_ALIASES["cancel"]):
         context.user_data.clear()
@@ -198,15 +208,6 @@ async def save_address(update: Update, context: ContextTypes.DEFAULT_TYPE):
     success = await AddressService.upsert_address(address)
     
     if success:
-        # Автоподписка на свои разборы
-        if u.username:
-            try:
-                orders = await ParticipantService.find_orders_for_username(u.username)
-                for order_id in orders:
-                    await SubscriptionService.subscribe(u.id, order_id)
-            except Exception as e:
-                logger.warning(f"Автоподписка не удалась: {e}")
-
         context.user_data.clear()
         msg = (
             "✅ Адрес сохранён!\n\n"
@@ -242,8 +243,9 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
                         reply_markup=InlineKeyboardMarkup(kb_rows))
 
 def register(application):
-    """Регистрация клиентских хэндлеров (ТОЛЬКО КОМАНДЫ)"""
+    """Регистрация клиентских хэндлеров"""
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_cmd))
-    # MessageHandler удален - теперь обрабатывается в text_handler.py
-    logger.info("✅ Клиентские хэндлеры зарегистрированы (только команды)")
+    application.add_handler(CommandHandler("admin", admin_info))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_client_text))
+    logger.info("✅ Клиентские хэндлеры зарегистрированы")
