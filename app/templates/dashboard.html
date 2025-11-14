@@ -38,7 +38,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-400 text-sm font-medium">Всего заказов</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_orders || 0"></p>
+                        <p class="text-3xl font-bold mt-2" x-text="stats.total_orders || 0">0</p>
                     </div>
                     <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
                         <i class="fas fa-box text-blue-400 text-xl"></i>
@@ -55,7 +55,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-400 text-sm font-medium">Активные</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.active_orders || 0"></p>
+                        <p class="text-3xl font-bold mt-2" x-text="stats.active_orders || 0">0</p>
                     </div>
                     <div class="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
                         <i class="fas fa-spinner text-green-400 text-xl"></i>
@@ -72,7 +72,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-400 text-sm font-medium">Участники</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_participants || 0"></p>
+                        <p class="text-3xl font-bold mt-2" x-text="stats.total_participants || 0">0</p>
                     </div>
                     <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
                         <i class="fas fa-users text-purple-400 text-xl"></i>
@@ -89,7 +89,7 @@
                 <div class="flex items-center justify-between">
                     <div>
                         <p class="text-gray-400 text-sm font-medium">Подписки</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_subscriptions || 0"></p>
+                        <p class="text-3xl font-bold mt-2" x-text="stats.total_subscriptions || 0">0</p>
                     </div>
                     <div class="w-12 h-12 bg-yellow-500/20 rounded-2xl flex items-center justify-center">
                         <i class="fas fa-bell text-yellow-400 text-xl"></i>
@@ -206,35 +206,46 @@ document.addEventListener('alpine:init', () => {
         
         async loadData() {
             try {
+                console.log('Starting data load...');
+                
                 // Загрузка статистики
                 const statsResponse = await fetch('/admin/api/stats');
+                console.log('Stats response status:', statsResponse.status);
+                
                 if (!statsResponse.ok) {
                     throw new Error(`HTTP error! status: ${statsResponse.status}`);
                 }
+                
                 const statsData = await statsResponse.json();
+                console.log('Stats data:', statsData);
                 this.stats = statsData;
                 
                 // Загрузка последних заказов
                 const ordersResponse = await fetch('/admin/api/orders?limit=5');
+                console.log('Orders response status:', ordersResponse.status);
+                
                 if (!ordersResponse.ok) {
                     throw new Error(`HTTP error! status: ${ordersResponse.status}`);
                 }
+                
                 const ordersData = await ordersResponse.json();
+                console.log('Orders data:', ordersData);
                 this.displayRecentOrders(ordersData.orders || []);
                 
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
-                this.showError('Ошибка загрузки данных');
+                this.showError('Ошибка загрузки данных: ' + error.message);
             } finally {
-                setTimeout(() => {
-                    this.loading = false;
-                }, 500);
+                this.loading = false;
             }
         },
         
         displayRecentOrders(orders) {
             const container = document.getElementById('recent-orders');
-            if (!container) return;
+            if (!container) {
+                console.error('Recent orders container not found');
+                return;
+            }
             
             if (orders.length === 0) {
                 container.innerHTML = `
@@ -271,6 +282,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         getStatusColor(status) {
+            if (!status) return 'bg-gray-500/20 text-gray-400';
             if (status.includes('доставлен') || status.includes('получен')) {
                 return 'bg-green-500/20 text-green-400';
             } else if (status.includes('отмен')) {
@@ -282,13 +294,17 @@ document.addEventListener('alpine:init', () => {
         
         formatDate(dateString) {
             if (!dateString) return 'Неизвестно';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Неизвестно';
+            }
         },
         
         showError(message) {
