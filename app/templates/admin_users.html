@@ -1,0 +1,282 @@
+{% extends "base.html" %}
+
+{% block page_title %}Управление администраторами{% endblock %}
+
+{% block content %}
+<div x-data="adminUsers()" class="space-y-6">
+    <!-- Header -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold">Администраторы системы</h3>
+                <p class="text-gray-400 text-sm mt-1">Управление пользователями с доступом к панели управления</p>
+            </div>
+            <button @click="showCreateForm = true" class="btn-primary px-6 py-2 rounded-2xl font-medium">
+                <i class="fas fa-plus mr-2"></i>Добавить администратора
+            </button>
+        </div>
+    </div>
+
+    <!-- Users Table -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-white/10">
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Пользователь</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Роль</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Последний вход</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="loading">
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Загрузка администраторов...</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && users.length === 0">
+                        <tr>
+                            <td colspan="5" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-users text-2xl mb-2"></i>
+                                <p>Администраторы не найдены</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-for="user in users" :key="user.id">
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center space-x-3">
+                                    <template x-if="user.avatar_url">
+                                        <img :src="user.avatar_url" alt="Avatar" class="w-8 h-8 rounded-full">
+                                    </template>
+                                    <template x-if="!user.avatar_url">
+                                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-user text-white text-xs"></i>
+                                        </div>
+                                    </template>
+                                    <div>
+                                        <div x-text="user.username" class="font-medium"></div>
+                                        <div x-text="user.email" class="text-gray-400 text-sm"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium capitalize" 
+                                      :class="user.role === 'super_admin' ? 'bg-purple-500/20 text-purple-400' : 'bg-blue-500/20 text-blue-400'"
+                                      x-text="user.role === 'super_admin' ? 'Супер-админ' : 'Админ'"></span>
+                            </td>
+                            <td class="py-4 px-4">
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
+                                      :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                      x-text="user.is_active ? 'Активен' : 'Неактивен'"></span>
+                            </td>
+                            <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(user.last_login)"></td>
+                            <td class="py-4 px-4">
+                                <div class="flex items-center space-x-2">
+                                    <button @click="editUser(user)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button x-show="user.id !== currentUser.id" @click="deleteUser(user)" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div x-show="showCreateForm || editingUser" x-transition class="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50 p-4">
+        <div class="glass-effect rounded-2xl p-6 w-full max-w-md">
+            <h3 class="text-lg font-semibold mb-4" x-text="editingUser ? 'Редактирование администратора' : 'Новый администратор'"></h3>
+            
+            <form @submit.prevent="submitForm()" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Имя пользователя *</label>
+                    <input type="text" x-model="formData.username" required
+                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                           :readonly="editingUser">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Email</label>
+                    <input type="email" x-model="formData.email"
+                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Роль *</label>
+                    <select x-model="formData.role" required
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <option value="admin">Админ</option>
+                        <option value="super_admin">Супер-админ</option>
+                    </select>
+                </div>
+
+                <div x-show="!editingUser">
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Пароль *</label>
+                    <input type="password" x-model="formData.password" required
+                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                </div>
+
+                <div class="flex items-center space-x-4 pt-4">
+                    <button type="button" @click="closeForm()" class="flex-1 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl transition-all duration-200">
+                        Отмена
+                    </button>
+                    <button type="submit" :disabled="loading"
+                            class="flex-1 btn-primary px-4 py-2 rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
+                        <span x-text="editingUser ? 'Обновить' : 'Создать'"></span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminUsers', () => ({
+        users: [],
+        loading: true,
+        showCreateForm: false,
+        editingUser: null,
+        formData: {
+            username: '',
+            email: '',
+            role: 'admin',
+            password: ''
+        },
+        currentUser: {
+            id: {{ current_admin.user_id }}
+        },
+        
+        async init() {
+            await this.loadUsers();
+        },
+        
+        async loadUsers() {
+            this.loading = true;
+            try {
+                const response = await fetch('/admin/api/admin/users');
+                const data = await response.json();
+                this.users = data.users || [];
+            } catch (error) {
+                console.error('Error loading users:', error);
+                alert('Ошибка загрузки администраторов');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        editUser(user) {
+            this.editingUser = user;
+            this.formData = {
+                username: user.username,
+                email: user.email || '',
+                role: user.role,
+                password: ''
+            };
+        },
+        
+        async deleteUser(user) {
+            if (confirm(`Удалить администратора ${user.username}?`)) {
+                try {
+                    const response = await fetch(`/admin/api/admin/users/${user.id}`, {
+                        method: 'DELETE'
+                    });
+                    
+                    const result = await response.json();
+                    if (response.ok) {
+                        this.showNotification(result.message, 'success');
+                        this.loadUsers();
+                    } else {
+                        this.showNotification(result.detail, 'error');
+                    }
+                } catch (error) {
+                    console.error('Error deleting user:', error);
+                    this.showNotification('Ошибка при удалении', 'error');
+                }
+            }
+        },
+        
+        async submitForm() {
+            this.loading = true;
+            try {
+                const url = this.editingUser 
+                    ? `/admin/api/admin/users/${this.editingUser.id}`
+                    : '/admin/api/admin/users';
+                
+                const method = this.editingUser ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(this.formData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    this.showNotification(result.message, 'success');
+                    this.closeForm();
+                    this.loadUsers();
+                } else {
+                    this.showNotification(result.detail, 'error');
+                }
+            } catch (error) {
+                console.error('Error submitting form:', error);
+                this.showNotification('Ошибка при сохранении', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        closeForm() {
+            this.showCreateForm = false;
+            this.editingUser = null;
+            this.formData = {
+                username: '',
+                email: '',
+                role: 'admin',
+                password: ''
+            };
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'Никогда';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Неизвестно';
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            // Используем утилиту из base.html если она есть, иначе fallback
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                alert(message);
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}
