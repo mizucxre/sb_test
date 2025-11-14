@@ -749,3 +749,100 @@ async def export_orders(
     except Exception as e:
         logger.error(f"Error exporting orders: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
+
+@app.post("/api/orders/bulk-update-status")
+async def bulk_update_order_status(
+    request: Request,
+    username: str = Depends(authenticate_admin)
+):
+    """Массовое обновление статусов заказов"""
+    try:
+        data = await request.json()
+        order_ids = data.get('order_ids', [])
+        new_status = data.get('status', '')
+        
+        if not order_ids:
+            raise HTTPException(400, "Не выбраны заказы для обновления")
+        
+        if not new_status:
+            raise HTTPException(400, "Не указан новый статус")
+        
+        if new_status not in STATUSES:
+            raise HTTPException(400, f"Неверный статус. Допустимые значения: {STATUSES}")
+        
+        success_count = 0
+        failed_count = 0
+        
+        for order_id in order_ids:
+            try:
+                success = await OrderService.update_order_status(order_id, new_status)
+                if success:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                logger.error(f"Error updating order {order_id}: {e}")
+                failed_count += 1
+        
+        message = f"Обновлено {success_count} заказов"
+        if failed_count > 0:
+            message += f", не удалось обновить {failed_count}"
+        
+        return {
+            "success": True,
+            "message": message,
+            "updated": success_count,
+            "failed": failed_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk update order status: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.post("/api/orders/bulk-delete")
+async def bulk_delete_orders(
+    request: Request,
+    username: str = Depends(authenticate_admin)
+):
+    """Массовое удаление заказов"""
+    try:
+        data = await request.json()
+        order_ids = data.get('order_ids', [])
+        
+        if not order_ids:
+            raise HTTPException(400, "Не выбраны заказы для удаления")
+        
+        success_count = 0
+        failed_count = 0
+        
+        for order_id in order_ids:
+            try:
+                success = await OrderService.delete_order(order_id)
+                if success:
+                    success_count += 1
+                else:
+                    failed_count += 1
+            except Exception as e:
+                logger.error(f"Error deleting order {order_id}: {e}")
+                failed_count += 1
+        
+        message = f"Удалено {success_count} заказов"
+        if failed_count > 0:
+            message += f", не удалось удалить {failed_count}"
+        
+        return {
+            "success": True,
+            "message": message,
+            "deleted": success_count,
+            "failed": failed_count
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in bulk delete orders: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
