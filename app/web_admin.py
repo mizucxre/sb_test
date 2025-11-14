@@ -1,10 +1,8 @@
 import logging
-from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query, Response
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
-import secrets
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
@@ -12,29 +10,19 @@ import json
 from app.database import db
 from app.services.order_service import OrderService, ParticipantService
 from app.services.user_service import AddressService, SubscriptionService
-from app.models import Order
-from app.config import ADMIN_USERNAME, ADMIN_PASSWORD, SECRET_KEY, STATUSES
+from app.services.admin_service import AdminService, AdminChatService
+from app.models import Order, AdminUserCreate, AdminUserUpdate, AdminChatMessageCreate
+from app.config import STATUSES
+from app.utils.security import verify_password, create_access_token, verify_token, generate_avatar_url
+from app.utils.session import get_current_admin, require_permission, require_super_admin
 
 logger = logging.getLogger(__name__)
-
-security = HTTPBasic()
 
 app = FastAPI(title="SEABLUU Admin", docs_url=None, redoc_url=None)
 
 # Mount static files and templates
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
-
-def authenticate_admin(credentials: HTTPBasicCredentials = Depends(security)):
-    correct_username = secrets.compare_digest(credentials.username, ADMIN_USERNAME)
-    correct_password = secrets.compare_digest(credentials.password, ADMIN_PASSWORD)
-    if not (correct_username and correct_password):
-        raise HTTPException(
-            status_code=401,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
 
 def serialize_model(model):
     """Сериализация Pydantic модели в словарь с обработкой разных версий Pydantic"""
@@ -49,103 +37,333 @@ def serialize_model(model):
             # Если не Pydantic модель, используем __dict__
             return model.__dict__
 
-# Страницы
+# Страница входа
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {
+        "request": request
+    })
+
+@app.post("/login")
+async def login(request: Request, response: Response):
+    """Аутентификация администратора"""
+    try:
+        form_data = await request.form()
+        username = form_data.get("username")
+        password = form_data.get("password")
+        
+        if not username or not password:
+            raise HTTPException(400, "Необходимо указать имя пользователя и пароль")
+        
+        # Проверяем учетные данные
+        admin_user = await AdminService.authenticate_user(username, password)
+        if not admin_user:
+            raise HTTPException(401, "Неверное имя пользователя или пароль")
+        
+        # Создаем токен
+        access_token = create_access_token(
+            data={"sub": admin_user.username, "user_id": admin_user.id, "role": admin_user.role}
+        )
+        
+        # Устанавливаем cookie
+        response = RedirectResponse(url="/admin/", status_code=302)
+        response.set_cookie(
+            key="admin_token",
+            value=access_token,
+            httponly=True,
+            max_age=60 * 60 * 24 * 7,  # 7 дней
+            secure=False,  # Для продакшена установите True
+            samesite="lax"
+        )
+        
+        # Обновляем время последнего входа
+        await AdminService.update_last_login(admin_user.id)
+        
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login error: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.get("/logout")
+async def logout(response: Response):
+    """Выход из системы"""
+    response = RedirectResponse(url="/admin/login", status_code=302)
+    response.delete_cookie("admin_token")
+    return response
+
+# Защищенные страницы
 @app.get("/", response_class=HTMLResponse)
-async def admin_dashboard(request: Request, username: str = Depends(authenticate_admin)):
+async def admin_dashboard(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "dashboard"
     })
 
 @app.get("/orders", response_class=HTMLResponse)
-async def orders_page(request: Request, username: str = Depends(authenticate_admin)):
+async def orders_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("orders.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "orders",
         "statuses": STATUSES
     })
 
 @app.get("/orders/new", response_class=HTMLResponse)
-async def new_order_page(request: Request, username: str = Depends(authenticate_admin)):
+async def new_order_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("order_form.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "statuses": STATUSES,
         "current_page": "orders"
     })
 
-# ДОБАВЛЕНО: Эндпоинт для редактирования заказа
 @app.get("/orders/{order_id}/edit", response_class=HTMLResponse)
-async def edit_order_page(request: Request, order_id: str, username: str = Depends(authenticate_admin)):
+async def edit_order_page(request: Request, order_id: str, current_admin: dict = Depends(get_current_admin)):
     order = await OrderService.get_order(order_id)
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
     return templates.TemplateResponse("order_form.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "statuses": STATUSES,
         "current_page": "orders",
         "order": order
     })
 
 @app.get("/participants", response_class=HTMLResponse)
-async def participants_page(request: Request, username: str = Depends(authenticate_admin)):
+async def participants_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("participants.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "participants"
     })
 
 @app.get("/reports", response_class=HTMLResponse)
-async def reports_page(request: Request, username: str = Depends(authenticate_admin)):
+async def reports_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("reports.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "reports"
     })
 
 @app.get("/broadcast", response_class=HTMLResponse)
-async def broadcast_page(request: Request, username: str = Depends(authenticate_admin)):
+async def broadcast_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("broadcast.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "broadcast",
         "statuses": STATUSES
     })
 
 @app.get("/settings", response_class=HTMLResponse)
-async def settings_page(request: Request, username: str = Depends(authenticate_admin)):
+async def settings_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("settings.html", {
         "request": request,
-        "username": username,
+        "current_admin": current_admin,
         "current_page": "settings",
         "statuses": STATUSES
     })
 
-# API endpoints
+# Новые страницы для управления администраторами
+@app.get("/admin-users", response_class=HTMLResponse)
+@require_super_admin
+async def admin_users_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    return templates.TemplateResponse("admin_users.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "admin_users"
+    })
+
+@app.get("/admin-chat", response_class=HTMLResponse)
+async def admin_chat_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    return templates.TemplateResponse("admin_chat.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "admin_chat"
+    })
+
+@app.get("/profile", response_class=HTMLResponse)
+async def profile_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    return templates.TemplateResponse("profile.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "profile"
+    })
+
+# API endpoints для администраторов
+@app.get("/api/admin/users")
+@require_super_admin
+async def get_admin_users(current_admin: dict = Depends(get_current_admin)):
+    """Получение списка администраторов"""
+    try:
+        users = await AdminService.get_all_users()
+        return {"users": users}
+    except Exception as e:
+        logger.error(f"Error fetching admin users: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/admin/users")
+@require_super_admin
+async def create_admin_user(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Создание нового администратора"""
+    try:
+        data = await request.json()
+        user_data = AdminUserCreate(**data)
+        
+        # Проверяем существование пользователя
+        existing = await AdminService.get_user_by_username(user_data.username)
+        if existing:
+            raise HTTPException(400, "Пользователь с таким именем уже существует")
+        
+        user = await AdminService.create_user(user_data)
+        return {"success": True, "user": user, "message": "Администратор создан"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating admin user: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.put("/api/admin/users/{user_id}")
+@require_super_admin
+async def update_admin_user(user_id: int, request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Обновление администратора"""
+    try:
+        data = await request.json()
+        user_data = AdminUserUpdate(**data)
+        
+        user = await AdminService.update_user(user_id, user_data)
+        if not user:
+            raise HTTPException(404, "Пользователь не найден")
+        
+        return {"success": True, "user": user, "message": "Администратор обновлен"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error updating admin user: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.delete("/api/admin/users/{user_id}")
+@require_super_admin
+async def delete_admin_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
+    """Удаление администратора"""
+    try:
+        if user_id == current_admin["user_id"]:
+            raise HTTPException(400, "Нельзя удалить самого себя")
+        
+        success = await AdminService.delete_user(user_id)
+        if not success:
+            raise HTTPException(404, "Пользователь не найден")
+        
+        return {"success": True, "message": "Администратор удален"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting admin user: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# API для чата администраторов
+@app.get("/api/admin/chat/messages")
+async def get_chat_messages(current_admin: dict = Depends(get_current_admin)):
+    """Получение сообщений чата"""
+    try:
+        messages = await AdminChatService.get_recent_messages(50)
+        return {"messages": messages}
+    except Exception as e:
+        logger.error(f"Error fetching chat messages: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/admin/chat/messages")
+async def create_chat_message(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Создание сообщения в чате"""
+    try:
+        data = await request.json()
+        message_data = AdminChatMessageCreate(**data)
+        
+        message = await AdminChatService.create_message(
+            current_admin["user_id"], 
+            message_data.message
+        )
+        
+        return {"success": True, "message": message}
+        
+    except Exception as e:
+        logger.error(f"Error creating chat message: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# API для профиля
+@app.put("/api/admin/profile")
+async def update_profile(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Обновление профиля текущего пользователя"""
+    try:
+        data = await request.json()
+        
+        # Только супер-админ может менять свою роль
+        if "role" in data and current_admin["role"] != "super_admin":
+            del data["role"]
+        
+        user_data = AdminUserUpdate(**data)
+        user = await AdminService.update_user(current_admin["user_id"], user_data)
+        
+        return {"success": True, "user": user, "message": "Профиль обновлен"}
+        
+    except Exception as e:
+        logger.error(f"Error updating profile: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.put("/api/admin/profile/password")
+async def change_password(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Смена пароля"""
+    try:
+        data = await request.json()
+        current_password = data.get("current_password")
+        new_password = data.get("new_password")
+        
+        if not current_password or not new_password:
+            raise HTTPException(400, "Необходимо указать текущий и новый пароль")
+        
+        success = await AdminService.change_password(
+            current_admin["user_id"], 
+            current_password, 
+            new_password
+        )
+        
+        if not success:
+            raise HTTPException(400, "Неверный текущий пароль")
+        
+        return {"success": True, "message": "Пароль изменен"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error changing password: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# Существующие API endpoints (остаются без изменений, но добавляем проверку авторизации)
 @app.get("/api/stats")
-async def get_stats(username: str = Depends(authenticate_admin)):
+async def get_stats(current_admin: dict = Depends(get_current_admin)):
     """Получение статистики для дашборда"""
     try:
-        # Получаем все заказы для статистики
+        # ... существующий код ...
         orders = await OrderService.list_recent_orders(1000)
         total_orders = len(orders)
         
-        # Активные заказы (исключаем завершенные)
         active_statuses = [s for s in STATUSES if "получен" not in s.lower() and "доставлен" not in s.lower()]
         active_orders = len([o for o in orders if o.status in active_statuses])
         
-        # Участники
         all_participants = []
         for order in orders:
             participants = await ParticipantService.get_participants(order.order_id)
             all_participants.extend(participants)
         total_participants = len(set(p.username for p in all_participants))
         
-        # Подписки
         subscriptions = await SubscriptionService.get_all_subscriptions()
         total_subscriptions = len(subscriptions)
         
@@ -159,13 +377,42 @@ async def get_stats(username: str = Depends(authenticate_admin)):
         logger.error(f"Error fetching stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# ... остальные существующие API endpoints с добавлением current_admin: dict = Depends(get_current_admin) ...
+
+# Middleware для проверки аутентификации
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    # Пропускаем страницу логина и статические файлы
+    if request.url.path in ["/admin/login", "/admin/logout"] or request.url.path.startswith("/admin/static"):
+        return await call_next(request)
+    
+    # Проверяем токен для защищенных страниц
+    token = request.cookies.get("admin_token")
+    if not token:
+        return RedirectResponse(url="/admin/login")
+    
+    payload = verify_token(token)
+    if not payload:
+        response = RedirectResponse(url="/admin/login")
+        response.delete_cookie("admin_token")
+        return response
+    
+    # Добавляем информацию о пользователе в запрос
+    request.state.admin_user = payload
+    
+    response = await call_next(request)
+    return response
+
+# ... продолжение web_admin.py после middleware ...
+
+# Существующие API endpoints с новой аутентификацией
 @app.get("/api/orders")
 async def get_orders(
     status: Optional[str] = None,
     country: Optional[str] = None,
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """API для получения списка заказов с пагинацией"""
     try:
@@ -202,7 +449,7 @@ async def get_orders(
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/orders/{order_id}")
-async def get_order(order_id: str, username: str = Depends(authenticate_admin)):
+async def get_order(order_id: str, current_admin: dict = Depends(get_current_admin)):
     """API для получения информации о заказе"""
     try:
         order = await OrderService.get_order(order_id)
@@ -241,7 +488,7 @@ async def get_order(order_id: str, username: str = Depends(authenticate_admin)):
 @app.post("/api/orders/create")
 async def create_order_api(
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Создание нового заказа"""
     try:
@@ -282,7 +529,7 @@ async def create_order_api(
 async def update_order_api(
     order_id: str,
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Обновление заказа"""
     try:
@@ -319,7 +566,7 @@ async def update_order_api(
 @app.delete("/api/orders/{order_id}")
 async def delete_order_api(
     order_id: str,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Удаление заказа"""
     try:
@@ -344,9 +591,9 @@ async def delete_order_api(
 async def get_participants(
     order_id: Optional[str] = None,
     paid: Optional[bool] = None,
-    limit: int = Query(1000, ge=1, le=5000),  # Увеличено для загрузки всех участников
+    limit: int = Query(1000, ge=1, le=5000),
     offset: int = Query(0, ge=0),
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """API для получения списка участников"""
     try:
@@ -387,13 +634,12 @@ async def get_participants(
         logger.error(f"Error fetching participants: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# ИСПРАВЛЕНО: Эндпоинт обновления платежа
 @app.put("/api/participants/{order_id}/{username}/paid")
 async def update_participant_paid(
     order_id: str,
     username: str,
     request: Request,
-    username_auth: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Изменение статуса оплаты участника"""
     try:
@@ -408,15 +654,10 @@ async def update_participant_paid(
         logger.error(f"Error updating participant payment: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
-# ДОБАВЛЕНО: Эндпоинт для рассылки неплательщикам
-# ЗАМЕНИТЬ существующий эндпоинт broadcast_unpaid:
-
-# ЗАМЕНИТЕ эндпоинт broadcast_unpaid в web_admin.py:
-
 @app.post("/api/broadcast/unpaid")
 async def broadcast_unpaid(
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Рассылка уведомлений неплательщикам"""
     try:
@@ -466,8 +707,8 @@ async def broadcast_unpaid(
         for user_id in user_ids:
             try:
                 # Импортируем бота здесь чтобы избежать циклических импортов
-                from app.main import bot
-                await bot.send_message(
+                from app.webhook import application
+                await application.bot.send_message(
                     chat_id=user_id,
                     text=message,
                     parse_mode='HTML'
@@ -493,11 +734,10 @@ async def broadcast_unpaid(
         logger.error(f"Error broadcasting to unpaid: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
-# ДОБАВИТЬ эндпоинт для общей рассылки:
 @app.post("/api/broadcast/all")
 async def broadcast_all(
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Рассылка сообщения всем пользователям"""
     try:
@@ -527,8 +767,8 @@ async def broadcast_all(
         # Отправляем сообщения через Telegram бота
         for user_id in user_ids:
             try:
-                from app.main import bot
-                await bot.send_message(
+                from app.webhook import application
+                await application.bot.send_message(
                     chat_id=user_id,
                     text=message,
                     parse_mode='HTML'
@@ -555,16 +795,12 @@ async def broadcast_all(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.get("/api/statuses")
-async def get_statuses(username: str = Depends(authenticate_admin)):
+async def get_statuses(current_admin: dict = Depends(get_current_admin)):
     """API для получения списка статусов"""
     return {"statuses": STATUSES}
 
-# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
-
-# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
-
 @app.get("/orders/{order_id}", response_class=HTMLResponse)
-async def view_order_page(request: Request, order_id: str, username: str = Depends(authenticate_admin)):
+async def view_order_page(request: Request, order_id: str, current_admin: dict = Depends(get_current_admin)):
     """Страница просмотра заказа"""
     try:
         order = await OrderService.get_order(order_id)
@@ -575,7 +811,7 @@ async def view_order_page(request: Request, order_id: str, username: str = Depen
         
         return templates.TemplateResponse("order_view.html", {
             "request": request,
-            "username": username,
+            "current_admin": current_admin,
             "current_page": "orders",
             "order": order,
             "participants": participants
@@ -588,7 +824,7 @@ async def view_order_page(request: Request, order_id: str, username: str = Depen
 async def get_analytics(
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """API для получения аналитики"""
     try:
@@ -642,7 +878,7 @@ async def get_analytics(
 @app.get("/api/reports/export/participants")
 async def export_participants(
     format: str = Query("csv", regex="^(csv|json)$"),
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Экспорт участников"""
     try:
@@ -698,7 +934,7 @@ async def export_participants(
 @app.get("/api/reports/export/orders")
 async def export_orders(
     format: str = Query("csv", regex="^(csv|json)$"),
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Экспорт заказов"""
     try:
@@ -750,12 +986,10 @@ async def export_orders(
         logger.error(f"Error exporting orders: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
-
 @app.post("/api/orders/bulk-update-status")
 async def bulk_update_order_status(
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Массовое обновление статусов заказов"""
     try:
@@ -806,7 +1040,7 @@ async def bulk_update_order_status(
 @app.post("/api/orders/bulk-delete")
 async def bulk_delete_orders(
     request: Request,
-    username: str = Depends(authenticate_admin)
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Массовое удаление заказов"""
     try:
