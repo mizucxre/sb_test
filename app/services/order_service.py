@@ -166,3 +166,61 @@ class ParticipantService:
                 username.lower().lstrip('@')
             )
             return [row['order_id'] for row in rows]
+
+@staticmethod
+async def update_order(order_id: str, update_data: dict) -> bool:
+    """Обновление данных заказа"""
+    try:
+        async with db.pool.acquire() as conn:
+            set_parts = []
+            values = []
+            i = 1
+            
+            for key, value in update_data.items():
+                if key in ["client_name", "country", "note"]:
+                    set_parts.append(f"{key} = ${i}")
+                    values.append(value)
+                    i += 1
+            
+            if not set_parts:
+                return False
+            
+            values.append(order_id)
+            query = f"UPDATE orders SET {', '.join(set_parts)}, updated_at = NOW() WHERE order_id = ${i}"
+            
+            result = await conn.execute(query, *values)
+            return "UPDATE 1" in result
+            
+    except Exception as e:
+        logger.error(f"Error updating order {order_id}: {e}")
+        return False
+
+@staticmethod
+async def delete_order(order_id: str) -> bool:
+    """Удаление заказа и связанных данных"""
+    try:
+        async with db.pool.acquire() as conn:
+            async with conn.transaction():
+                # Удаляем участников
+                await conn.execute(
+                    "DELETE FROM participants WHERE order_id = $1",
+                    order_id
+                )
+                
+                # Удаляем подписки
+                await conn.execute(
+                    "DELETE FROM subscriptions WHERE order_id = $1", 
+                    order_id
+                )
+                
+                # Удаляем заказ
+                result = await conn.execute(
+                    "DELETE FROM orders WHERE order_id = $1",
+                    order_id
+                )
+                
+                return "DELETE 1" in result
+                
+    except Exception as e:
+        logger.error(f"Error deleting order {order_id}: {e}")
+        return False
