@@ -18,6 +18,34 @@ class Database:
     async def init_tables(self):
         """Инициализация таблиц"""
         async with self.pool.acquire() as conn:
+            # Таблица администраторов
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS admin_users (
+                    id SERIAL PRIMARY KEY,
+                    username VARCHAR(100) UNIQUE NOT NULL,
+                    email VARCHAR(255) UNIQUE,
+                    password_hash VARCHAR(255) NOT NULL,
+                    role VARCHAR(20) DEFAULT 'admin',
+                    avatar_url VARCHAR(500),
+                    is_active BOOLEAN DEFAULT TRUE,
+                    last_login TIMESTAMPTZ,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            ''')
+            
+            # Таблица чата администраторов
+            await conn.execute('''
+                CREATE TABLE IF NOT EXISTS admin_chat_messages (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES admin_users(id) ON DELETE CASCADE,
+                    message TEXT NOT NULL,
+                    is_system BOOLEAN DEFAULT FALSE,
+                    created_at TIMESTAMPTZ DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ DEFAULT NOW()
+                )
+            ''')
+            
             # Таблица заказов
             await conn.execute('''
                 CREATE TABLE IF NOT EXISTS orders (
@@ -81,6 +109,18 @@ class Database:
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_participants_order_id ON participants(order_id)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_participants_username ON participants(username)')
             await conn.execute('CREATE INDEX IF NOT EXISTS idx_subscriptions_user_id ON subscriptions(user_id)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_admin_users_username ON admin_users(username)')
+            await conn.execute('CREATE INDEX IF NOT EXISTS idx_admin_chat_created_at ON admin_chat_messages(created_at)')
+
+            # Создаем супер-администратора по умолчанию, если нет пользователей
+            result = await conn.fetchval("SELECT COUNT(*) FROM admin_users")
+            if result == 0:
+                from app.utils.security import hash_password
+                default_password = os.getenv("ADMIN_DEFAULT_PASSWORD", "admin123")
+                await conn.execute('''
+                    INSERT INTO admin_users (username, email, password_hash, role, is_active)
+                    VALUES ($1, $2, $3, $4, $5)
+                ''', 'admin', 'admin@seabluu.com', hash_password(default_password), 'super_admin', True)
 
 # Глобальный экземпляр базы данных
 db = Database()
