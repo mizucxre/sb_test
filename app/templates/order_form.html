@@ -1,156 +1,211 @@
 {% extends "base.html" %}
 
-{% block page_title %}{{ "Редактирование" if order else "Создание" }} заказа{% endblock %}
+{% block page_title %}{% if order %}Редактирование заказа {{ order.order_id }}{% else %}Создание заказа{% endif %}{% endblock %}
 
 {% block content %}
 <div x-data="orderForm()" class="max-w-2xl mx-auto">
     <div class="glass-effect rounded-2xl p-6">
-        <h2 class="text-2xl font-bold mb-6">{{ "Редактирование" if order else "Создание" }} заказа</h2>
-
         <form @submit.prevent="submitForm()" class="space-y-6">
             <!-- Order ID -->
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Order ID *</label>
-                <input type="text" x-model="form.order_id" required
+                <input type="text" x-model="formData.order_id" required
                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
                        placeholder="CN-12345">
             </div>
 
             <!-- Client Name -->
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Имя клиента *</label>
-                <textarea x-model="form.client_name" required
+                <label class="block text-sm font-medium text-gray-400 mb-2">Клиент *</label>
+                <textarea x-model="formData.client_name" required rows="2"
                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
-                          placeholder="Введите имя клиента или @username участников"
-                          rows="2"></textarea>
-                <p class="text-xs text-gray-400 mt-1">Укажите @username участников, они будут автоматически добавлены</p>
+                          placeholder="Имя клиента или @username..."></textarea>
+                <p class="text-xs text-gray-400 mt-1">Можно указать несколько @username через запятую</p>
             </div>
 
-            <!-- Country and Status -->
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Страна *</label>
-                    <select x-model="form.country" required
-                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
-                        <option value="">Выберите страну</option>
-                        <option value="CN">Китай (CN)</option>
-                        <option value="KR">Корея (KR)</option>
-                    </select>
+            <!-- Country -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Страна *</label>
+                <div class="grid grid-cols-2 gap-4">
+                    <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
+                           :class="formData.country === 'CN' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
+                        <input type="radio" x-model="formData.country" value="CN" class="hidden">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                                 :class="formData.country === 'CN' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
+                                <i class="fas fa-check text-white text-xs" x-show="formData.country === 'CN'"></i>
+                            </div>
+                            <span>Китай (CN)</span>
+                        </div>
+                    </label>
+                    
+                    <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
+                           :class="formData.country === 'KR' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
+                        <input type="radio" x-model="formData.country" value="KR" class="hidden">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                                 :class="formData.country === 'KR' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
+                                <i class="fas fa-check text-white text-xs" x-show="formData.country === 'KR'"></i>
+                            </div>
+                            <span>Корея (KR)</span>
+                        </div>
+                    </label>
                 </div>
+            </div>
 
-                <div>
-                    <label class="block text-sm font-medium text-gray-400 mb-2">Статус *</label>
-                    <select x-model="form.status" required
-                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
-                        <option value="">Выберите статус</option>
-                        {% for status in statuses %}
-                        <option value="{{ status }}">{{ status }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+            <!-- Status -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Статус *</label>
+                <select x-model="formData.status" required
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                    <option value="">Выберите статус...</option>
+                    {% for status in statuses %}
+                    <option value="{{ status }}">{{ status }}</option>
+                    {% endfor %}
+                </select>
             </div>
 
             <!-- Note -->
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Примечание</label>
-                <textarea x-model="form.note"
+                <textarea x-model="formData.note" rows="3"
                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
-                          rows="3"
-                          placeholder="Дополнительная информация о заказе"></textarea>
+                          placeholder="Дополнительная информация..."></textarea>
             </div>
 
-            <!-- Participants Preview -->
-            <div x-show="extractedUsernames.length > 0">
-                <label class="block text-sm font-medium text-gray-400 mb-2">Обнаруженные участники</label>
-                <div class="bg-white/5 rounded-2xl p-4">
-                    <div class="flex flex-wrap gap-2">
-                        <template x-for="username in extractedUsernames" :key="username">
-                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-500/20 text-blue-300">
-                                <i class="fas fa-user mr-2"></i>
-                                <span x-text="username"></span>
-                            </span>
-                        </template>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Form Actions -->
+            <!-- Actions -->
             <div class="flex items-center justify-between pt-6 border-t border-white/10">
                 <a href="/admin/orders" class="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
                     Отмена
                 </a>
-                <button type="submit" class="btn-primary px-6 py-3 rounded-2xl font-medium" :disabled="loading">
+                <button type="submit" :disabled="loading"
+                        class="btn-primary px-8 py-3 rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
                     <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
-                    {{ "Сохранить" if order else "Создать" }} заказ
+                    {% if order %}Обновить заказ{% else %}Создать заказ{% endif %}
                 </button>
             </div>
         </form>
+    </div>
+
+    <!-- Success Message -->
+    <div x-show="success" x-transition class="fixed top-4 right-4 glass-effect rounded-2xl p-4 border border-green-500/20">
+        <div class="flex items-center space-x-3 text-green-400">
+            <i class="fas fa-check-circle"></i>
+            <span x-text="successMessage"></span>
+        </div>
+    </div>
+
+    <!-- Error Message -->
+    <div x-show="error" x-transition class="fixed top-4 right-4 glass-effect rounded-2xl p-4 border border-red-500/20">
+        <div class="flex items-center space-x-3 text-red-400">
+            <i class="fas fa-exclamation-circle"></i>
+            <span x-text="errorMessage"></span>
+        </div>
     </div>
 </div>
 
 <script>
 document.addEventListener('alpine:init', () => {
     Alpine.data('orderForm', () => ({
-        form: {
+        loading: false,
+        success: false,
+        error: false,
+        successMessage: '',
+        errorMessage: '',
+        formData: {
             order_id: '',
             client_name: '',
             country: '',
             status: '',
             note: ''
         },
-        loading: false,
-        
-        get extractedUsernames() {
-            // Простая регулярка для извлечения username
-            const usernames = this.form.client_name.match(/@[a-zA-Z0-9_]{5,}/g) || [];
-            return usernames.map(u => u.substring(1)); // Убираем @
-        },
         
         init() {
-            // Если это редактирование, загружаем данные заказа
-            {% if order %}
-            this.loadOrderData();
-            {% endif %}
+            // Если редактирование, загружаем данные заказа
+            const urlParams = new URLSearchParams(window.location.search);
+            const orderId = urlParams.get('edit');
+            if (orderId) {
+                this.loadOrder(orderId);
+            }
         },
         
-        loadOrderData() {
-            // Загружаем данные заказа для редактирования
-            // В реальном приложении здесь будет запрос к API
-            this.form = {
-                order_id: '{{ order.order_id }}',
-                client_name: '{{ order.client_name }}',
-                country: '{{ order.country }}',
-                status: '{{ order.status }}',
-                note: '{{ order.note }}'
-            };
+        async loadOrder(orderId) {
+            try {
+                const response = await fetch(`/admin/api/orders/${orderId}`);
+                const data = await response.json();
+                
+                if (data.order) {
+                    this.formData = {
+                        order_id: data.order.order_id,
+                        client_name: data.order.client_name,
+                        country: data.order.country,
+                        status: data.order.status,
+                        note: data.order.note || ''
+                    };
+                }
+            } catch (error) {
+                console.error('Error loading order:', error);
+                this.showError('Ошибка загрузки заказа');
+            }
         },
         
         async submitForm() {
             this.loading = true;
+            this.hideMessages();
             
             try {
-                const response = await fetch('/admin/api/orders', {
-                    method: 'POST',
+                const url = this.isEdit() ? 
+                    `/admin/api/orders/${this.formData.order_id}` : 
+                    '/admin/api/orders/create';
+                
+                const method = this.isEdit() ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'Content-Type': 'application/json',
                     },
-                    body: new URLSearchParams(this.form)
+                    body: JSON.stringify(this.formData)
                 });
                 
-                const result = await response.json();
+                const data = await response.json();
                 
                 if (response.ok) {
-                    alert('Заказ успешно создан!');
-                    window.location.href = '/admin/orders';
+                    this.showSuccess(data.message || 'Заказ успешно сохранен');
+                    setTimeout(() => {
+                        window.location.href = '/admin/orders';
+                    }, 2000);
                 } else {
-                    alert('Ошибка: ' + result.detail);
+                    this.showError(data.detail || 'Ошибка при сохранении заказа');
                 }
+                
             } catch (error) {
-                console.error('Error creating order:', error);
-                alert('Ошибка при создании заказа');
+                console.error('Error submitting form:', error);
+                this.showError('Ошибка соединения с сервером');
             } finally {
                 this.loading = false;
             }
+        },
+        
+        isEdit() {
+            return new URLSearchParams(window.location.search).has('edit');
+        },
+        
+        showSuccess(message) {
+            this.successMessage = message;
+            this.success = true;
+            setTimeout(() => this.hideMessages(), 5000);
+        },
+        
+        showError(message) {
+            this.errorMessage = message;
+            this.error = true;
+            setTimeout(() => this.hideMessages(), 5000);
+        },
+        
+        hideMessages() {
+            this.success = false;
+            this.error = false;
         }
     }));
 });
