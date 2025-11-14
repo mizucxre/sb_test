@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ "Редактирование" if order else "Создание" }} заказа{% endblock %}
+
+{% block content %}
+<div x-data="orderForm()" class="max-w-2xl mx-auto">
+    <div class="glass-effect rounded-2xl p-6">
+        <h2 class="text-2xl font-bold mb-6">{{ "Редактирование" if order else "Создание" }} заказа</h2>
+
+        <form @submit.prevent="submitForm()" class="space-y-6">
+            <!-- Order ID -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Order ID *</label>
+                <input type="text" x-model="form.order_id" required
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                       placeholder="CN-12345">
+            </div>
+
+            <!-- Client Name -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Имя клиента *</label>
+                <textarea x-model="form.client_name" required
+                          class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                          placeholder="Введите имя клиента или @username участников"
+                          rows="2"></textarea>
+                <p class="text-xs text-gray-400 mt-1">Укажите @username участников, они будут автоматически добавлены</p>
+            </div>
+
+            <!-- Country and Status -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Страна *</label>
+                    <select x-model="form.country" required
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <option value="">Выберите страну</option>
+                        <option value="CN">Китай (CN)</option>
+                        <option value="KR">Корея (KR)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-sm font-medium text-gray-400 mb-2">Статус *</label>
+                    <select x-model="form.status" required
+                            class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <option value="">Выберите статус</option>
+                        {% for status in statuses %}
+                        <option value="{{ status }}">{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+
+            <!-- Note -->
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Примечание</label>
+                <textarea x-model="form.note"
+                          class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                          rows="3"
+                          placeholder="Дополнительная информация о заказе"></textarea>
+            </div>
+
+            <!-- Participants Preview -->
+            <div x-show="extractedUsernames.length > 0">
+                <label class="block text-sm font-medium text-gray-400 mb-2">Обнаруженные участники</label>
+                <div class="bg-white/5 rounded-2xl p-4">
+                    <div class="flex flex-wrap gap-2">
+                        <template x-for="username in extractedUsernames" :key="username">
+                            <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-500/20 text-blue-300">
+                                <i class="fas fa-user mr-2"></i>
+                                <span x-text="username"></span>
+                            </span>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Form Actions -->
+            <div class="flex items-center justify-between pt-6 border-t border-white/10">
+                <a href="/admin/orders" class="px-6 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
+                    Отмена
+                </a>
+                <button type="submit" class="btn-primary px-6 py-3 rounded-2xl font-medium" :disabled="loading">
+                    <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
+                    {{ "Сохранить" if order else "Создать" }} заказ
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('orderForm', () => ({
+        form: {
+            order_id: '',
+            client_name: '',
+            country: '',
+            status: '',
+            note: ''
+        },
+        loading: false,
+        
+        get extractedUsernames() {
+            // Простая регулярка для извлечения username
+            const usernames = this.form.client_name.match(/@[a-zA-Z0-9_]{5,}/g) || [];
+            return usernames.map(u => u.substring(1)); // Убираем @
+        },
+        
+        init() {
+            // Если это редактирование, загружаем данные заказа
+            {% if order %}
+            this.loadOrderData();
+            {% endif %}
+        },
+        
+        loadOrderData() {
+            // Загружаем данные заказа для редактирования
+            // В реальном приложении здесь будет запрос к API
+            this.form = {
+                order_id: '{{ order.order_id }}',
+                client_name: '{{ order.client_name }}',
+                country: '{{ order.country }}',
+                status: '{{ order.status }}',
+                note: '{{ order.note }}'
+            };
+        },
+        
+        async submitForm() {
+            this.loading = true;
+            
+            try {
+                const response = await fetch('/admin/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams(this.form)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert('Заказ успешно создан!');
+                    window.location.href = '/admin/orders';
+                } else {
+                    alert('Ошибка: ' + result.detail);
+                }
+            } catch (error) {
+                console.error('Error creating order:', error);
+                alert('Ошибка при создании заказа');
+            } finally {
+                this.loading = false;
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}
