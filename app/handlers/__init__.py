@@ -4,13 +4,13 @@ import logging
 logger = logging.getLogger(__name__)
 
 def register_handlers(application: Application):
-    """Регистрация всех хэндлеров"""
-    from . import client_handlers, admin_handlers, callback_handlers, excel_handlers
+    """Регистрация всех хэндлеров в правильном порядке"""
+    from . import callback_handlers, client_handlers, admin_handlers, excel_handlers
     
-    # Регистрируем в правильном порядке
+    # Правильный порядок: специфичные -> общие
     callback_handlers.register(application)
-    client_handlers.register(application)
-    admin_handlers.register(application)
-    excel_handlers.register(application)  # ← НОВОЕ!
+    excel_handlers.register(application)
+    admin_handlers.register(application)  # Админы перед клиентами
+    client_handlers.register(application)  # Клиенты последние
     
     logger.info("✅ Все хэндлеры успешно зарегистрированы!")
