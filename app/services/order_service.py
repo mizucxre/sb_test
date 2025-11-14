@@ -293,3 +293,23 @@ class ParticipantService:
         except Exception as e:
             logger.error(f"Error finding orders for username: {e}")
             return []
+
+    @staticmethod
+    async def get_all_participants(limit: int = 5000) -> List[Participant]:
+        """Получить всех участников из всех заказов"""
+        try:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT order_id, username, paid, created_at, updated_at FROM participants ORDER BY updated_at DESC LIMIT $1",
+                    limit
+                )
+                participants = []
+                for row in rows:
+                    participant_dict = dict(row)
+                    if 'id' in participant_dict:
+                        del participant_dict['id']
+                    participants.append(Participant(**participant_dict))
+                return participants
+        except Exception as e:
+            logger.error(f"Error getting all participants: {e}")
+            return []
