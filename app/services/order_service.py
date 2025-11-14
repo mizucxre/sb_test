@@ -13,10 +13,15 @@ class OrderService:
         try:
             async with db.pool.acquire() as conn:
                 row = await conn.fetchrow(
-                    "SELECT * FROM orders WHERE order_id = $1", order_id
+                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders WHERE order_id = $1", 
+                    order_id
                 )
                 if row:
-                    return Order(**dict(row))
+                    # Преобразуем row в dict и убираем поле 'id' если оно есть
+                    order_dict = dict(row)
+                    if 'id' in order_dict:
+                        del order_dict['id']
+                    return Order(**order_dict)
             return None
         except Exception as e:
             logger.error(f"Error getting order {order_id}: {e}")
@@ -65,10 +70,16 @@ class OrderService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM orders WHERE note ILIKE $1",
+                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders WHERE note ILIKE $1",
                     f"%{marker}%"
                 )
-                return [Order(**dict(row)) for row in rows]
+                orders = []
+                for row in rows:
+                    order_dict = dict(row)
+                    if 'id' in order_dict:
+                        del order_dict['id']
+                    orders.append(Order(**order_dict))
+                return orders
         except Exception as e:
             logger.error(f"Error getting orders by note: {e}")
             return []
@@ -79,10 +90,16 @@ class OrderService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM orders ORDER BY updated_at DESC LIMIT $1",
+                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders ORDER BY updated_at DESC LIMIT $1",
                     limit
                 )
-                return [Order(**dict(row)) for row in rows]
+                orders = []
+                for row in rows:
+                    order_dict = dict(row)
+                    if 'id' in order_dict:
+                        del order_dict['id']
+                    orders.append(Order(**order_dict))
+                return orders
         except Exception as e:
             logger.error(f"Error listing recent orders: {e}")
             return []
@@ -93,10 +110,16 @@ class OrderService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM orders WHERE status = ANY($1) ORDER BY updated_at DESC",
+                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders WHERE status = ANY($1) ORDER BY updated_at DESC",
                     statuses
                 )
-                return [Order(**dict(row)) for row in rows]
+                orders = []
+                for row in rows:
+                    order_dict = dict(row)
+                    if 'id' in order_dict:
+                        del order_dict['id']
+                    orders.append(Order(**order_dict))
+                return orders
         except Exception as e:
             logger.error(f"Error listing orders by status: {e}")
             return []
@@ -111,7 +134,7 @@ class OrderService:
                 i = 1
                 
                 for key, value in update_data.items():
-                    if key in ["client_name", "country", "note"]:
+                    if key in ["client_name", "country", "note", "status"]:
                         set_parts.append(f"{key} = ${i}")
                         values.append(value)
                         i += 1
@@ -183,10 +206,16 @@ class ParticipantService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM participants WHERE order_id = $1 ORDER BY username",
+                    "SELECT order_id, username, paid, created_at, updated_at FROM participants WHERE order_id = $1 ORDER BY username",
                     order_id
                 )
-                return [Participant(**dict(row)) for row in rows]
+                participants = []
+                for row in rows:
+                    participant_dict = dict(row)
+                    if 'id' in participant_dict:
+                        del participant_dict['id']
+                    participants.append(Participant(**participant_dict))
+                return participants
         except Exception as e:
             logger.error(f"Error getting participants for {order_id}: {e}")
             return []
