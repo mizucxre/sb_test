@@ -22,6 +22,18 @@ BTN_ADMIN_EXIT_NEW    = "🚪 Выйти из админ-панели"
 
 BTN_BACK_TO_ADMIN_NEW = "⬅️ Назад, в админ-панель"
 
+# Подменю «Рассылка»
+BTN_BC_ALL_NEW  = "📨 Уведомления всем должникам"
+BTN_BC_ONE_NEW  = "📩 Уведомления по ID разбора"
+
+# Подменю «Адреса»
+BTN_ADDRS_EXPORT_NEW = "📤 Выгрузить адреса"
+BTN_ADDRS_EDIT_NEW   = "✏️ Изменить адрес по username"
+
+# Подменю «Отчёты»
+BTN_REPORT_EXPORT_BY_NOTE_NEW = "🧾 Выгрузить разборы админа"
+BTN_REPORT_UNPAID_NEW         = "🧮 Отчёт по должникам"
+
 # Основные клавиатуры
 MAIN_KB = ReplyKeyboardMarkup(
     [
@@ -38,6 +50,34 @@ ADMIN_MENU_KB = ReplyKeyboardMarkup(
         [KeyboardButton(BTN_ADMIN_SEND_NEW), KeyboardButton(BTN_ADMIN_ADDRS_NEW)],
         [KeyboardButton(BTN_ADMIN_REPORTS_NEW), KeyboardButton(BTN_ADMIN_MASS_NEW)],
         [KeyboardButton(BTN_ADMIN_EXIT_NEW)],
+    ],
+    resize_keyboard=True,
+)
+
+# Клавиатуры подменю
+BROADCAST_MENU_KB = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton(BTN_BC_ALL_NEW)],
+        [KeyboardButton(BTN_BC_ONE_NEW)],
+        [KeyboardButton(BTN_BACK_TO_ADMIN_NEW)],
+    ],
+    resize_keyboard=True,
+)
+
+ADMIN_ADDR_MENU_KB = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton(BTN_ADDRS_EXPORT_NEW)],
+        [KeyboardButton(BTN_ADDRS_EDIT_NEW)],
+        [KeyboardButton(BTN_BACK_TO_ADMIN_NEW)],
+    ],
+    resize_keyboard=True,
+)
+
+REPORTS_MENU_KB = ReplyKeyboardMarkup(
+    [
+        [KeyboardButton(BTN_REPORT_EXPORT_BY_NOTE_NEW)],
+        [KeyboardButton(BTN_REPORT_UNPAID_NEW)],
+        [KeyboardButton(BTN_BACK_TO_ADMIN_NEW)],
     ],
     resize_keyboard=True,
 )
