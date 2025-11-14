@@ -1,7 +1,7 @@
 import logging
 import re
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes, CommandHandler, MessageHandler, filters
+from telegram.ext import ContextTypes, CommandHandler
 
 from app.config import ADMIN_IDS, STATUSES
 from app.utils.helpers import reply_animated, reply_markdown_animated, _is_admin
@@ -62,10 +62,13 @@ async def handle_admin_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработка текстовых сообщений админа"""
     user_id = update.effective_user.id
     if not _is_admin(user_id, ADMIN_IDS):
+        logger.warning(f"❌ Неадмин {user_id} попытался использовать админский обработчик")
         return
 
     raw_text = (update.message.text or "").strip()
     text = raw_text.lower()
+
+    logger.info(f"🛠 Админский обработчик: сообщение от {user_id}: '{raw_text}'")
 
     # Выход из админки
     if _is_text(text, ADMIN_MENU_ALIASES["admin_exit"]):
@@ -152,6 +155,8 @@ async def _handle_admin_modes(update: Update, context: ContextTypes.DEFAULT_TYPE
     """Обработка различных режимов админки"""
     mode = context.user_data.get("adm_mode")
     
+    logger.info(f"🛠 Админский обработчик: режим '{mode}', текст: '{raw_text}'")
+    
     if mode == "add_order_id":
         await _handle_add_order_id(update, context, raw_text)
     elif mode == "add_order_client":
@@ -173,7 +178,7 @@ async def _handle_admin_modes(update: Update, context: ContextTypes.DEFAULT_TYPE
     elif mode == "adm_export_orders_by_note":
         await _handle_export_orders_by_note(update, context, raw_text)
     else:
-        logger.warning(f"Неизвестный режим админа: {mode}")
+        logger.warning(f"❌ Админский обработчик: неизвестный режим админа: {mode}")
         await reply_animated(update, context, "Вы в админ-панели. Выберите действие:", reply_markup=ADMIN_MENU_KB)
 
 async def _handle_add_order_id(update: Update, context: ContextTypes.DEFAULT_TYPE, raw_text: str):
@@ -551,6 +556,7 @@ async def notify_subscribers(application, order_id: str, new_status: str):
         logger.error(f"Ошибка уведомления подписчиков: {e}")
 
 def register(application):
-    """Регистрация админских хэндлеров"""
+    """Регистрация админских хэндлеров (ТОЛЬКО КОМАНДЫ)"""
     application.add_handler(CommandHandler("admin", admin_menu))
-    logger.info("✅ Админские хэндлеры зарегистрированы")
+    # MessageHandler удален - теперь обрабатывается в text_handler.py
+    logger.info("✅ Админские хэндлеры зарегистрированы (только команды)")
