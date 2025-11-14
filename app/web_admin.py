@@ -40,14 +40,17 @@ def authenticate_admin(credentials: HTTPBasicCredentials = Depends(security)):
 async def admin_dashboard(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "dashboard"
     })
 
 @app.get("/orders", response_class=HTMLResponse)
 async def orders_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("orders.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "orders",
+        "statuses": STATUSES
     })
 
 @app.get("/orders/new", response_class=HTMLResponse)
@@ -55,35 +58,40 @@ async def new_order_page(request: Request, username: str = Depends(authenticate_
     return templates.TemplateResponse("order_form.html", {
         "request": request,
         "username": username,
-        "statuses": STATUSES
+        "statuses": STATUSES,
+        "current_page": "orders"
     })
 
 @app.get("/participants", response_class=HTMLResponse)
 async def participants_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("participants.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "participants"
     })
 
 @app.get("/reports", response_class=HTMLResponse)
 async def reports_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("reports.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "reports"
     })
 
 @app.get("/broadcast", response_class=HTMLResponse)
 async def broadcast_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("broadcast.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "broadcast"
     })
 
 @app.get("/settings", response_class=HTMLResponse)
 async def settings_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("settings.html", {
         "request": request,
-        "username": username
+        "username": username,
+        "current_page": "settings"
     })
 
 # API endpoints
@@ -92,11 +100,11 @@ async def get_stats(username: str = Depends(authenticate_admin)):
     """Получение статистики для дашборда"""
     try:
         # Получаем все заказы для статистики
-        orders = await OrderService.list_recent_orders(1000)  # Большой лимит для статистики
+        orders = await OrderService.list_recent_orders(1000)
         total_orders = len(orders)
         
         # Активные заказы (исключаем завершенные)
-        active_statuses = [s for s in STATUSES if "получен" not in s.lower()]
+        active_statuses = [s for s in STATUSES if "получен" not in s.lower() and "доставлен" not in s.lower()]
         active_orders = len([o for o in orders if o.status in active_statuses])
         
         # Участники
@@ -225,10 +233,6 @@ async def update_order_status(
         if not success:
             raise HTTPException(status_code=404, detail="Order not found")
         
-        # Уведомляем подписчиков
-        from app.webhook import application
-        await notify_subscribers(application, order_id, status)
-        
         return {"message": "Status updated successfully"}
     except Exception as e:
         logger.error(f"Error updating order status: {e}")
@@ -238,9 +242,11 @@ async def update_order_status(
 async def delete_order(order_id: str, username: str = Depends(authenticate_admin)):
     """API для удаления заказа"""
     try:
-        # Здесь должна быть логика удаления заказа
-        # Пока просто возвращаем заглушку
-        return {"message": "Delete functionality to be implemented"}
+        success = await OrderService.delete_order(order_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        return {"message": "Order deleted successfully"}
     except Exception as e:
         logger.error(f"Error deleting order {order_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -258,9 +264,13 @@ async def get_participants(
         if order_id:
             participants = await ParticipantService.get_participants(order_id)
         else:
-            # Здесь должна быть логика получения всех участников
-            # Пока возвращаем пустой список
-            participants = []
+            # Получаем всех участников из всех заказов
+            all_participants = []
+            orders = await OrderService.list_recent_orders(1000)
+            for order in orders:
+                participants = await ParticipantService.get_participants(order.order_id)
+                all_participants.extend(participants)
+            participants = all_participants
         
         # Фильтрация по статусу оплаты
         if paid is not None:
@@ -287,12 +297,11 @@ async def toggle_participant_paid(
 ):
     """API для изменения статуса оплаты участника"""
     try:
-        if paid:
-            # Здесь должна быть логика отметки оплаты
-            # Пока заглушка
-            return {"message": "Payment status updated"}
-        else:
-            return {"message": "Payment status updated"}
+        success = await ParticipantService.toggle_participant_paid(order_id, username)
+        if not success:
+            raise HTTPException(status_code=400, detail="Failed to update payment status")
+        
+        return {"message": "Payment status updated successfully"}
     except Exception as e:
         logger.error(f"Error updating participant payment status: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -320,268 +329,42 @@ async def broadcast_unpaid(
 ):
     """API для рассылки неплательщикам"""
     try:
-        # Здесь должна быть логика рассылки
-        # Пока заглушка
-        return {"message": "Broadcast functionality to be implemented", "sent_to": 0}
-    except Exception as e:
-        logger.error(f"Error sending broadcast: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-async def notify_subscribers(application, order_id: str, new_status: str):
-    """Уведомление подписчиков об изменении статуса"""
-    try:
-        subs = await SubscriptionService.get_all_subscriptions()
-        targets = [s for s in subs if s.order_id == order_id]
-        
-        for sub in targets:
-            try:
-                await application.bot.send_message(
-                    chat_id=sub.user_id,
-                    text=f"🔄 Обновление по заказу *{order_id}*\nНовый статус: *{new_status}*",
-                    parse_mode="Markdown",
-                )
-                await SubscriptionService.set_last_sent_status(sub.user_id, order_id, new_status)
-            except Exception as e:
-                logger.warning(f"Не удалось уведомить {sub.user_id}: {e}")
-    except Exception as e:
-        logger.error(f"Ошибка уведомления подписчиков: {e}")
-
-from fastapi import Form, HTTPException
-from pydantic import BaseModel
-from typing import Optional
-
-# Pydantic модели для валидации
-class OrderCreate(BaseModel):
-    order_id: str
-    client_name: str
-    country: str
-    status: str
-    note: Optional[str] = ""
-
-class OrderUpdate(BaseModel):
-    client_name: Optional[str] = None
-    country: Optional[str] = None
-    status: Optional[str] = None
-    note: Optional[str] = None
-
-# API endpoints для заказов
-@app.post("/api/orders/create")
-async def create_order_api(
-    order_data: OrderCreate,
-    username: str = Depends(authenticate_admin)
-):
-    """Создание нового заказа"""
-    try:
-        # Проверяем существование заказа
-        existing = await OrderService.get_order(order_data.order_id)
-        if existing:
-            raise HTTPException(400, "Заказ с таким ID уже существует")
-        
-        order = Order(
-            order_id=order_data.order_id,
-            client_name=order_data.client_name,
-            country=order_data.country.upper(),
-            status=order_data.status,
-            note=order_data.note or ""
-        )
-        
-        success = await OrderService.add_order(order)
-        if not success:
-            raise HTTPException(500, "Ошибка при создании заказа")
-        
-        # Добавляем участников
-        from app.utils.validators import extract_usernames
-        usernames = extract_usernames(order_data.client_name)
-        if usernames:
-            await ParticipantService.ensure_participants(order_data.order_id, usernames)
-        
-        return {"success": True, "message": "Заказ успешно создан"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating order: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-@app.put("/api/orders/{order_id}")
-async def update_order_api(
-    order_id: str,
-    order_data: OrderUpdate,
-    username: str = Depends(authenticate_admin)
-):
-    """Обновление заказа"""
-    try:
-        order = await OrderService.get_order(order_id)
-        if not order:
-            raise HTTPException(404, "Заказ не найден")
-        
-        # Обновляем поля
-        update_data = {}
-        if order_data.client_name is not None:
-            update_data["client_name"] = order_data.client_name
-        if order_data.country is not None:
-            update_data["country"] = order_data.country.upper()
-        if order_data.status is not None:
-            update_data["status"] = order_data.status
-        if order_data.note is not None:
-            update_data["note"] = order_data.note
-        
-        # Здесь должна быть логика обновления в базе
-        # Покажем как это можно сделать через существующий сервис
-        if update_data:
-            # Для примера - обновим статус если он изменился
-            if "status" in update_data:
-                await OrderService.update_order_status(order_id, update_data["status"])
-            
-            # Для остальных полей нужен отдельный метод update_order
-            # Пока оставим заглушку
-            logger.info(f"Order {order_id} update data: {update_data}")
-        
-        return {"success": True, "message": "Заказ обновлен"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error updating order: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-@app.delete("/api/orders/{order_id}")
-async def delete_order_api(
-    order_id: str,
-    username: str = Depends(authenticate_admin)
-):
-    """Удаление заказа"""
-    try:
-        # Проверяем существование заказа
-        order = await OrderService.get_order(order_id)
-        if not order:
-            raise HTTPException(404, "Заказ не найден")
-        
-        # Здесь должна быть логика удаления заказа и связанных данных
-        # Пока заглушка - в реальности нужно удалить из orders, participants, subscriptions
-        logger.info(f"Order {order_id} marked for deletion")
-        
-        return {"success": True, "message": "Заказ удален"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error deleting order: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-@app.put("/api/participants/{order_id}/{username}/paid")
-async def update_participant_paid(
-    order_id: str,
-    username: str,
-    paid: bool = Form(...),
-    username_auth: str = Depends(authenticate_admin)
-):
-    """Изменение статуса оплаты участника"""
-    try:
-        success = await ParticipantService.toggle_participant_paid(order_id, username)
-        if not success:
-            raise HTTPException(400, "Не удалось обновить статус оплаты")
-        
-        return {"success": True, "message": "Статус оплаты обновлен"}
-        
-    except Exception as e:
-        logger.error(f"Error updating participant payment: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-@app.get("/api/participants/stats")
-async def get_participants_stats(username: str = Depends(authenticate_admin)):
-    """Статистика по участникам"""
-    try:
-        # Общее количество участников
-        all_participants = []
-        orders = await OrderService.list_recent_orders(1000)
-        
-        for order in orders:
-            participants = await ParticipantService.get_participants(order.order_id)
-            all_participants.extend(participants)
-        
-        total_participants = len(set(p.username for p in all_participants))
-        paid_participants = len([p for p in all_participants if p.paid])
-        unpaid_participants = total_participants - paid_participants
-        
-        # Неплательщики по заказам
-        unpaid_grouped = await ParticipantService.get_all_unpaid_grouped()
-        
-        return {
-            "total_participants": total_participants,
-            "paid_participants": paid_participants,
-            "unpaid_participants": unpaid_participants,
-            "unpaid_by_order": unpaid_grouped
-        }
-        
-    except Exception as e:
-        logger.error(f"Error getting participants stats: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-class BroadcastRequest(BaseModel):
-    order_id: Optional[str] = None
-    message: str
-    target: str  # all_unpaid, order_unpaid, all_users
-
-@app.post("/api/broadcast/send")
-async def send_broadcast(
-    broadcast_data: BroadcastRequest,
-    username: str = Depends(authenticate_admin)
-):
-    """Отправка рассылки"""
-    try:
         from app.webhook import application
         
         sent_count = 0
         failed_count = 0
         
-        if broadcast_data.target == "all_unpaid":
+        if order_id:
+            # Рассылка неплательщикам конкретного заказа
+            usernames = await ParticipantService.get_unpaid_usernames(order_id)
+        else:
             # Рассылка всем неплательщикам
             grouped = await ParticipantService.get_all_unpaid_grouped()
-            
-            for order_id, usernames in grouped.items():
-                for username in usernames:
-                    try:
-                        user_ids = await AddressService.get_user_ids_by_usernames([username])
-                        if user_ids:
-                            await application.bot.send_message(
-                                chat_id=user_ids[0],
-                                text=broadcast_data.message,
-                                parse_mode="Markdown"
-                            )
-                            sent_count += 1
-                    except Exception as e:
-                        logger.warning(f"Failed to send to {username}: {e}")
-                        failed_count += 1
-                        
-        elif broadcast_data.target == "order_unpaid" and broadcast_data.order_id:
-            # Рассылка неплательщикам конкретного заказа
-            usernames = await ParticipantService.get_unpaid_usernames(broadcast_data.order_id)
-            
-            for username in usernames:
-                try:
-                    user_ids = await AddressService.get_user_ids_by_usernames([username])
-                    if user_ids:
-                        await application.bot.send_message(
-                            chat_id=user_ids[0],
-                            text=broadcast_data.message,
-                            parse_mode="Markdown"
-                        )
-                        sent_count += 1
-                except Exception as e:
-                    logger.warning(f"Failed to send to {username}: {e}")
-                    failed_count += 1
+            usernames = []
+            for order_usernames in grouped.values():
+                usernames.extend(order_usernames)
+        
+        for username in usernames:
+            try:
+                user_ids = await AddressService.get_user_ids_by_usernames([username])
+                if user_ids:
+                    await application.bot.send_message(
+                        chat_id=user_ids[0],
+                        text=message,
+                        parse_mode="Markdown"
+                    )
+                    sent_count += 1
+            except Exception as e:
+                logger.warning(f"Failed to send to {username}: {e}")
+                failed_count += 1
         
         return {
-            "success": True,
-            "message": f"Рассылка отправлена: {sent_count} успешно, {failed_count} ошибок",
-            "sent_count": sent_count,
-            "failed_count": failed_count
+            "message": f"Broadcast sent: {sent_count} successful, {failed_count} failed",
+            "sent_to": sent_count
         }
-        
     except Exception as e:
         logger.error(f"Error sending broadcast: {e}")
-        raise HTTPException(500, "Ошибка при отправке рассылки")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 from fastapi.responses import StreamingResponse
 import io
