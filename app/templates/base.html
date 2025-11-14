@@ -4,8 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}SEABLUU Admin{% endblock %}</title>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -120,7 +119,7 @@
         </div>
 
         <!-- Sidebar -->
-        <div x-show="sidebarOpen || !window.matchMedia('(max-width: 1024px)').matches"
+        <div x-show="sidebarOpen || window.matchMedia('(min-width: 1024px)').matches"
              x-transition:enter="transition-transform duration-300 ease-in-out"
              x-transition:enter-start="-translate-x-full"
              x-transition:enter-end="translate-x-0"
@@ -147,7 +146,7 @@
 
                 <!-- Navigation -->
                 <nav class="flex-1 p-4 space-y-2">
-                    <a href="/admin" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
                         <i class="fas fa-chart-pie w-5"></i>
                         <span>Дашборд</span>
                     </a>
@@ -235,18 +234,79 @@
     </div>
 
     <script>
-        // Инициализация Alpine.js компонентов
+        // Инициализация Alpine.js - только базовые функции
         document.addEventListener('alpine:init', () => {
-            Alpine.data('dashboard', () => ({
-                loading: true,
+            // Базовые утилиты для всех страниц
+            Alpine.data('pageUtils', () => ({
+                formatDate(dateString) {
+                    if (!dateString) return 'Неизвестно';
+                    try {
+                        const date = new Date(dateString);
+                        return date.toLocaleDateString('ru-RU', {
+                            day: 'numeric',
+                            month: 'short',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                    } catch (e) {
+                        return 'Неизвестно';
+                    }
+                },
                 
-                init() {
-                    // Симуляция загрузки данных
+                showNotification(message, type = 'info') {
+                    // Создаем уведомление
+                    const notification = document.createElement('div');
+                    const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
+                                   type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
+                                   'bg-blue-500/20 border-blue-500/50';
+                    
+                    notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
+                    notification.innerHTML = `
+                        <div class="flex items-center space-x-3">
+                            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
+                                ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
+                            <span>${message}</span>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(notification);
+                    
+                    // Автоматически удаляем через 5 секунд
                     setTimeout(() => {
-                        this.loading = false;
-                    }, 1000);
+                        if (notification.parentNode) {
+                            notification.parentNode.removeChild(notification);
+                        }
+                    }, 5000);
+                },
+                
+                async apiCall(url, options = {}) {
+                    try {
+                        const response = await fetch(url, {
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...options.headers
+                            },
+                            ...options
+                        });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
+                        }
+                        
+                        return await response.json();
+                    } catch (error) {
+                        console.error('API call error:', error);
+                        this.showNotification(error.message, 'error');
+                        throw error;
+                    }
                 }
             }));
+        });
+
+        // Обработка ошибок загрузки страницы
+        window.addEventListener('error', (event) => {
+            console.error('Global error:', event.error);
         });
     </script>
 </body>
