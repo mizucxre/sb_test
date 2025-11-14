@@ -9,14 +9,14 @@
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
                 <span class="text-gray-400">Выбрано: <span x-text="selectedOrders.length" class="font-semibold"></span></span>
-                <select x-model="bulkAction" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="bulkAction" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     <option value="">Выберите действие...</option>
                     <option value="update_status">Изменить статус</option>
                     <option value="delete">Удалить выбранные</option>
                 </select>
                 
                 <div x-show="bulkAction === 'update_status'" class="flex items-center space-x-2">
-                    <select x-model="bulkStatus" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                    <select x-model="bulkStatus" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                         <option value="">Выберите статус...</option>
                         {% for status in statuses %}
                         <option value="{{ status }}">{{ status }}</option>
@@ -38,11 +38,11 @@
     </div>
 
     <!-- Filters -->
-    <div class="glass-effect rounded-2xl p-6 filters">
+    <div class="glass-effect rounded-2xl p-6">
         <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус</label>
-                <select x-model="filters.status" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <select x-model="filters.status" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все статусы</option>
                     {% for status in statuses %}
                     <option value="{{ status }}">{{ status }}</option>
@@ -51,7 +51,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
-                <select x-model="filters.country" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <select x-model="filters.country" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все страны</option>
                     <option value="CN">Китай (CN)</option>
                     <option value="KR">Корея (KR)</option>
@@ -205,6 +205,15 @@ document.addEventListener('alpine:init', () => {
         
         init() {
             this.loadOrders();
+            // Применяем стили к селектам после инициализации Alpine
+            this.$nextTick(() => {
+                setTimeout(() => {
+                    const selects = this.$el.querySelectorAll('select');
+                    selects.forEach(select => {
+                        select.classList.add('custom-select');
+                    });
+                }, 100);
+            });
         },
         
         async loadOrders() {
