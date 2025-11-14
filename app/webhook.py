@@ -8,11 +8,17 @@ from telegram.ext import Application, ApplicationBuilder
 from app.database import db
 from app.handlers import register_handlers
 from app.config import BOT_TOKEN, PUBLIC_URL
+from app.web_admin import app as admin_app  # Импортируем веб-админку
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO)
 
+# Основное приложение
 app = FastAPI()
+
+# Подключаем веб-админку
+app.mount("/admin", admin_app)
+
 application: Application = None
 
 async def _build_application() -> Application:
@@ -96,6 +102,10 @@ async def telegram(request: Request):
         logger.error(f"📊 Update data: {data if 'data' in locals() else 'No data'}")
     
     return Response(status_code=200)
+
+@app.get("/")
+async def root():
+    return {"status": "ok", "message": "SEABLUU Bot is running"}
 
 @app.get("/health")
 async def health():
