@@ -10,7 +10,8 @@ import json
 from app.database import db
 from app.services.order_service import OrderService, ParticipantService
 from app.services.user_service import AddressService, SubscriptionService
-from app.services.admin_service import AdminService, AdminChatService
+from app.services.admin_service import AdminService
+from app.services.admin_chat_service import AdminChatService  # Исправленный импорт
 from app.models import Order, AdminUserCreate, AdminUserUpdate, AdminChatMessageCreate
 from app.config import STATUSES
 from app.utils.security import verify_password, create_access_token, verify_token, generate_avatar_url
@@ -346,6 +347,7 @@ async def change_password(request: Request, current_admin: dict = Depends(get_cu
         logger.error(f"Error changing password: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
+# ... остальной код остается без изменений ...
 # Существующие API endpoints (остаются без изменений, но добавляем проверку авторизации)
 @app.get("/api/stats")
 async def get_stats(current_admin: dict = Depends(get_current_admin)):
