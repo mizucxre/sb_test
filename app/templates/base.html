@@ -7,6 +7,11 @@
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            important: true,
+        }
+    </script>
     
     <!-- Font Awesome -->
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
@@ -88,41 +93,22 @@
             background: rgba(255, 255, 255, 0.3);
         }
 
-        /* АГРЕССИВНЫЕ стили для выпадающих списков */
-        select {
-            appearance: none !important;
+        /* АБСОЛЮТНЫЕ стили для выпадающих списков */
+        .custom-select {
             -webkit-appearance: none !important;
             -moz-appearance: none !important;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e") !important;
-            background-position: right 12px center !important;
-            background-repeat: no-repeat !important;
-            background-size: 16px !important;
+            appearance: none !important;
+            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
             padding-right: 40px !important;
         }
 
-        select:focus {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23007AFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e") !important;
+        .custom-select:focus {
+            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23007AFF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
         }
 
-        /* Убедитесь, что стандартная стрелка скрыта в IE */
-        select::-ms-expand {
+        /* Скрываем стандартную стрелку в IE */
+        .custom-select::-ms-expand {
             display: none !important;
-        }
-
-        /* Специфичные стили для select в фильтрах */
-        .filters select {
-            appearance: none !important;
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%239ca3af' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e") !important;
-            background-position: right 12px center !important;
-            background-repeat: no-repeat !important;
-            background-size: 16px !important;
-            padding-right: 40px !important;
-        }
-
-        .filters select:focus {
-            background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%23007AFF' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='m6 8 4 4 4-4'/%3e%3c/svg%3e") !important;
         }
     </style>
 </head>
@@ -326,6 +312,21 @@
                 }
             }));
         });
+
+        // Принудительное применение стилей к выпадающим спискам
+        function applySelectStyles() {
+            const allSelects = document.querySelectorAll('select');
+            allSelects.forEach(select => {
+                select.classList.add('custom-select');
+            });
+        }
+
+        // Применяем стили после загрузки
+        document.addEventListener('DOMContentLoaded', applySelectStyles);
+        document.addEventListener('alpine:init', applySelectStyles);
+        
+        // Периодически проверяем и применяем стили (для динамического контента)
+        setInterval(applySelectStyles, 1000);
 
         // Обработка ошибок загрузки страницы
         window.addEventListener('error', (event) => {
