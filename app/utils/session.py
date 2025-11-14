@@ -43,8 +43,11 @@ def require_permission(required_role: str = None):
         return current_admin
     return role_checker
 
-def require_super_admin(current_admin: dict = Depends(get_current_admin)):
-    """Проверка что пользователь супер-админ"""
-    if current_admin.get("role") != "super_admin":
-        raise HTTPException(status_code=403, detail="Super admin access required")
-    return current_admin
+# Исправленная функция - возвращаем dependency, а не используем как декоратор напрямую
+def require_super_admin():
+    """Фабрика зависимости для проверки супер-админа"""
+    def super_admin_checker(current_admin: dict = Depends(get_current_admin)):
+        if current_admin.get("role") != "super_admin":
+            raise HTTPException(status_code=403, detail="Super admin access required")
+        return current_admin
+    return super_admin_checker
