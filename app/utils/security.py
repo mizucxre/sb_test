@@ -8,10 +8,15 @@ from passlib.context import CryptContext
 # Конфигурация для хэширования паролей
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Секретный ключ для JWT
-SECRET_KEY = "your-secret-key-change-in-production"  # Замените в продакшене
+# Секретный ключ для JWT (будет переопределен из config)
+SECRET_KEY = "temp-secret-key"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7  # 7 дней
+
+def set_secret_key(secret_key: str):
+    """Установить секретный ключ из конфигурации"""
+    global SECRET_KEY
+    SECRET_KEY = secret_key
 
 def hash_password(password: str) -> str:
     """Хэширование пароля"""
