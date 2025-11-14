@@ -131,38 +131,37 @@
                 </div>
 
                 <!-- Navigation -->
-                <nav class="flex-1 p-4 space-y-2">
-                    <a href="/admin" class="flex items-center space-x-3 p-3 rounded-2xl text-blue-400 bg-blue-500/10 border border-blue-500/20">
-                        <i class="fas fa-chart-pie w-5"></i>
-                        <span>Дашборд</span>
-                    </a>
-                    
-                    <a href="/admin/orders" class="flex items-center space-x-3 p-3 rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-box w-5"></i>
-                        <span>Заказы</span>
-                    </a>
-                    
-                    <a href="/admin/participants" class="flex items-center space-x-3 p-3 rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-users w-5"></i>
-                        <span>Участники</span>
-                    </a>
-                    
-                    <a href="/admin/reports" class="flex items-center space-x-3 p-3 rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-chart-bar w-5"></i>
-                        <span>Отчеты</span>
-                    </a>
-                    
-                    <a href="/admin/broadcast" class="flex items-center space-x-3 p-3 rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-bullhorn w-5"></i>
-                        <span>Рассылки</span>
-                    </a>
-                    
-                    <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl text-gray-300 hover:text-white hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-cog w-5"></i>
-                        <span>Настройки</span>
-                    </a>
-                </nav>
-
+<nav class="flex-1 p-4 space-y-2">
+    <a href="/admin" class="flex items-center space-x-3 p-3 rounded-2xl {% if request.url.path == '/admin/' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-chart-pie w-5"></i>
+        <span>Дашборд</span>
+    </a>
+    
+    <a href="/admin/orders" class="flex items-center space-x-3 p-3 rounded-2xl {% if '/orders' in request.url.path %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-box w-5"></i>
+        <span>Заказы</span>
+    </a>
+    
+    <a href="/admin/participants" class="flex items-center space-x-3 p-3 rounded-2xl {% if '/participants' in request.url.path %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-users w-5"></i>
+        <span>Участники</span>
+    </a>
+    
+    <a href="/admin/reports" class="flex items-center space-x-3 p-3 rounded-2xl {% if '/reports' in request.url.path %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-chart-bar w-5"></i>
+        <span>Отчеты</span>
+    </a>
+    
+    <a href="/admin/broadcast" class="flex items-center space-x-3 p-3 rounded-2xl {% if '/broadcast' in request.url.path %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-bullhorn w-5"></i>
+        <span>Рассылки</span>
+    </a>
+    
+    <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl {% if '/settings' in request.url.path %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+        <i class="fas fa-cog w-5"></i>
+        <span>Настройки</span>
+    </a>
+</nav>
                 <!-- User info -->
                 <div class="p-4 border-t border-white/10">
                     <div class="flex items-center space-x-3 p-3 rounded-2xl bg-white/5">
