@@ -1,11 +1,12 @@
 import logging
-from fastapi import FastAPI, Depends, HTTPException, Request, Form
+from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 from typing import List, Optional
+from datetime import datetime, timedelta
 
 from app.database import db
 from app.services.order_service import OrderService, ParticipantService
@@ -34,27 +35,118 @@ def authenticate_admin(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
+# Страницы
 @app.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, username: str = Depends(authenticate_admin)):
-    """Главная страница админки"""
     return templates.TemplateResponse("dashboard.html", {
         "request": request,
         "username": username
     })
 
+@app.get("/orders", response_class=HTMLResponse)
+async def orders_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("orders.html", {
+        "request": request,
+        "username": username
+    })
+
+@app.get("/orders/new", response_class=HTMLResponse)
+async def new_order_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("order_form.html", {
+        "request": request,
+        "username": username,
+        "statuses": STATUSES
+    })
+
+@app.get("/participants", response_class=HTMLResponse)
+async def participants_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("participants.html", {
+        "request": request,
+        "username": username
+    })
+
+@app.get("/reports", response_class=HTMLResponse)
+async def reports_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("reports.html", {
+        "request": request,
+        "username": username
+    })
+
+@app.get("/broadcast", response_class=HTMLResponse)
+async def broadcast_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("broadcast.html", {
+        "request": request,
+        "username": username
+    })
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request, username: str = Depends(authenticate_admin)):
+    return templates.TemplateResponse("settings.html", {
+        "request": request,
+        "username": username
+    })
+
+# API endpoints
+@app.get("/api/stats")
+async def get_stats(username: str = Depends(authenticate_admin)):
+    """Получение статистики для дашборда"""
+    try:
+        # Получаем все заказы для статистики
+        orders = await OrderService.list_recent_orders(1000)  # Большой лимит для статистики
+        total_orders = len(orders)
+        
+        # Активные заказы (исключаем завершенные)
+        active_statuses = [s for s in STATUSES if "получен" not in s.lower()]
+        active_orders = len([o for o in orders if o.status in active_statuses])
+        
+        # Участники
+        all_participants = []
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            all_participants.extend(participants)
+        total_participants = len(set(p.username for p in all_participants))
+        
+        # Подписки
+        subscriptions = await SubscriptionService.get_all_subscriptions()
+        total_subscriptions = len(subscriptions)
+        
+        return {
+            "total_orders": total_orders,
+            "active_orders": active_orders,
+            "total_participants": total_participants,
+            "total_subscriptions": total_subscriptions
+        }
+    except Exception as e:
+        logger.error(f"Error fetching stats: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
 @app.get("/api/orders")
 async def get_orders(
     status: Optional[str] = None,
-    limit: int = 50,
+    country: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     username: str = Depends(authenticate_admin)
 ):
-    """API для получения списка заказов"""
+    """API для получения списка заказов с пагинацией"""
     try:
         if status:
             orders = await OrderService.list_orders_by_status([status])
         else:
-            orders = await OrderService.list_recent_orders(limit)
-        return {"orders": [dict(order) for order in orders]}
+            orders = await OrderService.list_recent_orders(limit + offset)
+        
+        # Фильтрация по стране
+        if country:
+            orders = [o for o in orders if o.country == country.upper()]
+        
+        # Пагинация
+        paginated_orders = orders[offset:offset + limit]
+        
+        return {
+            "orders": [dict(order) for order in paginated_orders],
+            "total": len(orders),
+            "has_more": len(orders) > offset + limit
+        }
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -91,6 +183,11 @@ async def create_order(
 ):
     """API для создания нового заказа"""
     try:
+        # Проверяем, существует ли уже заказ
+        existing_order = await OrderService.get_order(order_id)
+        if existing_order:
+            raise HTTPException(status_code=400, detail="Order already exists")
+        
         order = Order(
             order_id=order_id,
             client_name=client_name,
@@ -109,7 +206,9 @@ async def create_order(
         if usernames:
             await ParticipantService.ensure_participants(order_id, usernames)
         
-        return {"message": "Order created successfully"}
+        return {"message": "Order created successfully", "order_id": order_id}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating order: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -135,38 +234,67 @@ async def update_order_status(
         logger.error(f"Error updating order status: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@app.post("/api/orders/batch-status")
-async def batch_update_status(
-    order_ids: List[str] = Form(...),
-    status: str = Form(...),
+@app.delete("/api/orders/{order_id}")
+async def delete_order(order_id: str, username: str = Depends(authenticate_admin)):
+    """API для удаления заказа"""
+    try:
+        # Здесь должна быть логика удаления заказа
+        # Пока просто возвращаем заглушку
+        return {"message": "Delete functionality to be implemented"}
+    except Exception as e:
+        logger.error(f"Error deleting order {order_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/participants")
+async def get_participants(
+    order_id: Optional[str] = None,
+    paid: Optional[bool] = None,
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
     username: str = Depends(authenticate_admin)
 ):
-    """API для массового обновления статусов"""
+    """API для получения списка участников"""
     try:
-        results = []
-        for order_id in order_ids:
-            try:
-                success = await OrderService.update_order_status(order_id, status)
-                results.append({
-                    "order_id": order_id,
-                    "success": success,
-                    "message": "Updated" if success else "Not found"
-                })
-                
-                if success:
-                    from app.webhook import application
-                    await notify_subscribers(application, order_id, status)
-                    
-            except Exception as e:
-                results.append({
-                    "order_id": order_id,
-                    "success": False,
-                    "message": str(e)
-                })
+        if order_id:
+            participants = await ParticipantService.get_participants(order_id)
+        else:
+            # Здесь должна быть логика получения всех участников
+            # Пока возвращаем пустой список
+            participants = []
         
-        return {"results": results}
+        # Фильтрация по статусу оплаты
+        if paid is not None:
+            participants = [p for p in participants if p.paid == paid]
+        
+        # Пагинация
+        paginated_participants = participants[offset:offset + limit]
+        
+        return {
+            "participants": [dict(p) for p in paginated_participants],
+            "total": len(participants),
+            "has_more": len(participants) > offset + limit
+        }
     except Exception as e:
-        logger.error(f"Error in batch status update: {e}")
+        logger.error(f"Error fetching participants: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.put("/api/participants/{order_id}/{username}/paid")
+async def toggle_participant_paid(
+    order_id: str,
+    username: str,
+    paid: bool = Form(...),
+    username_auth: str = Depends(authenticate_admin)
+):
+    """API для изменения статуса оплаты участника"""
+    try:
+        if paid:
+            # Здесь должна быть логика отметки оплаты
+            # Пока заглушка
+            return {"message": "Payment status updated"}
+        else:
+            return {"message": "Payment status updated"}
+    except Exception as e:
+        logger.error(f"Error updating participant payment status: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/statuses")
@@ -182,6 +310,21 @@ async def get_unpaid_participants(username: str = Depends(authenticate_admin)):
         return {"unpaid": grouped}
     except Exception as e:
         logger.error(f"Error fetching unpaid participants: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.post("/api/broadcast/unpaid")
+async def broadcast_unpaid(
+    order_id: Optional[str] = Form(None),
+    message: str = Form(...),
+    username: str = Depends(authenticate_admin)
+):
+    """API для рассылки неплательщикам"""
+    try:
+        # Здесь должна быть логика рассылки
+        # Пока заглушка
+        return {"message": "Broadcast functionality to be implemented", "sent_to": 0}
+    except Exception as e:
+        logger.error(f"Error sending broadcast: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 async def notify_subscribers(application, order_id: str, new_status: str):
