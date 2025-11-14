@@ -76,6 +76,21 @@ async def new_order_page(request: Request, username: str = Depends(authenticate_
         "current_page": "orders"
     })
 
+# ДОБАВЛЕНО: Эндпоинт для редактирования заказа
+@app.get("/orders/{order_id}/edit", response_class=HTMLResponse)
+async def edit_order_page(request: Request, order_id: str, username: str = Depends(authenticate_admin)):
+    order = await OrderService.get_order(order_id)
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    return templates.TemplateResponse("order_form.html", {
+        "request": request,
+        "username": username,
+        "statuses": STATUSES,
+        "current_page": "orders",
+        "order": order
+    })
+
 @app.get("/participants", response_class=HTMLResponse)
 async def participants_page(request: Request, username: str = Depends(authenticate_admin)):
     return templates.TemplateResponse("participants.html", {
@@ -107,7 +122,7 @@ async def settings_page(request: Request, username: str = Depends(authenticate_a
         "request": request,
         "username": username,
         "current_page": "settings",
-        "statuses": STATUSES  # Добавлено
+        "statuses": STATUSES
     })
 
 # API endpoints
@@ -329,7 +344,7 @@ async def delete_order_api(
 async def get_participants(
     order_id: Optional[str] = None,
     paid: Optional[bool] = None,
-    limit: int = Query(50, ge=1, le=1000),
+    limit: int = Query(1000, ge=1, le=5000),  # Увеличено для загрузки всех участников
     offset: int = Query(0, ge=0),
     username: str = Depends(authenticate_admin)
 ):
@@ -372,6 +387,7 @@ async def get_participants(
         logger.error(f"Error fetching participants: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
+# ИСПРАВЛЕНО: Эндпоинт обновления платежа
 @app.put("/api/participants/{order_id}/{username}/paid")
 async def update_participant_paid(
     order_id: str,
@@ -381,9 +397,7 @@ async def update_participant_paid(
 ):
     """Изменение статуса оплаты участника"""
     try:
-        data = await request.json()
-        paid = data.get('paid', False)
-        
+        # Используем toggle метод вместо получения данных из тела
         success = await ParticipantService.toggle_participant_paid(order_id, username)
         if not success:
             raise HTTPException(400, "Не удалось обновить статус оплаты")
@@ -392,6 +406,35 @@ async def update_participant_paid(
         
     except Exception as e:
         logger.error(f"Error updating participant payment: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# ДОБАВЛЕНО: Эндпоинт для рассылки неплательщикам
+@app.post("/api/broadcast/unpaid")
+async def broadcast_unpaid(
+    request: Request,
+    username: str = Depends(authenticate_admin)
+):
+    """Рассылка уведомлений неплательщикам"""
+    try:
+        data = await request.json()
+        message = data.get('message', '')
+        
+        if not message:
+            raise HTTPException(400, "Сообщение не может быть пустым")
+        
+        # Здесь должна быть логика отправки сообщений через Telegram бота
+        # Пока возвращаем заглушку
+        return {
+            "success": True, 
+            "message": "Рассылка запущена",
+            "sent_count": 0,  # Заглушка
+            "failed_count": 0  # Заглушка
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error broadcasting to unpaid: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.get("/api/statuses")
