@@ -9,7 +9,7 @@
         <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус</label>
-                <select x-model="filters.status" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.status" class="styled-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     <option value="">Все статусы</option>
                     {% for status in statuses %}
                     <option value="{{ status }}">{{ status }}</option>
@@ -18,7 +18,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
-                <select x-model="filters.country" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.country" class="styled-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     <option value="">Все страны</option>
                     <option value="CN">Китай (CN)</option>
                     <option value="KR">Корея (KR)</option>
@@ -28,8 +28,11 @@
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
                 <input type="text" x-model="filters.search" placeholder="Order ID..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
             </div>
-            <div class="flex items-end">
-                <button @click="resetFilters()" class="w-full bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-2 transition-all duration-200">
+            <div class="flex items-end space-x-2">
+                <button @click="applyFilters()" class="flex-1 btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200">
+                    Применить
+                </button>
+                <button @click="resetFilters()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-2 transition-all duration-200">
                     Сбросить
                 </button>
             </div>
@@ -58,6 +61,22 @@
                     </tr>
                 </thead>
                 <tbody>
+                    <template x-if="loading">
+                        <tr>
+                            <td colspan="6" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Загрузка заказов...</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && filteredOrders.length === 0">
+                        <tr>
+                            <td colspan="6" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-inbox text-2xl mb-2"></i>
+                                <p>Заказы не найдены</p>
+                            </td>
+                        </tr>
+                    </template>
                     <template x-for="order in filteredOrders" :key="order.order_id">
                         <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
                             <td class="py-4 px-4">
@@ -67,7 +86,9 @@
                                 <div x-text="order.client_name" class="truncate max-w-xs"></div>
                             </td>
                             <td class="py-4 px-4">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-white/10" x-text="order.status"></span>
+                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
+                                      :class="getStatusClass(order.status)" 
+                                      x-text="order.status"></span>
                             </td>
                             <td class="py-4 px-4">
                                 <span x-text="order.country" class="font-mono"></span>
@@ -124,19 +145,27 @@ document.addEventListener('alpine:init', () => {
         itemsPerPage: 10,
         totalOrders: 0,
         hasMore: false,
+        loading: true,
         
         init() {
             this.loadOrders();
-            
-            // Реактивность фильтров
-            this.$watch('filters', () => {
-                this.applyFilters();
-            });
         },
         
         async loadOrders() {
+            this.loading = true;
             try {
-                const response = await fetch('/admin/api/orders?limit=100');
+                let url = '/admin/api/orders?limit=100';
+                if (this.filters.status) {
+                    url += `&status=${this.filters.status}`;
+                }
+                if (this.filters.country) {
+                    url += `&country=${this.filters.country}`;
+                }
+                
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
                 const data = await response.json();
                 this.orders = data.orders || [];
                 this.totalOrders = data.total || 0;
@@ -144,19 +173,14 @@ document.addEventListener('alpine:init', () => {
                 this.applyFilters();
             } catch (error) {
                 console.error('Error loading orders:', error);
+                alert('Ошибка загрузки заказов');
+            } finally {
+                this.loading = false;
             }
         },
         
         applyFilters() {
             let filtered = this.orders;
-            
-            if (this.filters.status) {
-                filtered = filtered.filter(order => order.status === this.filters.status);
-            }
-            
-            if (this.filters.country) {
-                filtered = filtered.filter(order => order.country === this.filters.country);
-            }
             
             if (this.filters.search) {
                 const searchTerm = this.filters.search.toLowerCase();
@@ -175,6 +199,25 @@ document.addEventListener('alpine:init', () => {
                 country: '',
                 search: ''
             };
+            this.loadOrders();
+        },
+        
+        getStatusClass(status) {
+            const statusClasses = {
+                'новый': 'bg-blue-500/20 text-blue-400',
+                'в обработке': 'bg-yellow-500/20 text-yellow-400',
+                'доставлен': 'bg-green-500/20 text-green-400',
+                'получен': 'bg-purple-500/20 text-purple-400',
+                'отменен': 'bg-red-500/20 text-red-400'
+            };
+            
+            for (const [key, value] of Object.entries(statusClasses)) {
+                if (status.toLowerCase().includes(key)) {
+                    return value;
+                }
+            }
+            
+            return 'bg-gray-500/20 text-gray-400';
         },
         
         viewOrder(orderId) {
@@ -193,7 +236,7 @@ document.addEventListener('alpine:init', () => {
                     });
                     const result = await response.json();
                     alert(result.message);
-                    this.loadOrders(); // Перезагружаем список
+                    this.loadOrders();
                 } catch (error) {
                     console.error('Error deleting order:', error);
                     alert('Ошибка при удалении заказа');
