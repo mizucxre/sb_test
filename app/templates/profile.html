@@ -6,32 +6,25 @@
 <div class="max-w-2xl mx-auto space-y-6">
     <!-- Profile Info -->
     <div class="glass-effect rounded-2xl p-6">
-        <h3 class="text-lg font-semibold mb-6">Информация профиля</h3>
+        <h3 class="text-lg font-semibold mb-4">Информация профиля</h3>
         
         <div class="flex items-center space-x-6 mb-6">
-            {% if current_admin.avatar_url %}
-            <img src="{{ current_admin.avatar_url }}" alt="Avatar" class="w-20 h-20 rounded-2xl">
-            {% else %}
-            <div class="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center">
-                <i class="fas fa-user text-white text-2xl"></i>
-            </div>
-            {% endif %}
-            
+            <img src="{{ current_admin.avatar_url or 'https://ui-avatars.com/api/?name=' + current_admin.username + '&background=random&size=128' }}" 
+                 alt="{{ current_admin.username }}" 
+                 class="w-20 h-20 rounded-2xl">
             <div>
                 <h4 class="text-xl font-semibold">{{ current_admin.username }}</h4>
-                <p class="text-gray-400 capitalize">{{ current_admin.role }}</p>
-                <p class="text-sm text-gray-500 mt-1">Аватарка генерируется автоматически</p>
+                <p class="text-gray-400">
+                    {% if current_admin.role == 'super_admin' %}
+                    Супер-администратор
+                    {% else %}
+                    Администратор
+                    {% endif %}
+                </p>
             </div>
         </div>
 
         <form x-data="profileForm()" @submit.prevent="updateProfile()" class="space-y-4">
-            <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Имя пользователя</label>
-                <input type="text" value="{{ current_admin.username }}" disabled
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 text-gray-400">
-                <p class="text-xs text-gray-500 mt-1">Имя пользователя нельзя изменить</p>
-            </div>
-
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Email</label>
                 <input type="email" x-model="formData.email"
@@ -44,15 +37,15 @@
                 <label class="block text-sm font-medium text-gray-400 mb-2">Роль</label>
                 <select x-model="formData.role"
                         class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
-                    <option value="admin">Админ</option>
-                    <option value="super_admin">Супер-админ</option>
+                    <option value="admin">Администратор</option>
+                    <option value="super_admin">Супер-администратор</option>
                 </select>
             </div>
             {% endif %}
 
-            <div class="pt-4">
+            <div class="flex justify-end pt-4">
                 <button type="submit" :disabled="loading"
-                        class="btn-primary px-6 py-3 rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+                        class="btn-primary px-6 py-2 rounded-2xl font-medium disabled:opacity-50">
                     <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
                     Обновить профиль
                 </button>
@@ -62,30 +55,26 @@
 
     <!-- Change Password -->
     <div class="glass-effect rounded-2xl p-6">
-        <h3 class="text-lg font-semibold mb-6">Смена пароля</h3>
+        <h3 class="text-lg font-semibold mb-4">Смена пароля</h3>
         
         <form x-data="passwordForm()" @submit.prevent="changePassword()" class="space-y-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Текущий пароль</label>
-                <input type="password" x-model="passwordData.current_password" required
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <input type="password" x-model="formData.current_password" required
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       placeholder="Введите текущий пароль">
             </div>
 
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Новый пароль</label>
-                <input type="password" x-model="passwordData.new_password" required
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <input type="password" x-model="formData.new_password" required
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       placeholder="Введите новый пароль">
             </div>
 
-            <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Подтвердите новый пароль</label>
-                <input type="password" x-model="passwordData.confirm_password" required
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
-            </div>
-
-            <div class="pt-4">
-                <button type="submit" :disabled="loading || !passwordsMatch"
-                        class="btn-primary px-6 py-3 rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed">
+            <div class="flex justify-end pt-4">
+                <button type="submit" :disabled="loading"
+                        class="btn-primary px-6 py-2 rounded-2xl font-medium disabled:opacity-50">
                     <i class="fas fa-spinner fa-spin mr-2" x-show="loading"></i>
                     Сменить пароль
                 </button>
@@ -96,16 +85,11 @@
 
 <script>
 document.addEventListener('alpine:init', () => {
-    // Profile Form
     Alpine.data('profileForm', () => ({
         loading: false,
         formData: {
             email: '',
             role: '{{ current_admin.role }}'
-        },
-        
-        init() {
-            // Здесь можно загрузить текущие данные профиля если нужно
         },
         
         async updateProfile() {
@@ -120,20 +104,24 @@ document.addEventListener('alpine:init', () => {
                 });
                 
                 const result = await response.json();
+                
                 if (response.ok) {
                     this.showNotification(result.message, 'success');
+                    // Обновляем страницу чтобы применить изменения
+                    setTimeout(() => location.reload(), 1000);
                 } else {
                     this.showNotification(result.detail, 'error');
                 }
+                
             } catch (error) {
                 console.error('Error updating profile:', error);
-                this.showNotification('Ошибка обновления профиля', 'error');
+                this.showNotification('Ошибка при обновлении профиля', 'error');
             } finally {
                 this.loading = false;
             }
         },
         
-        showNotification(message, type = 'info') {
+        showNotification(message, type) {
             if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
                 Alpine.$data.pageUtils.showNotification(message, type);
             } else {
@@ -142,25 +130,14 @@ document.addEventListener('alpine:init', () => {
         }
     }));
     
-    // Password Form
     Alpine.data('passwordForm', () => ({
         loading: false,
-        passwordData: {
+        formData: {
             current_password: '',
-            new_password: '',
-            confirm_password: ''
-        },
-        
-        get passwordsMatch() {
-            return this.passwordData.new_password === this.passwordData.confirm_password;
+            new_password: ''
         },
         
         async changePassword() {
-            if (!this.passwordsMatch) {
-                alert('Пароли не совпадают');
-                return;
-            }
-            
             this.loading = true;
             try {
                 const response = await fetch('/admin/api/admin/profile/password', {
@@ -168,29 +145,30 @@ document.addEventListener('alpine:init', () => {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(this.passwordData)
+                    body: JSON.stringify(this.formData)
                 });
                 
                 const result = await response.json();
+                
                 if (response.ok) {
                     this.showNotification(result.message, 'success');
-                    this.passwordData = {
+                    this.formData = {
                         current_password: '',
-                        new_password: '',
-                        confirm_password: ''
+                        new_password: ''
                     };
                 } else {
                     this.showNotification(result.detail, 'error');
                 }
+                
             } catch (error) {
                 console.error('Error changing password:', error);
-                this.showNotification('Ошибка смены пароля', 'error');
+                this.showNotification('Ошибка при смене пароля', 'error');
             } finally {
                 this.loading = false;
             }
         },
         
-        showNotification(message, type = 'info') {
+        showNotification(message, type) {
             if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
                 Alpine.$data.pageUtils.showNotification(message, type);
             } else {
