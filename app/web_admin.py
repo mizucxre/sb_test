@@ -477,6 +477,8 @@ async def get_statuses(username: str = Depends(authenticate_admin)):
 
 # ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
 
+# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
+
 @app.get("/orders/{order_id}", response_class=HTMLResponse)
 async def view_order_page(request: Request, order_id: str, username: str = Depends(authenticate_admin)):
     """Страница просмотра заказа"""
@@ -506,13 +508,15 @@ async def get_analytics(
 ):
     """API для получения аналитики"""
     try:
-        # Базовая аналитика - можно расширить
+        # Получаем все заказы для анализа
         orders = await OrderService.list_recent_orders(1000)
         
         # Статистика по статусам
         status_stats = {}
         for status in STATUSES:
-            status_stats[status] = len([o for o in orders if o.status == status])
+            count = len([o for o in orders if o.status == status])
+            if count > 0:
+                status_stats[status] = count
         
         # Статистика по странам
         country_stats = {}
@@ -523,10 +527,17 @@ async def get_analytics(
         # Статистика по платежам
         total_participants = 0
         paid_participants = 0
+        
+        # Получаем всех участников
+        all_participants = []
         for order in orders:
             participants = await ParticipantService.get_participants(order.order_id)
+            all_participants.extend(participants)
             total_participants += len(participants)
             paid_participants += len([p for p in participants if p.paid])
+        
+        # Уникальные участники
+        unique_participants = len(set(p.username for p in all_participants))
         
         return {
             "status_stats": status_stats,
@@ -536,7 +547,9 @@ async def get_analytics(
                 "paid": paid_participants,
                 "unpaid": total_participants - paid_participants
             },
-            "total_orders": len(orders)
+            "total_orders": len(orders),
+            "unique_participants": unique_participants,
+            "completed_orders": len([o for o in orders if "доставлен" in o.status.lower() or "получен" in o.status.lower()])
         }
     except Exception as e:
         logger.error(f"Error generating analytics: {e}")
@@ -558,6 +571,7 @@ async def export_participants(
                 participant_data = serialize_model(p)
                 participant_data["order_client_name"] = order.client_name
                 participant_data["order_status"] = order.status
+                participant_data["order_country"] = order.country
                 all_participants.append(participant_data)
         
         if format == "csv":
@@ -568,7 +582,7 @@ async def export_participants(
             writer = csv.writer(output)
             
             # Заголовки
-            writer.writerow(["Username", "Order ID", "Client Name", "Status", "Paid", "Updated At"])
+            writer.writerow(["Username", "Order ID", "Client Name", "Status", "Country", "Paid", "Updated At"])
             
             for p in all_participants:
                 writer.writerow([
@@ -576,6 +590,7 @@ async def export_participants(
                     p['order_id'],
                     p['order_client_name'],
                     p['order_status'],
+                    p['order_country'],
                     "Да" if p['paid'] else "Нет",
                     p.get('updated_at', '')
                 ])
@@ -594,4 +609,59 @@ async def export_participants(
             
     except Exception as e:
         logger.error(f"Error exporting participants: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/reports/export/orders")
+async def export_orders(
+    format: str = Query("csv", regex="^(csv|json)$"),
+    username: str = Depends(authenticate_admin)
+):
+    """Экспорт заказов"""
+    try:
+        orders = await OrderService.list_recent_orders(1000)
+        
+        if format == "csv":
+            import csv
+            from io import StringIO
+            
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Заголовки
+            writer.writerow(["Order ID", "Client Name", "Country", "Status", "Note", "Created At", "Updated At"])
+            
+            for order in orders:
+                writer.writerow([
+                    order.order_id,
+                    order.client_name,
+                    order.country,
+                    order.status,
+                    order.note or "",
+                    order.created_at.isoformat() if order.created_at else "",
+                    order.updated_at.isoformat() if order.updated_at else ""
+                ])
+            
+            content = output.getvalue()
+            return JSONResponse({
+                "content": content,
+                "filename": f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            })
+            
+        else:  # json
+            orders_data = []
+            for order in orders:
+                order_data = serialize_model(order)
+                if order_data.get('created_at') and isinstance(order_data['created_at'], datetime):
+                    order_data['created_at'] = order_data['created_at'].isoformat()
+                if order_data.get('updated_at') and isinstance(order_data['updated_at'], datetime):
+                    order_data['updated_at'] = order_data['updated_at'].isoformat()
+                orders_data.append(order_data)
+            
+            return {
+                "orders": orders_data,
+                "filename": f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error exporting orders: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
