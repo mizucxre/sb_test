@@ -36,13 +36,6 @@ def authenticate_admin(credentials: HTTPBasicCredentials = Depends(security)):
         )
     return credentials.username
 
-# Custom JSON encoder to handle datetime and other types
-class CustomJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if isinstance(obj, datetime):
-            return obj.isoformat()
-        return super().default(obj)
-
 # Страницы
 @app.get("/", response_class=HTMLResponse)
 async def admin_dashboard(request: Request, username: str = Depends(authenticate_admin)):
@@ -126,15 +119,22 @@ async def get_stats(username: str = Depends(authenticate_admin)):
         subscriptions = await SubscriptionService.get_all_subscriptions()
         total_subscriptions = len(subscriptions)
         
-        return JSONResponse({
+        return {
             "total_orders": total_orders,
             "active_orders": active_orders,
             "total_participants": total_participants,
             "total_subscriptions": total_subscriptions
-        })
+        }
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+def serialize_model(model):
+    """Сериализация Pydantic модели в словарь"""
+    if hasattr(model, 'model_dump'):
+        return model.model_dump()
+    else:
+        return model.dict()
 
 @app.get("/api/orders")
 async def get_orders(
@@ -161,19 +161,19 @@ async def get_orders(
         # Convert orders to dict for JSON serialization
         orders_data = []
         for order in paginated_orders:
-            order_dict = order.dict()
+            order_data = serialize_model(order)
             # Ensure datetime fields are serializable
-            if order_dict.get('created_at'):
-                order_dict['created_at'] = order_dict['created_at'].isoformat()
-            if order_dict.get('updated_at'):
-                order_dict['updated_at'] = order_dict['updated_at'].isoformat()
-            orders_data.append(order_dict)
+            if order_data.get('created_at'):
+                order_data['created_at'] = order_data['created_at'].isoformat()
+            if order_data.get('updated_at'):
+                order_data['updated_at'] = order_data['updated_at'].isoformat()
+            orders_data.append(order_data)
         
-        return JSONResponse({
+        return {
             "orders": orders_data,
             "total": len(orders),
             "has_more": len(orders) > offset + limit
-        })
+        }
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -191,26 +191,26 @@ async def get_order(order_id: str, username: str = Depends(authenticate_admin)):
         order_subs = [s for s in subscriptions if s.order_id == order_id]
         
         # Convert to dict for JSON serialization
-        order_dict = order.dict()
-        if order_dict.get('created_at'):
-            order_dict['created_at'] = order_dict['created_at'].isoformat()
-        if order_dict.get('updated_at'):
-            order_dict['updated_at'] = order_dict['updated_at'].isoformat()
+        order_data = serialize_model(order)
+        if order_data.get('created_at'):
+            order_data['created_at'] = order_data['created_at'].isoformat()
+        if order_data.get('updated_at'):
+            order_data['updated_at'] = order_data['updated_at'].isoformat()
         
         participants_data = []
         for participant in participants:
-            participant_dict = participant.dict()
-            if participant_dict.get('created_at'):
-                participant_dict['created_at'] = participant_dict['created_at'].isoformat()
-            if participant_dict.get('updated_at'):
-                participant_dict['updated_at'] = participant_dict['updated_at'].isoformat()
-            participants_data.append(participant_dict)
+            participant_data = serialize_model(participant)
+            if participant_data.get('created_at'):
+                participant_data['created_at'] = participant_data['created_at'].isoformat()
+            if participant_data.get('updated_at'):
+                participant_data['updated_at'] = participant_data['updated_at'].isoformat()
+            participants_data.append(participant_data)
         
-        return JSONResponse({
-            "order": order_dict,
+        return {
+            "order": order_data,
             "participants": participants_data,
             "subscribers": len(order_subs)
-        })
+        }
     except Exception as e:
         logger.error(f"Error fetching order {order_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -247,7 +247,7 @@ async def create_order_api(
         if usernames:
             await ParticipantService.ensure_participants(data['order_id'], usernames)
         
-        return JSONResponse({"success": True, "message": "Заказ успешно создан"})
+        return {"success": True, "message": "Заказ успешно создан"}
         
     except HTTPException:
         raise
@@ -285,7 +285,7 @@ async def update_order_api(
             if not success:
                 raise HTTPException(500, "Ошибка при обновлении заказа")
         
-        return JSONResponse({"success": True, "message": "Заказ обновлен"})
+        return {"success": True, "message": "Заказ обновлен"}
         
     except HTTPException:
         raise
@@ -309,7 +309,7 @@ async def delete_order_api(
         if not success:
             raise HTTPException(500, "Ошибка при удалении заказа")
         
-        return JSONResponse({"success": True, "message": "Заказ удален"})
+        return {"success": True, "message": "Заказ удален"}
         
     except HTTPException:
         raise
@@ -348,18 +348,18 @@ async def get_participants(
         # Convert to dict for JSON serialization
         participants_data = []
         for participant in paginated_participants:
-            participant_dict = participant.dict()
-            if participant_dict.get('created_at'):
-                participant_dict['created_at'] = participant_dict['created_at'].isoformat()
-            if participant_dict.get('updated_at'):
-                participant_dict['updated_at'] = participant_dict['updated_at'].isoformat()
-            participants_data.append(participant_dict)
+            participant_data = serialize_model(participant)
+            if participant_data.get('created_at'):
+                participant_data['created_at'] = participant_data['created_at'].isoformat()
+            if participant_data.get('updated_at'):
+                participant_data['updated_at'] = participant_data['updated_at'].isoformat()
+            participants_data.append(participant_data)
         
-        return JSONResponse({
+        return {
             "participants": participants_data,
             "total": len(participants),
             "has_more": len(participants) > offset + limit
-        })
+        }
     except Exception as e:
         logger.error(f"Error fetching participants: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
@@ -380,7 +380,7 @@ async def update_participant_paid(
         if not success:
             raise HTTPException(400, "Не удалось обновить статус оплаты")
         
-        return JSONResponse({"success": True, "message": "Статус оплаты обновлен"})
+        return {"success": True, "message": "Статус оплаты обновлен"}
         
     except Exception as e:
         logger.error(f"Error updating participant payment: {e}")
@@ -389,10 +389,83 @@ async def update_participant_paid(
 @app.get("/api/statuses")
 async def get_statuses(username: str = Depends(authenticate_admin)):
     """API для получения списка статусов"""
-    return JSONResponse({"statuses": STATUSES})
+    return {"statuses": STATUSES}
 
-# Add this to handle JSON serialization properly
-@app.middleware("http")
-async def add_json_encoder(request: Request, call_next):
-    response = await call_next(request)
-    return response
+from fastapi.responses import StreamingResponse
+import io
+import csv
+
+@app.get("/api/reports/orders/csv")
+async def export_orders_csv(
+    status: Optional[str] = None,
+    country: Optional[str] = None,
+    username: str = Depends(authenticate_admin)
+):
+    """Экспорт заказов в CSV"""
+    try:
+        if status:
+            orders = await OrderService.list_orders_by_status([status])
+        else:
+            orders = await OrderService.list_recent_orders(1000)
+        
+        if country:
+            orders = [o for o in orders if o.country == country.upper()]
+        
+        # Создаем CSV в памяти
+        output = io.StringIO()
+        writer = csv.writer(output)
+        
+        # Заголовки
+        writer.writerow([
+            'Order ID', 'Client Name', 'Status', 'Country', 
+            'Note', 'Updated At', 'Participants Count'
+        ])
+        
+        # Данные
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            writer.writerow([
+                order.order_id,
+                order.client_name,
+                order.status,
+                order.country,
+                order.note or '',
+                order.updated_at or '',
+                len(participants)
+            ])
+        
+        output.seek(0)
+        
+        return StreamingResponse(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f"attachment; filename=orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            }
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting CSV: {e}")
+        raise HTTPException(500, "Ошибка при экспорте")
+
+@app.get("/api/reports/participants/unpaid")
+async def export_unpaid_participants(username: str = Depends(authenticate_admin)):
+    """Отчет по неплательщикам"""
+    try:
+        grouped = await ParticipantService.get_all_unpaid_grouped()
+        
+        report_data = []
+        for order_id, usernames in grouped.items():
+            order = await OrderService.get_order(order_id)
+            report_data.append({
+                "order_id": order_id,
+                "order_status": order.status if order else "Не найден",
+                "unpaid_count": len(usernames),
+                "usernames": ", ".join([f"@{u}" for u in usernames])
+            })
+        
+        return {"unpaid_report": report_data}
+        
+    except Exception as e:
+        logger.error(f"Error generating unpaid report: {e}")
+        raise HTTPException(500, "Ошибка при генерации отчета")
