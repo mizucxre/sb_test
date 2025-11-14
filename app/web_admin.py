@@ -411,6 +411,8 @@ async def update_participant_paid(
 # ДОБАВЛЕНО: Эндпоинт для рассылки неплательщикам
 # ЗАМЕНИТЬ существующий эндпоинт broadcast_unpaid:
 
+# ЗАМЕНИТЕ эндпоинт broadcast_unpaid в web_admin.py:
+
 @app.post("/api/broadcast/unpaid")
 async def broadcast_unpaid(
     request: Request,
@@ -418,20 +420,71 @@ async def broadcast_unpaid(
 ):
     """Рассылка уведомлений неплательщикам"""
     try:
-        from app.services.broadcast_service import BroadcastService
+        # Проверяем, что тело запроса не пустое
+        body = await request.body()
+        if not body:
+            raise HTTPException(400, "Empty request body")
         
-        data = await request.json()
+        try:
+            data = await request.json()
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON decode error: {e}")
+            raise HTTPException(400, "Invalid JSON format")
+            
         message = data.get('message', '')
         
         if not message:
             raise HTTPException(400, "Сообщение не может быть пустым")
         
-        result = await BroadcastService.broadcast_to_unpaid_users(message)
+        # Получаем всех неплательщиков
+        from app.services.order_service import ParticipantService
+        unpaid_grouped = await ParticipantService.get_all_unpaid_grouped()
+        
+        if not unpaid_grouped:
+            return {
+                "success": True, 
+                "message": "Нет неплательщиков для рассылки",
+                "result": {
+                    "sent": 0,
+                    "failed": 0, 
+                    "total": 0
+                }
+            }
+        
+        # Собираем все username
+        all_usernames = []
+        for usernames in unpaid_grouped.values():
+            all_usernames.extend(usernames)
+        
+        # Получаем user_id по username
+        user_ids = await AddressService.get_user_ids_by_usernames(all_usernames)
+        
+        sent_count = 0
+        failed_count = 0
+        
+        # Отправляем сообщения через Telegram бота
+        for user_id in user_ids:
+            try:
+                # Импортируем бота здесь чтобы избежать циклических импортов
+                from app.main import bot
+                await bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Error sending message to {user_id}: {e}")
+                failed_count += 1
         
         return {
             "success": True, 
             "message": "Рассылка завершена",
-            "result": result
+            "result": {
+                "sent": sent_count,
+                "failed": failed_count,
+                "total": len(user_ids)
+            }
         }
         
     except HTTPException:
