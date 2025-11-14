@@ -179,6 +179,19 @@
                         <i class="fas fa-bullhorn w-5"></i>
                         <span>Рассылки</span>
                     </a>
+
+                    <!-- Новые пункты меню -->
+                    {% if current_admin.role == 'super_admin' %}
+                    <a href="/admin/admin-users" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_users' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                        <i class="fas fa-user-shield w-5"></i>
+                        <span>Администраторы</span>
+                    </a>
+                    {% endif %}
+
+                    <a href="/admin/admin-chat" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                        <i class="fas fa-comments w-5"></i>
+                        <span>Чат админов</span>
+                    </a>
                     
                     <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'settings' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
                         <i class="fas fa-cog w-5"></i>
@@ -189,14 +202,25 @@
                 <!-- User info -->
                 <div class="p-4 border-t border-white/10">
                     <div class="flex items-center space-x-3 p-3 rounded-2xl bg-white/5">
+                        {% if current_admin.avatar_url %}
+                        <img src="{{ current_admin.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">
+                        {% else %}
                         <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
                             <i class="fas fa-user text-white text-sm"></i>
                         </div>
+                        {% endif %}
                         <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium truncate">{{ username }}</p>
-                            <p class="text-xs text-gray-400 truncate">Администратор</p>
+                            <p class="text-sm font-medium truncate">{{ current_admin.username }}</p>
+                            <p class="text-xs text-gray-400 truncate capitalize">{{ current_admin.role }}</p>
                         </div>
+                        <a href="/admin/profile" class="text-gray-400 hover:text-white transition-colors duration-200">
+                            <i class="fas fa-edit"></i>
+                        </a>
                     </div>
+                    <a href="/admin/logout" class="flex items-center space-x-3 p-3 rounded-2xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2">
+                        <i class="fas fa-sign-out-alt w-5"></i>
+                        <span>Выйти</span>
+                    </a>
                 </div>
             </div>
         </div>
@@ -222,12 +246,16 @@
                             <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-900"></span>
                         </button>
                         
-                        <!-- Search -->
-                        <div class="relative">
-                            <input type="text" 
-                                   placeholder="Поиск..." 
-                                   class="pl-10 pr-4 py-2 bg-white/5 border border-white/10 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
-                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                        <!-- User menu for mobile -->
+                        <div class="lg:hidden flex items-center space-x-3">
+                            {% if current_admin.avatar_url %}
+                            <img src="{{ current_admin.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">
+                            {% else %}
+                            <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-white text-xs"></i>
+                            </div>
+                            {% endif %}
+                            <span class="text-sm font-medium">{{ current_admin.username }}</span>
                         </div>
                     </div>
                 </div>
