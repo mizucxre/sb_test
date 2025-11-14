@@ -187,7 +187,7 @@
                         <span>Администраторы</span>
                     </a>
                     {% endif %}
-
+                    
                     <a href="/admin/admin-chat" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
                         <i class="fas fa-comments w-5"></i>
                         <span>Чат админов</span>
@@ -203,7 +203,7 @@
                 <div class="p-4 border-t border-white/10">
                     <div class="flex items-center space-x-3 p-3 rounded-2xl bg-white/5">
                         {% if current_admin.avatar_url %}
-                        <img src="{{ current_admin.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">
+                        <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-8 h-8 rounded-full">
                         {% else %}
                         <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
                             <i class="fas fa-user text-white text-sm"></i>
@@ -211,15 +211,20 @@
                         {% endif %}
                         <div class="flex-1 min-w-0">
                             <p class="text-sm font-medium truncate">{{ current_admin.username }}</p>
-                            <p class="text-xs text-gray-400 truncate capitalize">{{ current_admin.role }}</p>
+                            <p class="text-xs text-gray-400 truncate">
+                                {% if current_admin.role == 'super_admin' %}
+                                Супер-администратор
+                                {% else %}
+                                Администратор
+                                {% endif %}
+                            </p>
                         </div>
-                        <a href="/admin/profile" class="text-gray-400 hover:text-white transition-colors duration-200">
+                        <a href="/admin/profile" class="text-gray-400 hover:text-white">
                             <i class="fas fa-edit"></i>
                         </a>
                     </div>
-                    <a href="/admin/logout" class="flex items-center space-x-3 p-3 rounded-2xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-all duration-200 mt-2">
-                        <i class="fas fa-sign-out-alt w-5"></i>
-                        <span>Выйти</span>
+                    <a href="/admin/logout" class="block w-full mt-2 text-center text-sm text-gray-400 hover:text-white p-2 rounded-2xl hover:bg-white/5 transition-all duration-200">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Выйти
                     </a>
                 </div>
             </div>
@@ -240,19 +245,13 @@
                     </div>
                     
                     <div class="flex items-center space-x-4">
-                        <!-- Notifications -->
-                        <button class="relative p-2 rounded-2xl hover:bg-white/5 transition-all duration-200">
-                            <i class="fas fa-bell text-gray-300 hover:text-white"></i>
-                            <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-900"></span>
-                        </button>
-                        
-                        <!-- User menu for mobile -->
-                        <div class="lg:hidden flex items-center space-x-3">
+                        <!-- User info in header for mobile -->
+                        <div class="flex items-center space-x-3 lg:hidden">
                             {% if current_admin.avatar_url %}
-                            <img src="{{ current_admin.avatar_url }}" alt="Avatar" class="w-8 h-8 rounded-full">
+                            <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-8 h-8 rounded-full">
                             {% else %}
                             <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
-                                <i class="fas fa-user text-white text-xs"></i>
+                                <i class="fas fa-user text-white text-sm"></i>
                             </div>
                             {% endif %}
                             <span class="text-sm font-medium">{{ current_admin.username }}</span>
