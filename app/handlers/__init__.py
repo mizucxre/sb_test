@@ -1,16 +1,28 @@
-from telegram.ext import Application
 import logging
+from .admin_handlers import register as register_admin_handlers
+from .client_handlers import register as register_client_handlers  
+from .callback_handlers import register as register_callback_handlers
+from .text_handler import register as register_text_handler
+from .excel_handlers import register as register_excel_handlers
 
 logger = logging.getLogger(__name__)
 
-def register_handlers(application: Application):
+def register_handlers(application):
     """Регистрация всех хэндлеров в правильном порядке"""
-    from . import callback_handlers, client_handlers, admin_handlers, excel_handlers
     
-    # Правильный порядок: специфичные -> общие
-    callback_handlers.register(application)
-    excel_handlers.register(application)
-    admin_handlers.register(application)  # Админы перед клиентами
-    client_handlers.register(application)  # Клиенты последние
+    # 1. Сначала команды
+    register_client_handlers(application)  # /start, /help
     
-    logger.info("✅ Все хэндлеры успешно зарегистрированы!")
+    # 2. Админские команды  
+    register_admin_handlers(application)   # /admin
+    
+    # 3. Callback хэндлеры (inline кнопки)
+    register_callback_handlers(application)
+    
+    # 4. Текстовые сообщения (кнопки клавиатуры)
+    register_text_handler(application)
+    
+    # 5. Документы (Excel)
+    register_excel_handlers(application)
+    
+    logger.info("✅ Все хэндлеры зарегистрированы")
