@@ -2,11 +2,11 @@ import hashlib
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional
-from jose import JWTError, jwt  # Исправленный импорт
+from jose import JWTError, jwt
 from passlib.context import CryptContext
 
-# Конфигурация для хэширования паролей
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# Конфигурация для хэширования паролей - используем Argon2 который не имеет ограничения по длине
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # Секретный ключ для JWT (будет переопределен из config)
 SECRET_KEY = "temp-secret-key"
@@ -43,7 +43,7 @@ def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         return payload
-    except JWTError:  # Исправлено с PyJWTError на JWTError
+    except JWTError:
         return None
 
 def generate_avatar_url(username: str, email: Optional[str] = None, size: int = 64) -> str:
