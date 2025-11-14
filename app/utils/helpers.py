@@ -2,7 +2,7 @@ import asyncio
 import logging
 from typing import List, Tuple
 from telegram import Update
-from telegram.constants import ChatAction  # Импорт из constants!
+from telegram.constants import ChatAction
 from telegram.ext import ContextTypes
 
 logger = logging.getLogger(__name__)
@@ -66,3 +66,7 @@ def _err_reason(e: Exception) -> str:
     if "timeout" in s:
         return "timeout"
     return "ошибка"
+
+def _is_text(text: str, group: set[str]) -> bool:
+    """Проверка соответствия текста группе алиасов"""
+    return text.strip().lower() in {x.lower() for x in group}
