@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block page_title %}Чат администраторов{% endblock %}
+
+{% block content %}
+<div x-data="adminChat()" class="h-full flex flex-col">
+    <!-- Chat Header -->
+    <div class="glass-effect rounded-2xl p-6 mb-6">
+        <h3 class="text-lg font-semibold">Чат администраторов</h3>
+        <p class="text-gray-400 text-sm mt-1">Общайтесь с другими администраторами системы</p>
+    </div>
+
+    <!-- Chat Container -->
+    <div class="flex-1 glass-effect rounded-2xl p-6 flex flex-col">
+        <!-- Messages -->
+        <div class="flex-1 overflow-y-auto mb-4 space-y-4" id="chat-messages">
+            <template x-for="message in messages" :key="message.id">
+                <div class="flex space-x-3" :class="message.user_id === currentUser.id ? 'flex-row-reverse space-x-reverse' : ''">
+                    <template x-if="message.avatar_url && !message.is_system">
+                        <img :src="message.avatar_url" alt="Avatar" class="w-8 h-8 rounded-full flex-shrink-0">
+                    </template>
+                    <template x-if="!message.avatar_url && !message.is_system">
+                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-user text-white text-xs"></i>
+                        </div>
+                    </template>
+                    <template x-if="message.is_system">
+                        <div class="w-8 h-8 bg-gradient-to-r from-gray-500 to-gray-600 rounded-full flex items-center justify-center flex-shrink-0">
+                            <i class="fas fa-cog text-white text-xs"></i>
+                        </div>
+                    </template>
+                    
+                    <div class="flex-1" :class="message.user_id === currentUser.id ? 'items-end' : ''">
+                        <div class="flex items-center space-x-2 mb-1" :class="message.user_id === currentUser.id ? 'flex-row-reverse space-x-reverse' : ''">
+                            <span class="text-sm font-medium" x-text="message.username"></span>
+                            <span class="text-xs text-gray-400" x-text="formatTime(message.created_at)"></span>
+                        </div>
+                        <div class="rounded-2xl p-3 max-w-md" 
+                             :class="message.is_system ? 'bg-gray-500/20 text-gray-300' : message.user_id === currentUser.id ? 'bg-blue-500/20 text-blue-100' : 'bg-white/10 text-white'">
+                            <p x-text="message.message"></p>
+                        </div>
+                    </div>
+                </div>
+            </template>
+            
+            <div x-show="loading" class="text-center py-4 text-gray-400">
+                <i class="fas fa-spinner fa-spin mr-2"></i>
+                Загрузка сообщений...
+            </div>
+            
+            <div x-show="!loading && messages.length === 0" class="text-center py-8 text-gray-500">
+                <i class="fas fa-comments text-2xl mb-2"></i>
+                <p>Нет сообщений</p>
+                <p class="text-sm mt-2">Начните общение первым!</p>
+            </div>
+        </div>
+
+        <!-- Message Input -->
+        <div class="flex space-x-4">
+            <input type="text" x-model="newMessage" @keydown.enter="sendMessage()" 
+                   placeholder="Введите сообщение..." 
+                   class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+            <button @click="sendMessage()" :disabled="!newMessage.trim() || sending"
+                    class="btn-primary px-6 py-3 rounded-2xl font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminChat', () => ({
+        messages: [],
+        newMessage: '',
+        loading: true,
+        sending: false,
+        currentUser: {
+            id: {{ current_admin.user_id }},
+            username: '{{ current_admin.username }}'
+        },
+        
+        async init() {
+            await this.loadMessages();
+            this.scrollToBottom();
+            
+            // Периодическое обновление сообщений
+            setInterval(() => {
+                this.loadMessages();
+            }, 5000);
+        },
+        
+        async loadMessages() {
+            try {
+                const response = await fetch('/admin/api/admin/chat/messages');
+                const data = await response.json();
+                this.messages = data.messages || [];
+                this.loading = false;
+                
+                // Авто-скролл только если пользователь был внизу
+                const container = document.getElementById('chat-messages');
+                const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 100;
+                
+                if (isScrolledToBottom) {
+                    this.$nextTick(() => {
+                        this.scrollToBottom();
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                this.loading = false;
+            }
+        },
+        
+        async sendMessage() {
+            if (!this.newMessage.trim()) return;
+            
+            this.sending = true;
+            try {
+                const response = await fetch('/admin/api/admin/chat/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: this.newMessage
+                    })
+                });
+                
+                if (response.ok) {
+                    this.newMessage = '';
+                    await this.loadMessages();
+                    this.scrollToBottom();
+                } else {
+                    alert('Ошибка отправки сообщения');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Ошибка отправки сообщения');
+            } finally {
+                this.sending = false;
+            }
+        },
+        
+        scrollToBottom() {
+            const container = document.getElementById('chat-messages');
+            if (container) {
+                container.scrollTop = container.scrollHeight;
+            }
+        },
+        
+        formatTime(dateString) {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleTimeString('ru-RU', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return '';
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}
