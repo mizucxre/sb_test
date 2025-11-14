@@ -19,7 +19,7 @@ def register_handlers(application):
     # 3. Callback хэндлеры (inline кнопки)
     register_callback_handlers(application)
     
-    # 4. Текстовые сообщения (кнопки клавиатуры)
+    # 4. Текстовые сообщения (кнопки клавиатуры) - ЕДИНСТВЕННЫЙ обработчик текста
     register_text_handler(application)
     
     # 5. Документы (Excel)
