@@ -9,7 +9,7 @@
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Заказ</label>
-                <select x-model="filters.order_id" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.order_id" @change="applyFilters()" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     <option value="">Все заказы</option>
                     <template x-for="order in orders" :key="order.order_id">
                         <option :value="order.order_id" x-text="order.order_id"></option>
@@ -18,7 +18,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус оплаты</label>
-                <select x-model="filters.paid" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.paid" @change="applyFilters()" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     <option value="">Все</option>
                     <option value="true">Оплачено</option>
                     <option value="false">Не оплачено</option>
@@ -26,7 +26,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
-                <input type="text" x-model="filters.search" placeholder="Username..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <input type="text" x-model="filters.search" @input="applyFilters()" placeholder="Username..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
             </div>
         </div>
     </div>
@@ -45,7 +45,13 @@
             </div>
         </div>
 
-        <div class="overflow-x-auto">
+        <!-- Loading State -->
+        <div x-show="loading" class="text-center py-8">
+            <i class="fas fa-spinner fa-spin text-blue-500 text-2xl mb-2"></i>
+            <p class="text-gray-400">Загрузка участников...</p>
+        </div>
+
+        <div x-show="!loading && filteredParticipants.length > 0" class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-white/10">
@@ -57,7 +63,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <template x-for="participant in filteredParticipants" :key="participant.id">
+                    <template x-for="participant in filteredParticipants" :key="`${participant.order_id}-${participant.username}`">
                         <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
                             <td class="py-4 px-4">
                                 <div class="flex items-center space-x-3">
@@ -96,7 +102,7 @@
         </div>
 
         <!-- Empty State -->
-        <div x-show="filteredParticipants.length === 0" class="text-center py-12">
+        <div x-show="!loading && filteredParticipants.length === 0" class="text-center py-12">
             <i class="fas fa-users text-gray-500 text-5xl mb-4"></i>
             <p class="text-gray-400 text-lg">Участники не найдены</p>
             <p class="text-gray-500 text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
@@ -114,6 +120,7 @@ document.addEventListener('alpine:init', () => {
             paid: '',
             search: ''
         },
+        loading: true,
         
         get filteredParticipants() {
             let filtered = this.participants;
@@ -138,18 +145,20 @@ document.addEventListener('alpine:init', () => {
             return filtered;
         },
         
-        init() {
-            this.loadParticipants();
-            this.loadOrders();
+        async init() {
+            await Promise.all([this.loadParticipants(), this.loadOrders()]);
+            this.loading = false;
         },
         
         async loadParticipants() {
             try {
-                const response = await fetch('/admin/api/participants?limit=1000');
+                // Загружаем всех участников по умолчанию
+                const response = await fetch('/admin/api/participants?limit=5000');
                 const data = await response.json();
                 this.participants = data.participants || [];
             } catch (error) {
                 console.error('Error loading participants:', error);
+                this.participants = [];
             }
         },
         
@@ -160,32 +169,36 @@ document.addEventListener('alpine:init', () => {
                 this.orders = data.orders || [];
             } catch (error) {
                 console.error('Error loading orders:', error);
+                this.orders = [];
             }
         },
         
         async togglePayment(participant) {
             try {
+                // ИСПРАВЛЕНО: Отправляем PUT запрос без тела
                 const response = await fetch(`/admin/api/participants/${participant.order_id}/${participant.username}/paid`, {
                     method: 'PUT',
                     headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded',
-                    },
-                    body: new URLSearchParams({
-                        paid: !participant.paid
-                    })
+                        'Content-Type': 'application/json',
+                    }
                 });
                 
                 const result = await response.json();
                 
                 if (response.ok) {
+                    // Обновляем статус локально
                     participant.paid = !participant.paid;
                 } else {
-                    alert('Ошибка: ' + result.detail);
+                    alert('Ошибка: ' + (result.detail || 'Неизвестная ошибка'));
                 }
             } catch (error) {
                 console.error('Error toggling payment:', error);
                 alert('Ошибка при изменении статуса оплаты');
             }
+        },
+        
+        applyFilters() {
+            // Фильтрация происходит автоматически через computed property
         },
         
         viewUser(username) {
@@ -200,11 +213,34 @@ document.addEventListener('alpine:init', () => {
         
         exportParticipants() {
             // Логика экспорта
-            alert('Экспорт участников в CSV');
+            const csvContent = this.convertToCSV(this.filteredParticipants);
+            this.downloadCSV(csvContent, 'participants.csv');
         },
         
         broadcastUnpaid() {
             window.location.href = '/admin/broadcast';
+        },
+        
+        convertToCSV(participants) {
+            const headers = ['Username', 'Order ID', 'Paid', 'Updated At'];
+            const rows = participants.map(p => [
+                `@${p.username}`,
+                p.order_id,
+                p.paid ? 'Да' : 'Нет',
+                this.formatDate(p.updated_at)
+            ]);
+            
+            return [headers, ...rows].map(row => row.join(',')).join('\n');
+        },
+        
+        downloadCSV(content, filename) {
+            const blob = new Blob([content], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            a.click();
+            window.URL.revokeObjectURL(url);
         },
         
         formatDate(dateString) {
