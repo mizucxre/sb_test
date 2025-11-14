@@ -409,6 +409,8 @@ async def update_participant_paid(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 # ДОБАВЛЕНО: Эндпоинт для рассылки неплательщикам
+# ЗАМЕНИТЬ существующий эндпоинт broadcast_unpaid:
+
 @app.post("/api/broadcast/unpaid")
 async def broadcast_unpaid(
     request: Request,
@@ -416,25 +418,56 @@ async def broadcast_unpaid(
 ):
     """Рассылка уведомлений неплательщикам"""
     try:
+        from app.services.broadcast_service import BroadcastService
+        
         data = await request.json()
         message = data.get('message', '')
         
         if not message:
             raise HTTPException(400, "Сообщение не может быть пустым")
         
-        # Здесь должна быть логика отправки сообщений через Telegram бота
-        # Пока возвращаем заглушку
+        result = await BroadcastService.broadcast_to_unpaid_users(message)
+        
         return {
             "success": True, 
-            "message": "Рассылка запущена",
-            "sent_count": 0,  # Заглушка
-            "failed_count": 0  # Заглушка
+            "message": "Рассылка завершена",
+            "result": result
         }
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Error broadcasting to unpaid: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# ДОБАВИТЬ эндпоинт для общей рассылки:
+@app.post("/api/broadcast/all")
+async def broadcast_all(
+    request: Request,
+    username: str = Depends(authenticate_admin)
+):
+    """Рассылка сообщения всем пользователям"""
+    try:
+        from app.services.broadcast_service import BroadcastService
+        
+        data = await request.json()
+        message = data.get('message', '')
+        
+        if not message:
+            raise HTTPException(400, "Сообщение не может быть пустым")
+        
+        result = await BroadcastService.broadcast_to_all_users(message)
+        
+        return {
+            "success": True, 
+            "message": "Рассылка завершена",
+            "result": result
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error broadcasting to all users: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.get("/api/statuses")
