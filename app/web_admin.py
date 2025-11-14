@@ -441,3 +441,124 @@ async def broadcast_unpaid(
 async def get_statuses(username: str = Depends(authenticate_admin)):
     """API для получения списка статусов"""
     return {"statuses": STATUSES}
+
+# ДОБАВИТЬ в web_admin.py после существующих эндпоинтов:
+
+@app.get("/orders/{order_id}", response_class=HTMLResponse)
+async def view_order_page(request: Request, order_id: str, username: str = Depends(authenticate_admin)):
+    """Страница просмотра заказа"""
+    try:
+        order = await OrderService.get_order(order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        participants = await ParticipantService.get_participants(order_id)
+        
+        return templates.TemplateResponse("order_view.html", {
+            "request": request,
+            "username": username,
+            "current_page": "orders",
+            "order": order,
+            "participants": participants
+        })
+    except Exception as e:
+        logger.error(f"Error loading order page {order_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/reports/analytics")
+async def get_analytics(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    username: str = Depends(authenticate_admin)
+):
+    """API для получения аналитики"""
+    try:
+        # Базовая аналитика - можно расширить
+        orders = await OrderService.list_recent_orders(1000)
+        
+        # Статистика по статусам
+        status_stats = {}
+        for status in STATUSES:
+            status_stats[status] = len([o for o in orders if o.status == status])
+        
+        # Статистика по странам
+        country_stats = {}
+        for order in orders:
+            country = order.country
+            country_stats[country] = country_stats.get(country, 0) + 1
+        
+        # Статистика по платежам
+        total_participants = 0
+        paid_participants = 0
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            total_participants += len(participants)
+            paid_participants += len([p for p in participants if p.paid])
+        
+        return {
+            "status_stats": status_stats,
+            "country_stats": country_stats,
+            "payment_stats": {
+                "total": total_participants,
+                "paid": paid_participants,
+                "unpaid": total_participants - paid_participants
+            },
+            "total_orders": len(orders)
+        }
+    except Exception as e:
+        logger.error(f"Error generating analytics: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/reports/export/participants")
+async def export_participants(
+    format: str = Query("csv", regex="^(csv|json)$"),
+    username: str = Depends(authenticate_admin)
+):
+    """Экспорт участников"""
+    try:
+        # Получаем всех участников
+        all_participants = []
+        orders = await OrderService.list_recent_orders(1000)
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            for p in participants:
+                participant_data = serialize_model(p)
+                participant_data["order_client_name"] = order.client_name
+                participant_data["order_status"] = order.status
+                all_participants.append(participant_data)
+        
+        if format == "csv":
+            import csv
+            from io import StringIO
+            
+            output = StringIO()
+            writer = csv.writer(output)
+            
+            # Заголовки
+            writer.writerow(["Username", "Order ID", "Client Name", "Status", "Paid", "Updated At"])
+            
+            for p in all_participants:
+                writer.writerow([
+                    f"@{p['username']}",
+                    p['order_id'],
+                    p['order_client_name'],
+                    p['order_status'],
+                    "Да" if p['paid'] else "Нет",
+                    p.get('updated_at', '')
+                ])
+            
+            content = output.getvalue()
+            return JSONResponse({
+                "content": content,
+                "filename": f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+            })
+            
+        else:  # json
+            return {
+                "participants": all_participants,
+                "filename": f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            }
+            
+    except Exception as e:
+        logger.error(f"Error exporting participants: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
