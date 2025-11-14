@@ -12,6 +12,7 @@ class BroadcastService:
         """Отправка сообщения через Telegram бота"""
         try:
             # Импортируем здесь чтобы избежать циклических импортов
+            # Замените на ваш способ получения экземпляра бота
             from app.main import bot
             
             await bot.send_message(
@@ -62,33 +63,4 @@ class BroadcastService:
             
         except Exception as e:
             logger.error(f"Error in broadcast_to_unpaid_users: {e}")
-            return {"sent": 0, "failed": 0, "total": 0}
-    
-    @staticmethod
-    async def broadcast_to_all_users(message: str) -> Dict:
-        """Рассылка сообщения всем пользователям"""
-        try:
-            # Получаем всех пользователей с адресами
-            async with db.pool.acquire() as conn:
-                rows = await conn.fetch("SELECT DISTINCT user_id FROM addresses")
-                user_ids = [row['user_id'] for row in rows]
-            
-            sent_count = 0
-            failed_count = 0
-            
-            for user_id in user_ids:
-                success = await BroadcastService.send_telegram_message(user_id, message)
-                if success:
-                    sent_count += 1
-                else:
-                    failed_count += 1
-            
-            return {
-                "sent": sent_count,
-                "failed": failed_count,
-                "total": len(user_ids)
-            }
-            
-        except Exception as e:
-            logger.error(f"Error in broadcast_to_all_users: {e}")
             return {"sent": 0, "failed": 0, "total": 0}
