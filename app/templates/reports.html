@@ -46,7 +46,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <p class="text-gray-400 text-sm font-medium">Неплательщиков</p>
-                    <p class="text-3xl font-bold mt-2" x-text="stats.unpaid_count || 0"></p>
+                    <p class="text-3xl font-bold mt-2" x-text="stats.payment_stats?.unpaid || 0"></p>
                 </div>
                 <div class="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center">
                     <i class="fas fa-exclamation-triangle text-red-400 text-xl"></i>
@@ -72,6 +72,10 @@
                         </div>
                     </div>
                 </template>
+                <div x-show="statusStats.length === 0" class="text-center py-4 text-gray-500">
+                    <i class="fas fa-chart-pie text-2xl mb-2"></i>
+                    <p>Нет данных для отображения</p>
+                </div>
             </div>
         </div>
 
@@ -90,6 +94,29 @@
                         </div>
                     </div>
                 </template>
+                <div x-show="countryStats.length === 0" class="text-center py-4 text-gray-500">
+                    <i class="fas fa-globe text-2xl mb-2"></i>
+                    <p>Нет данных для отображения</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Payment Stats -->
+    <div class="glass-effect rounded-2xl p-6">
+        <h3 class="text-lg font-semibold mb-4">Статистика платежей</h3>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="text-center">
+                <div class="text-3xl font-bold text-blue-400" x-text="stats.payment_stats?.total || 0"></div>
+                <div class="text-gray-400 text-sm mt-2">Всего участников</div>
+            </div>
+            <div class="text-center">
+                <div class="text-3xl font-bold text-green-400" x-text="stats.payment_stats?.paid || 0"></div>
+                <div class="text-gray-400 text-sm mt-2">Оплатили</div>
+            </div>
+            <div class="text-center">
+                <div class="text-3xl font-bold text-red-400" x-text="stats.payment_stats?.unpaid || 0"></div>
+                <div class="text-gray-400 text-sm mt-2">Не оплатили</div>
             </div>
         </div>
     </div>
@@ -98,22 +125,22 @@
     <div class="glass-effect rounded-2xl p-6">
         <h3 class="text-lg font-semibold mb-4">Экспорт отчетов</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button @click="exportReport('orders')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
+            <button @click="exportReport('orders', 'csv')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
                 <i class="fas fa-file-excel text-green-400 text-2xl mb-3 group-hover:scale-110 transition-transform duration-200"></i>
-                <h4 class="font-semibold mb-2">Экспорт заказов</h4>
-                <p class="text-gray-400 text-sm">Все заказы в формате Excel</p>
+                <h4 class="font-semibold mb-2">Экспорт заказов (CSV)</h4>
+                <p class="text-gray-400 text-sm">Все заказы в формате CSV</p>
             </button>
 
-            <button @click="exportReport('participants')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
+            <button @click="exportReport('participants', 'csv')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
                 <i class="fas fa-file-csv text-blue-400 text-2xl mb-3 group-hover:scale-110 transition-transform duration-200"></i>
-                <h4 class="font-semibold mb-2">Экспорт участников</h4>
+                <h4 class="font-semibold mb-2">Экспорт участников (CSV)</h4>
                 <p class="text-gray-400 text-sm">Список участников в CSV</p>
             </button>
 
-            <button @click="exportReport('unpaid')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
-                <i class="fas fa-file-pdf text-red-400 text-2xl mb-3 group-hover:scale-110 transition-transform duration-200"></i>
-                <h4 class="font-semibold mb-2">Отчет по неплательщикам</h4>
-                <p class="text-gray-400 text-sm">Детальный отчет в PDF</p>
+            <button @click="exportReport('participants', 'json')" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-left group">
+                <i class="fas fa-file-code text-purple-400 text-2xl mb-3 group-hover:scale-110 transition-transform duration-200"></i>
+                <h4 class="font-semibold mb-2">Экспорт данных (JSON)</h4>
+                <p class="text-gray-400 text-sm">Полные данные в JSON</p>
             </button>
         </div>
     </div>
@@ -126,58 +153,76 @@ document.addEventListener('alpine:init', () => {
         statusStats: [],
         countryStats: [],
         
-        init() {
-            this.loadReportsData();
+        async init() {
+            await this.loadReportsData();
         },
         
         async loadReportsData() {
             try {
-                // Загрузка общей статистики
-                const statsResponse = await fetch('/admin/api/stats');
-                this.stats = await statsResponse.json();
+                // Загрузка аналитики
+                const analyticsResponse = await fetch('/admin/api/reports/analytics');
+                if (!analyticsResponse.ok) {
+                    throw new Error('Failed to load analytics');
+                }
+                const analyticsData = await analyticsResponse.json();
+                this.stats = analyticsData;
                 
-                // Загрузка заказов для анализа
-                const ordersResponse = await fetch('/admin/api/orders?limit=1000');
-                const ordersData = await ordersResponse.json();
-                this.analyzeOrders(ordersData.orders || []);
+                // Преобразование данных для графиков
+                this.statusStats = Object.entries(analyticsData.status_stats || {}).map(([name, count]) => ({
+                    name,
+                    count,
+                    percentage: (count / analyticsData.total_orders * 100).toFixed(1)
+                }));
+                
+                this.countryStats = Object.entries(analyticsData.country_stats || {}).map(([name, count]) => ({
+                    name: name === 'CN' ? 'Китай' : name === 'KR' ? 'Корея' : name,
+                    count,
+                    percentage: (count / analyticsData.total_orders * 100).toFixed(1)
+                }));
                 
             } catch (error) {
                 console.error('Error loading reports data:', error);
+                alert('Ошибка загрузки данных отчетов');
             }
         },
         
-        analyzeOrders(orders) {
-            // Анализ по статусам
-            const statusCount = {};
-            orders.forEach(order => {
-                statusCount[order.status] = (statusCount[order.status] || 0) + 1;
-            });
-            
-            this.statusStats = Object.entries(statusCount).map(([name, count]) => ({
-                name,
-                count,
-                percentage: (count / orders.length * 100).toFixed(1)
-            }));
-            
-            // Анализ по странам
-            const countryCount = {};
-            orders.forEach(order => {
-                countryCount[order.country] = (countryCount[order.country] || 0) + 1;
-            });
-            
-            this.countryStats = Object.entries(countryCount).map(([name, count]) => ({
-                name: name === 'CN' ? 'Китай' : 'Корея',
-                count,
-                percentage: (count / orders.length * 100).toFixed(1)
-            }));
-        },
-        
-        exportReport(type) {
-            // Логика экспорта отчетов
-            alert(`Экспорт отчета: ${type}`);
-            
-            // В реальном приложении здесь будет:
-            // window.open(`/admin/api/export/${type}`, '_blank');
+        async exportReport(type, format) {
+            try {
+                const response = await fetch(`/admin/api/reports/export/${type}?format=${format}`);
+                if (!response.ok) {
+                    throw new Error('Export failed');
+                }
+                
+                const data = await response.json();
+                
+                if (format === 'csv') {
+                    // Создаем и скачиваем CSV файл
+                    const blob = new Blob([data.content], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    // Скачиваем JSON файл
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                }
+                
+            } catch (error) {
+                console.error('Error exporting report:', error);
+                alert('Ошибка при экспорте данных');
+            }
         }
     }));
 });
