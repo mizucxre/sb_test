@@ -4,12 +4,45 @@
 
 {% block content %}
 <div x-data="orders()" class="space-y-6">
+    <!-- Bulk Actions -->
+    <div x-show="selectedOrders.length > 0" x-transition class="glass-effect rounded-2xl p-6">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <span class="text-gray-400">Выбрано: <span x-text="selectedOrders.length" class="font-semibold"></span></span>
+                <select x-model="bulkAction" class="styled-select bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                    <option value="">Выберите действие...</option>
+                    <option value="update_status">Изменить статус</option>
+                    <option value="delete">Удалить выбранные</option>
+                </select>
+                
+                <div x-show="bulkAction === 'update_status'" class="flex items-center space-x-2">
+                    <select x-model="bulkStatus" class="styled-select bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <option value="">Выберите статус...</option>
+                        {% for status in statuses %}
+                        <option value="{{ status }}">{{ status }}</option>
+                        {% endfor %}
+                    </select>
+                    <button @click="applyBulkAction()" class="btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200">
+                        Применить
+                    </button>
+                </div>
+                
+                <button x-show="bulkAction === 'delete'" @click="applyBulkAction()" class="btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30">
+                    Удалить выбранные
+                </button>
+            </div>
+            <button @click="clearSelection()" class="text-gray-400 hover:text-white transition-colors duration-200">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
     <!-- Filters -->
     <div class="glass-effect rounded-2xl p-6">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус</label>
-                <select x-model="filters.status" class="styled-select w-full bg-gray/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.status" class="styled-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все статусы</option>
                     {% for status in statuses %}
                     <option value="{{ status }}">{{ status }}</option>
@@ -18,7 +51,7 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
-                <select x-model="filters.country" class="styled-select w-full bg-gray/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.country" class="styled-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все страны</option>
                     <option value="CN">Китай (CN)</option>
                     <option value="KR">Корея (KR)</option>
@@ -26,14 +59,14 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
-                <input type="text" x-model="filters.search" placeholder="Order ID..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <input type="text" x-model="filters.search" placeholder="Order ID или клиент..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
             </div>
             <div class="flex items-end space-x-2">
-                <button @click="applyFilters()" class="flex-1 btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200">
-                    Применить
+                <button @click="applyFilters()" class="flex-1 btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200">
+                    <i class="fas fa-filter mr-2"></i>Применить
                 </button>
-                <button @click="resetFilters()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-2 transition-all duration-200">
-                    Сбросить
+                <button @click="resetFilters()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-3 transition-all duration-200">
+                    <i class="fas fa-undo mr-2"></i>Сбросить
                 </button>
             </div>
         </div>
@@ -42,16 +75,27 @@
     <!-- Orders Table -->
     <div class="glass-effect rounded-2xl p-6">
         <div class="flex items-center justify-between mb-6">
-            <h3 class="text-lg font-semibold">Список заказов</h3>
-            <a href="/admin/orders/new" class="btn-primary px-6 py-2 rounded-2xl font-medium">
-                <i class="fas fa-plus mr-2"></i>Новый заказ
-            </a>
+            <div class="flex items-center space-x-4">
+                <h3 class="text-lg font-semibold">Список заказов</h3>
+                <span class="text-gray-400 text-sm" x-text="`${filteredOrders.length} из ${totalOrders}`"></span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button @click="selectAll()" class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
+                    <i class="fas fa-check-square mr-2"></i>Выбрать все
+                </button>
+                <a href="/admin/orders/new" class="btn-primary px-6 py-2 rounded-2xl font-medium">
+                    <i class="fas fa-plus mr-2"></i>Новый заказ
+                </a>
+            </div>
         </div>
 
         <div class="overflow-x-auto">
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-white/10">
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium w-12">
+                            <input type="checkbox" @change="toggleAll()" :checked="selectedOrders.length === filteredOrders.length && filteredOrders.length > 0" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
+                        </th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Order ID</th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
@@ -63,7 +107,7 @@
                 <tbody>
                     <template x-if="loading">
                         <tr>
-                            <td colspan="6" class="py-8 text-center text-gray-400">
+                            <td colspan="7" class="py-8 text-center text-gray-400">
                                 <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
                                 <p>Загрузка заказов...</p>
                             </td>
@@ -71,19 +115,26 @@
                     </template>
                     <template x-if="!loading && filteredOrders.length === 0">
                         <tr>
-                            <td colspan="6" class="py-8 text-center text-gray-400">
+                            <td colspan="7" class="py-8 text-center text-gray-400">
                                 <i class="fas fa-inbox text-2xl mb-2"></i>
                                 <p>Заказы не найдены</p>
+                                <p class="text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
                             </td>
                         </tr>
                     </template>
                     <template x-for="order in filteredOrders" :key="order.order_id">
-                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200" :class="{ 'bg-blue-500/10': selectedOrders.includes(order.order_id) }">
+                            <td class="py-4 px-4">
+                                <input type="checkbox" :value="order.order_id" x-model="selectedOrders" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
+                            </td>
                             <td class="py-4 px-4">
                                 <span class="font-mono font-semibold" x-text="order.order_id"></span>
                             </td>
                             <td class="py-4 px-4">
                                 <div x-text="order.client_name" class="truncate max-w-xs"></div>
+                                <template x-if="order.note">
+                                    <p class="text-xs text-gray-500 mt-1 truncate" x-text="order.note"></p>
+                                </template>
                             </td>
                             <td class="py-4 px-4">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
@@ -91,18 +142,20 @@
                                       x-text="order.status"></span>
                             </td>
                             <td class="py-4 px-4">
-                                <span x-text="order.country" class="font-mono"></span>
+                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono" 
+                                      :class="order.country === 'CN' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'"
+                                      x-text="order.country"></span>
                             </td>
                             <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(order.updated_at)"></td>
                             <td class="py-4 px-4">
                                 <div class="flex items-center space-x-2">
-                                    <button @click="viewOrder(order.order_id)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200">
+                                    <button @click="viewOrder(order.order_id)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200" title="Просмотр">
                                         <i class="fas fa-eye"></i>
                                     </button>
-                                    <button @click="editOrder(order.order_id)" class="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-2xl transition-all duration-200">
+                                    <button @click="editOrder(order.order_id)" class="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-2xl transition-all duration-200" title="Редактировать">
                                         <i class="fas fa-edit"></i>
                                     </button>
-                                    <button @click="deleteOrder(order.order_id)" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200">
+                                    <button @click="deleteOrder(order.order_id)" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200" title="Удалить">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </div>
@@ -136,11 +189,14 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('orders', () => ({
         orders: [],
         filteredOrders: [],
+        selectedOrders: [],
         filters: {
             status: '',
             country: '',
             search: ''
         },
+        bulkAction: '',
+        bulkStatus: '',
         currentPage: 1,
         itemsPerPage: 10,
         totalOrders: 0,
@@ -156,7 +212,7 @@ document.addEventListener('alpine:init', () => {
             try {
                 let url = '/admin/api/orders?limit=100';
                 if (this.filters.status) {
-                    url += `&status=${this.filters.status}`;
+                    url += `&status=${encodeURIComponent(this.filters.status)}`;
                 }
                 if (this.filters.country) {
                     url += `&country=${this.filters.country}`;
@@ -173,7 +229,7 @@ document.addEventListener('alpine:init', () => {
                 this.applyFilters();
             } catch (error) {
                 console.error('Error loading orders:', error);
-                alert('Ошибка загрузки заказов');
+                this.showNotification('Ошибка загрузки заказов', 'error');
             } finally {
                 this.loading = false;
             }
@@ -186,11 +242,13 @@ document.addEventListener('alpine:init', () => {
                 const searchTerm = this.filters.search.toLowerCase();
                 filtered = filtered.filter(order => 
                     order.order_id.toLowerCase().includes(searchTerm) ||
-                    order.client_name.toLowerCase().includes(searchTerm)
+                    order.client_name.toLowerCase().includes(searchTerm) ||
+                    (order.note && order.note.toLowerCase().includes(searchTerm))
                 );
             }
             
             this.filteredOrders = filtered;
+            this.selectedOrders = [];
         },
         
         resetFilters() {
@@ -203,16 +261,19 @@ document.addEventListener('alpine:init', () => {
         },
         
         getStatusClass(status) {
-            const statusClasses = {
-                'новый': 'bg-blue-500/20 text-blue-400',
-                'в обработке': 'bg-yellow-500/20 text-yellow-400',
-                'доставлен': 'bg-green-500/20 text-green-400',
-                'получен': 'bg-purple-500/20 text-purple-400',
-                'отменен': 'bg-red-500/20 text-red-400'
+            const statusMap = {
+                '🛒 выкуплен': 'bg-blue-500/20 text-blue-400',
+                '📦 отправка на адрес': 'bg-yellow-500/20 text-yellow-400',
+                '📬 приехал на адрес': 'bg-purple-500/20 text-purple-400',
+                '🛫 ожидает доставку': 'bg-orange-500/20 text-orange-400',
+                '🚚 отправлен': 'bg-indigo-500/20 text-indigo-400',
+                '🏠 приехал админу': 'bg-teal-500/20 text-teal-400',
+                '✅ получен': 'bg-green-500/20 text-green-400',
+                '❌ отменен': 'bg-red-500/20 text-red-400'
             };
             
-            for (const [key, value] of Object.entries(statusClasses)) {
-                if (status.toLowerCase().includes(key)) {
+            for (const [key, value] of Object.entries(statusMap)) {
+                if (status.toLowerCase().includes(key.toLowerCase().replace(/[🛒📦📬🛫🚚🏠✅❌]/g, '').trim())) {
                     return value;
                 }
             }
@@ -235,11 +296,97 @@ document.addEventListener('alpine:init', () => {
                         method: 'DELETE'
                     });
                     const result = await response.json();
-                    alert(result.message);
+                    this.showNotification(result.message, 'success');
                     this.loadOrders();
                 } catch (error) {
                     console.error('Error deleting order:', error);
-                    alert('Ошибка при удалении заказа');
+                    this.showNotification('Ошибка при удалении заказа', 'error');
+                }
+            }
+        },
+        
+        // Mass actions
+        selectAll() {
+            this.selectedOrders = this.filteredOrders.map(order => order.order_id);
+        },
+        
+        toggleAll() {
+            if (this.selectedOrders.length === this.filteredOrders.length) {
+                this.selectedOrders = [];
+            } else {
+                this.selectAll();
+            }
+        },
+        
+        clearSelection() {
+            this.selectedOrders = [];
+            this.bulkAction = '';
+            this.bulkStatus = '';
+        },
+        
+        async applyBulkAction() {
+            if (this.selectedOrders.length === 0) {
+                this.showNotification('Выберите заказы для действия', 'error');
+                return;
+            }
+            
+            if (this.bulkAction === 'update_status') {
+                if (!this.bulkStatus) {
+                    this.showNotification('Выберите статус для обновления', 'error');
+                    return;
+                }
+                
+                if (confirm(`Изменить статус ${this.selectedOrders.length} заказов на "${this.bulkStatus}"?`)) {
+                    try {
+                        const response = await fetch('/admin/api/orders/bulk-update-status', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                order_ids: this.selectedOrders,
+                                status: this.bulkStatus
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (response.ok) {
+                            this.showNotification(result.message, 'success');
+                            this.loadOrders();
+                            this.clearSelection();
+                        } else {
+                            this.showNotification(result.detail || 'Ошибка при обновлении статусов', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error updating order statuses:', error);
+                        this.showNotification('Ошибка при обновлении статусов', 'error');
+                    }
+                }
+            } else if (this.bulkAction === 'delete') {
+                if (confirm(`Удалить ${this.selectedOrders.length} выбранных заказов?`)) {
+                    try {
+                        const response = await fetch('/admin/api/orders/bulk-delete', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                order_ids: this.selectedOrders
+                            })
+                        });
+                        
+                        const result = await response.json();
+                        if (response.ok) {
+                            this.showNotification(result.message, 'success');
+                            this.loadOrders();
+                            this.clearSelection();
+                        } else {
+                            this.showNotification(result.detail || 'Ошибка при удалении заказов', 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error deleting orders:', error);
+                        this.showNotification('Ошибка при удалении заказов', 'error');
+                    }
                 }
             }
         },
@@ -260,13 +407,26 @@ document.addEventListener('alpine:init', () => {
         
         formatDate(dateString) {
             if (!dateString) return 'Неизвестно';
-            const date = new Date(dateString);
-            return date.toLocaleDateString('ru-RU', {
-                day: 'numeric',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Неизвестно';
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            // Используем утилиту из base.html если она есть, иначе fallback
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                alert(message);
+            }
         }
     }));
 });
