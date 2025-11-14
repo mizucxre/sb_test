@@ -13,8 +13,11 @@ NEON_DATABASE_URL = os.getenv("NEON_DATABASE_URL")
 PUBLIC_URL = os.getenv("PUBLIC_URL", "")
 PORT = int(os.getenv("PORT", "8080"))
 
-# Admin Configuration
+# Web Admin Configuration
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "admin")
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")
 ADMIN_DEFAULT_PASSWORD = os.getenv("ADMIN_DEFAULT_PASSWORD", "admin123")
+SECRET_KEY = os.getenv("SECRET_KEY", "your-secret-key-change-in-production")
 
 # Status Configuration
 STATUSES = [
