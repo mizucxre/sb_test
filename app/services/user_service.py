@@ -36,10 +36,16 @@ class AddressService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM addresses WHERE user_id = $1",
+                    "SELECT user_id, username, full_name, phone, city, address, postcode, created_at, updated_at FROM addresses WHERE user_id = $1",
                     user_id
                 )
-                return [Address(**dict(row)) for row in rows]
+                addresses = []
+                for row in rows:
+                    address_dict = dict(row)
+                    if 'id' in address_dict:
+                        del address_dict['id']
+                    addresses.append(Address(**address_dict))
+                return addresses
         except Exception as e:
             logger.error(f"Error listing addresses for user {user_id}: {e}")
             return []
@@ -64,10 +70,16 @@ class AddressService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM addresses WHERE username = ANY($1)",
+                    "SELECT user_id, username, full_name, phone, city, address, postcode, created_at, updated_at FROM addresses WHERE username = ANY($1)",
                     [u.lower().lstrip('@') for u in usernames]
                 )
-                return [Address(**dict(row)) for row in rows]
+                addresses = []
+                for row in rows:
+                    address_dict = dict(row)
+                    if 'id' in address_dict:
+                        del address_dict['id']
+                    addresses.append(Address(**address_dict))
+                return addresses
         except Exception as e:
             logger.error(f"Error getting addresses by usernames: {e}")
             return []
@@ -134,10 +146,16 @@ class SubscriptionService:
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT * FROM subscriptions WHERE user_id = $1",
+                    "SELECT user_id, order_id, last_sent_status, created_at, updated_at FROM subscriptions WHERE user_id = $1",
                     user_id
                 )
-                return [Subscription(**dict(row)) for row in rows]
+                subscriptions = []
+                for row in rows:
+                    subscription_dict = dict(row)
+                    if 'id' in subscription_dict:
+                        del subscription_dict['id']
+                    subscriptions.append(Subscription(**subscription_dict))
+                return subscriptions
         except Exception as e:
             logger.error(f"Error listing subscriptions for user {user_id}: {e}")
             return []
@@ -147,8 +165,14 @@ class SubscriptionService:
         """Получить все подписки (для рассылки)"""
         try:
             async with db.pool.acquire() as conn:
-                rows = await conn.fetch("SELECT * FROM subscriptions")
-                return [Subscription(**dict(row)) for row in rows]
+                rows = await conn.fetch("SELECT user_id, order_id, last_sent_status, created_at, updated_at FROM subscriptions")
+                subscriptions = []
+                for row in rows:
+                    subscription_dict = dict(row)
+                    if 'id' in subscription_dict:
+                        del subscription_dict['id']
+                    subscriptions.append(Subscription(**subscription_dict))
+                return subscriptions
         except Exception as e:
             logger.error(f"Error getting all subscriptions: {e}")
             return []
