@@ -197,9 +197,14 @@ async def profile_page(request: Request, current_admin: dict = Depends(get_curre
     })
 
 # API endpoints для администраторов
+# В импортах оставляем как есть
+from app.utils.session import get_current_admin, require_permission, require_super_admin
+
+# ... остальной код без изменений до API endpoints ...
+
+# API endpoints для администраторов - ИСПРАВЛЕННЫЕ
 @app.get("/api/admin/users")
-@require_super_admin
-async def get_admin_users(current_admin: dict = Depends(get_current_admin)):
+async def get_admin_users(current_admin: dict = Depends(require_super_admin())):  # Добавлены скобки
     """Получение списка администраторов"""
     try:
         users = await AdminService.get_all_users()
@@ -209,8 +214,10 @@ async def get_admin_users(current_admin: dict = Depends(get_current_admin)):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/admin/users")
-@require_super_admin
-async def create_admin_user(request: Request, current_admin: dict = Depends(get_current_admin)):
+async def create_admin_user(
+    request: Request, 
+    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
+):
     """Создание нового администратора"""
     try:
         data = await request.json()
@@ -231,8 +238,11 @@ async def create_admin_user(request: Request, current_admin: dict = Depends(get_
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.put("/api/admin/users/{user_id}")
-@require_super_admin
-async def update_admin_user(user_id: int, request: Request, current_admin: dict = Depends(get_current_admin)):
+async def update_admin_user(
+    user_id: int, 
+    request: Request, 
+    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
+):
     """Обновление администратора"""
     try:
         data = await request.json()
@@ -251,8 +261,10 @@ async def update_admin_user(user_id: int, request: Request, current_admin: dict 
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.delete("/api/admin/users/{user_id}")
-@require_super_admin
-async def delete_admin_user(user_id: int, current_admin: dict = Depends(get_current_admin)):
+async def delete_admin_user(
+    user_id: int, 
+    current_admin: dict = Depends(require_super_admin())  # Добавлены скобки
+):
     """Удаление администратора"""
     try:
         if user_id == current_admin["user_id"]:
@@ -269,6 +281,8 @@ async def delete_admin_user(user_id: int, current_admin: dict = Depends(get_curr
     except Exception as e:
         logger.error(f"Error deleting admin user: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# ... остальной код без изменений ...
 
 # API для чата администраторов
 @app.get("/api/admin/chat/messages")
