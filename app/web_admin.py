@@ -26,9 +26,14 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="SEABLUU Admin", docs_url=None, redoc_url=None)
 
+# Определяем базовые пути для статики и шаблонов
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+TEMPLATES_DIR = os.path.join(BASE_DIR, "templates")
+
 # Mount static files and templates
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
-templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 def serialize_model(model):
     """Сериализация Pydantic модели в словарь с обработкой разных версий Pydantic"""
@@ -1098,7 +1103,9 @@ async def bulk_delete_orders(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 # Создаем директорию для аватарок
-os.makedirs("app/static/avatars", exist_ok=True)
+# Создаем директорию для аватарок
+AVATAR_DIR = os.path.join(STATIC_DIR, "avatars")
+os.makedirs(AVATAR_DIR, exist_ok=True)
 
 @app.post("/api/admin/profile/avatar")
 async def upload_avatar(
@@ -1118,21 +1125,9 @@ async def upload_avatar(
         # Читаем и обрабатываем изображение
         contents = await avatar.read()
         image = Image.open(io.BytesIO(contents))
-        
-        # Конвертируем в RGB если нужно
-        if image.mode in ('RGBA', 'LA', 'P'):
-            image = image.convert('RGB')
-        
-        # Ресайзим изображение до 200x200
-        image.thumbnail((200, 200), Image.Resampling.LANCZOS)
-        
-        # Генерируем уникальное имя файла
-        file_extension = avatar.filename.split('.')[-1].lower()
-        if file_extension not in ['jpg', 'jpeg', 'png', 'gif']:
-            file_extension = 'jpg'
-        
+        ...
         filename = f"{current_admin['user_id']}_{uuid.uuid4().hex[:8]}.{file_extension}"
-        save_path = f"app/static/avatars/{filename}"
+        save_path = os.path.join(AVATAR_DIR, filename)
         
         # Сохраняем изображение
         image.save(save_path, 'JPEG' if file_extension in ['jpg', 'jpeg'] else 'PNG', quality=85)
