@@ -27,44 +27,7 @@
 
     <!-- Content -->
     <div x-show="!loading" class="space-y-4 lg:space-y-6 slide-up">
-        <!-- Stats Cards -->
-        <div class="responsive-grid gap-3 lg:gap-6">
-            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Всего заказов</p>
-                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.total_orders || 0"></p>
-                    </div>
-                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-box text-blue-400 text-sm lg:text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Активных заказов</p>
-                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.active_orders || 0"></p>
-                    </div>
-                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-check-circle text-green-400 text-sm lg:text-xl"></i>
-                    </div>
-                </div>
-            </div>
-
-            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Участников</p>
-                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.total_participants || 0"></p>
-                    </div>
-                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-users text-purple-400 text-sm lg:text-xl"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
+        <!-- Stats Cards removed as requested -->
 
         <!-- Quick Actions and System Status -->
         <div class="responsive-grid gap-3 lg:gap-6">
