@@ -154,6 +154,13 @@ document.addEventListener('alpine:init', () => {
         async init() {
             // Убеждаемся, что модальное окно закрыто при инициализации
             this.showModal = false;
+            this.editingUser = null;
+            this.formData = {
+                username: '',
+                email: '',
+                role: 'admin',
+                password: ''
+            };
             await this.loadUsers();
         },
         
