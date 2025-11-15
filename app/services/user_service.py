@@ -94,6 +94,25 @@ class AddressService:
             logger.error(f"Error getting user IDs by usernames: {e}")
             return []
 
+    @staticmethod
+    async def get_all_addresses() -> List[Address]:
+        """Получить все адреса"""
+        try:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT user_id, username, full_name, phone, city, address, postcode, created_at, updated_at FROM addresses ORDER BY updated_at DESC"
+                )
+                addresses = []
+                for row in rows:
+                    address_dict = dict(row)
+                    if 'id' in address_dict:
+                        del address_dict['id']
+                    addresses.append(Address(**address_dict))
+                return addresses
+        except Exception as e:
+            logger.error(f"Error getting all addresses: {e}")
+            return []
+    
 class SubscriptionService:
     
     @staticmethod
@@ -109,7 +128,7 @@ class SubscriptionService:
         except Exception as e:
             logger.error(f"Error checking subscription: {e}")
             return False
-    
+
     @staticmethod
     async def subscribe(user_id: int, order_id: str) -> bool:
         """Подписать пользователя на заказ"""
@@ -175,6 +194,26 @@ class SubscriptionService:
                 return subscriptions
         except Exception as e:
             logger.error(f"Error getting all subscriptions: {e}")
+            return []
+    
+    @staticmethod
+    async def get_subscriptions_by_order(order_id: str) -> List[Subscription]:
+        """Получить подписки по заказу"""
+        try:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT user_id, order_id, last_sent_status, created_at, updated_at FROM subscriptions WHERE order_id = $1",
+                    order_id
+                )
+                subscriptions = []
+                for row in rows:
+                    subscription_dict = dict(row)
+                    if 'id' in subscription_dict:
+                        del subscription_dict['id']
+                    subscriptions.append(Subscription(**subscription_dict))
+                return subscriptions
+        except Exception as e:
+            logger.error(f"Error getting subscriptions by order {order_id}: {e}")
             return []
     
     @staticmethod
