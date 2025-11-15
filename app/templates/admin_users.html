@@ -236,7 +236,7 @@ document.addEventListener('alpine:init', () => {
                     this.closeForm();
                     await this.loadUsers();
                 } else {
-                    this.showNotification(result.detail || 'Ошибка при сохранении', 'error');
+                    this.showNotification(result.detail, 'error');
                 }
                 
             } catch (error) {
@@ -274,7 +274,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         showNotification(message, type = 'info') {
-            // Используем утилиту из base.html, если она есть
+            // Используем утилиту из base.html
             if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
                 Alpine.$data.pageUtils.showNotification(message, type);
             } else {
