@@ -379,7 +379,71 @@ class ParticipantService:
             logger.error(f"Error getting all participants: {e}")
             return []
 
-# ДОБАВИТЬ в класс ParticipantService:
+    @staticmethod
+    async def get_participants_paginated(
+        order_id: Optional[str] = None,
+        paid: Optional[bool] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> Dict[str, Any]:
+        """Оптимизированное получение участников с пагинацией на уровне БД"""
+        try:
+            async with db.pool.acquire() as conn:
+                # Строим запрос динамически
+                where_conditions = []
+                params = []
+                param_count = 0
+                
+                if order_id:
+                    param_count += 1
+                    where_conditions.append(f"order_id = ${param_count}")
+                    params.append(order_id)
+                
+                if paid is not None:
+                    param_count += 1
+                    where_conditions.append(f"paid = ${param_count}")
+                    params.append(paid)
+                
+                where_clause = ""
+                if where_conditions:
+                    where_clause = "WHERE " + " AND ".join(where_conditions)
+                
+                # Получаем общее количество
+                count_query = f"SELECT COUNT(*) FROM participants {where_clause}"
+                total = await conn.fetchval(count_query, *params)
+                
+                # Получаем данные с пагинацией
+                param_count += 1
+                params.append(limit)
+                param_count += 1
+                params.append(offset)
+                
+                data_query = f"""
+                    SELECT order_id, username, paid, created_at, updated_at 
+                    FROM participants 
+                    {where_clause}
+                    ORDER BY updated_at DESC 
+                    LIMIT ${param_count - 1} OFFSET ${param_count}
+                """
+                
+                rows = await conn.fetch(data_query, *params)
+                
+                participants = []
+                for row in rows:
+                    participant_dict = dict(row)
+                    if 'id' in participant_dict:
+                        del participant_dict['id']
+                    participants.append(Participant(**participant_dict))
+                
+                return {
+                    "participants": participants,
+                    "total": total,
+                    "has_more": (offset + limit) < total
+                }
+                
+        except Exception as e:
+            logger.error(f"Error getting paginated participants: {e}")
+            return {"participants": [], "total": 0, "has_more": False}
 
     @staticmethod
     async def get_all_participants(limit: int = 5000) -> List[Participant]:
