@@ -126,8 +126,12 @@ class OrderService:
 
     @staticmethod
     async def update_order(order_id: str, update_data: dict) -> bool:
-        """Обновление данных заказа"""
+        """Обновление данных заказа с отправкой уведомлений"""
         try:
+            old_order = await OrderService.get_order(order_id)
+            if not old_order:
+                return False
+                
             async with db.pool.acquire() as conn:
                 set_parts = []
                 values = []
@@ -146,11 +150,56 @@ class OrderService:
                 query = f"UPDATE orders SET {', '.join(set_parts)}, updated_at = NOW() WHERE order_id = ${i}"
                 
                 result = await conn.execute(query, *values)
+                
+                # Отправляем уведомления если статус изменился
+                if "status" in update_data and update_data["status"] != old_order.status:
+                    await OrderService._send_status_notifications(order_id, update_data["status"])
+                
                 return "UPDATE 1" in result
                 
         except Exception as e:
             logger.error(f"Error updating order {order_id}: {e}")
             return False
+
+    @staticmethod
+    async def _send_status_notifications(order_id: str, new_status: str):
+        """Отправка уведомлений о смене статуса подписанным пользователям"""
+        try:
+            from app.services.user_service import SubscriptionService
+            from app.webhook import application
+            
+            # Получаем подписанных пользователей
+            subscriptions = await SubscriptionService.get_subscriptions_by_order(order_id)
+            if not subscriptions:
+                return
+            
+            # Получаем информацию о заказе
+            order = await OrderService.get_order(order_id)
+            if not order:
+                return
+            
+            # Формируем сообщение
+            message = f"🔄 <b>Обновление статуса заказа</b>\n\n"
+            message += f"📦 <b>Заказ:</b> {order.order_id}\n"
+            message += f"👤 <b>Клиент:</b> {order.client_name}\n"
+            message += f"🌍 <b>Страна:</b> {order.country}\n"
+            message += f"🔄 <b>Новый статус:</b> {new_status}\n"
+            message += f"\n💡 <i>Следите за обновлениями!</i>"
+            
+            # Отправляем уведомления
+            for subscription in subscriptions:
+                try:
+                    await application.bot.send_message(
+                        chat_id=subscription.user_id,
+                        text=message,
+                        parse_mode='HTML'
+                    )
+                    logger.info(f"Sent status notification to {subscription.user_id} for order {order_id}")
+                except Exception as e:
+                    logger.error(f"Error sending notification to {subscription.user_id}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Error sending status notifications for order {order_id}: {e}")
 
     @staticmethod
     async def delete_order(order_id: str) -> bool:
@@ -181,7 +230,7 @@ class OrderService:
         except Exception as e:
             logger.error(f"Error deleting order {order_id}: {e}")
             return False
-
+            
 # ДОБАВИТЬ в класс OrderService:
 
     @staticmethod
@@ -197,7 +246,7 @@ class OrderService:
         except Exception as e:
             logger.error(f"Error bulk updating order statuses: {e}")
             return False
-            
+    
 class ParticipantService:
     
     @staticmethod
@@ -235,7 +284,7 @@ class ParticipantService:
         except Exception as e:
             logger.error(f"Error getting participants for {order_id}: {e}")
             return []
-    
+
     @staticmethod
     async def toggle_participant_paid(order_id: str, username: str) -> bool:
         """Переключить статус оплаты участника"""
@@ -273,7 +322,7 @@ class ParticipantService:
         except Exception as e:
             logger.error(f"Error getting unpaid usernames: {e}")
             return []
-    
+
     @staticmethod
     async def get_all_unpaid_grouped() -> Dict[str, List[str]]:
         """Сгруппировать всех неплательщиков по order_id"""
