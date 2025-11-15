@@ -267,14 +267,16 @@ document.addEventListener('alpine:init', () => {
         
         async sendReminder(participant) {
             try {
-                // Отправляем напоминание через API
-                const response = await fetch('/admin/api/broadcast/unpaid', {
+                // ИСПРАВЛЕНО: Отправляем напоминание конкретному пользователю через правильный эндпоинт
+                const message = `🔔 Напоминание о задолженности по заказу ${participant.order_id}. Пожалуйста, оплатите ваш заказ.`;
+                
+                const response = await fetch('/admin/api/broadcast/reminder', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        message: `🔔 Напоминание о задолженности по заказу ${participant.order_id}. Пожалуйста, оплатите ваш заказ.`,
+                        message: message,
                         usernames: [participant.username]
                     })
                 });
