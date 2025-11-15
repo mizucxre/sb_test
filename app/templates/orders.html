@@ -39,8 +39,8 @@
 
     <!-- Filters -->
     <div class="glass-effect rounded-2xl p-6">
-        <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
-            <div class="md:col-span-2">
+        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+            <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус</label>
                 <select x-model="filters.status" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все статусы</option>
@@ -58,8 +58,19 @@
                 </select>
             </div>
             <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Метка Админа</label>
+                <select x-model="filters.note" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                    <option value="">Все метки</option>
+                    {% if admin_notes %}
+                    {% for note in admin_notes %}
+                    <option value="{{ note }}">{{ note }}</option>
+                    {% endfor %}
+                    {% endif %}
+                </select>
+            </div>
+            <div class="md:col-span-2">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
-                <input type="text" x-model="filters.search" placeholder="Order ID или клиент..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <input type="text" x-model="filters.search" placeholder="Order ID, клиент или метка..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
             </div>
             <div class="flex items-end space-x-2">
                 <button @click="applyFilters()" class="flex-1 btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200">
@@ -96,21 +107,22 @@
             <table class="w-full">
                 <thead>
                     <tr class="border-b border-white/10">
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium w-12">
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium w-12 hidden-mobile">
                             <input type="checkbox" @change="toggleAll()" :checked="selectedOrders.length === filteredOrders.length && filteredOrders.length > 0" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
                         </th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Order ID</th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Страна</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Обновлен</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Страна</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Метка Админа</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Обновлен</th>
                         <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
                     </tr>
                 </thead>
                 <tbody>
                     <template x-if="loading">
                         <tr>
-                            <td colspan="7" class="py-8 text-center text-gray-400">
+                            <td colspan="8" class="py-8 text-center text-gray-400">
                                 <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
                                 <p>Загрузка заказов...</p>
                             </td>
@@ -118,7 +130,7 @@
                     </template>
                     <template x-if="!loading && filteredOrders.length === 0">
                         <tr>
-                            <td colspan="7" class="py-8 text-center text-gray-400">
+                            <td colspan="8" class="py-8 text-center text-gray-400">
                                 <i class="fas fa-inbox text-2xl mb-2"></i>
                                 <p>Заказы не найдены</p>
                                 <p class="text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
@@ -127,29 +139,40 @@
                     </template>
                     <template x-for="order in filteredOrders" :key="order.order_id">
                         <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200" :class="{ 'bg-blue-500/10': selectedOrders.includes(order.order_id) }">
-                            <td class="py-4 px-4">
+                            <td class="py-4 px-4 hidden-mobile">
                                 <input type="checkbox" :value="order.order_id" x-model="selectedOrders" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
                             </td>
                             <td class="py-4 px-4">
                                 <span class="font-mono font-semibold" x-text="order.order_id"></span>
+                                <div class="md:hidden text-xs text-gray-500 mt-1">
+                                    <span x-text="order.country" class="inline-block px-1 py-0.5 rounded bg-white/10 mr-2"></span>
+                                    <template x-if="order.note">
+                                        <span x-text="order.note" class="inline-block px-1 py-0.5 rounded bg-purple-500/20 text-purple-400"></span>
+                                    </template>
+                                </div>
                             </td>
                             <td class="py-4 px-4">
                                 <div x-text="order.client_name" class="truncate max-w-xs"></div>
-                                <template x-if="order.note">
-                                    <p class="text-xs text-gray-500 mt-1 truncate" x-text="order.note"></p>
-                                </template>
                             </td>
                             <td class="py-4 px-4">
                                 <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
                                       :class="getStatusClass(order.status)" 
                                       x-text="order.status"></span>
                             </td>
-                            <td class="py-4 px-4">
+                            <td class="py-4 px-4 hidden-mobile">
                                 <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono" 
                                       :class="order.country === 'CN' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'"
                                       x-text="order.country"></span>
                             </td>
-                            <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(order.updated_at)"></td>
+                            <td class="py-4 px-4 hidden-mobile">
+                                <template x-if="order.note">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400" x-text="order.note"></span>
+                                </template>
+                                <template x-if="!order.note">
+                                    <span class="text-gray-500 text-xs">—</span>
+                                </template>
+                            </td>
+                            <td class="py-4 px-4 text-gray-400 text-sm hidden-mobile" x-text="formatDate(order.updated_at)"></td>
                             <td class="py-4 px-4">
                                 <div class="flex items-center space-x-2">
                                     <button @click="viewOrder(order.order_id)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200" title="Просмотр">
@@ -198,6 +221,7 @@ document.addEventListener('alpine:init', () => {
         filters: {
             status: '',
             country: '',
+            note: '',
             search: ''
         },
         bulkAction: '',
@@ -231,6 +255,9 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (this.filters.country) {
                     url += `&country=${this.filters.country}`;
+                }
+                if (this.filters.note) {
+                    url += `&note=${encodeURIComponent(this.filters.note)}`;
                 }
                 
                 const response = await fetch(url);
@@ -286,6 +313,7 @@ document.addEventListener('alpine:init', () => {
             this.filters = {
                 status: '',
                 country: '',
+                note: '',
                 search: ''
             };
             this.loadOrders();
