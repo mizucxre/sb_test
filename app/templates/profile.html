@@ -9,9 +9,17 @@
         <h3 class="text-lg font-semibold mb-4">Информация профиля</h3>
         
         <div class="flex items-center space-x-6 mb-6">
-            <img src="{{ current_admin.avatar_url or 'https://ui-avatars.com/api/?name=' + current_admin.username + '&background=random&size=128' }}" 
-                 alt="{{ current_admin.username }}" 
-                 class="w-20 h-20 rounded-2xl">
+            <div class="relative">
+                <img id="avatar-preview" 
+                     src="{{ current_admin.avatar_url or 'https://ui-avatars.com/api/?name=' + current_admin.username + '&background=random&size=128' }}" 
+                     alt="{{ current_admin.username }}" 
+                     class="w-20 h-20 rounded-2xl">
+                <input type="file" id="avatar-input" accept="image/*" class="hidden">
+                <button onclick="document.getElementById('avatar-input').click()" 
+                        class="absolute -bottom-2 -right-2 bg-blue-500 hover:bg-blue-600 text-white p-2 rounded-full transition-all duration-200">
+                    <i class="fas fa-camera text-sm"></i>
+                </button>
+            </div>
             <div>
                 <h4 class="text-xl font-semibold">{{ current_admin.username }}</h4>
                 <p class="text-gray-400">
@@ -84,6 +92,71 @@
 </div>
 
 <script>
+// Обработка загрузки аватарки
+document.getElementById('avatar-input').addEventListener('change', function(e) {
+    const file = e.target.files[0];
+    if (file) {
+        // Проверяем тип файла
+        if (!file.type.startsWith('image/')) {
+            alert('Пожалуйста, выберите изображение');
+            return;
+        }
+
+        // Проверяем размер файла (максимум 5MB)
+        if (file.size > 5 * 1024 * 1024) {
+            alert('Размер файла не должен превышать 5MB');
+            return;
+        }
+
+        // Показываем превью
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('avatar-preview').src = e.target.result;
+            
+            // Отправляем на сервер
+            uploadAvatar(file);
+        };
+        reader.readAsDataURL(file);
+    }
+});
+
+async function uploadAvatar(file) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    try {
+        const response = await fetch('/admin/api/admin/profile/avatar', {
+            method: 'POST',
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+            showNotification('Аватарка успешно обновлена', 'success');
+            // Обновляем аватарку во всех местах на странице
+            document.querySelectorAll('img[src*="avatar"]').forEach(img => {
+                if (img.src.includes('ui-avatars.com') || img.src.includes('gravatar')) {
+                    img.src = result.avatar_url + '?t=' + new Date().getTime();
+                }
+            });
+        } else {
+            showNotification(result.detail || 'Ошибка при загрузке аватарки', 'error');
+        }
+    } catch (error) {
+        console.error('Error uploading avatar:', error);
+        showNotification('Ошибка при загрузке аватарки', 'error');
+    }
+}
+
+function showNotification(message, type) {
+    if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+        Alpine.$data.pageUtils.showNotification(message, type);
+    } else {
+        alert(message);
+    }
+}
+
 document.addEventListener('alpine:init', () => {
     Alpine.data('profileForm', () => ({
         loading: false,
