@@ -4,8 +4,14 @@
 
 {% block content %}
 <div x-data="reports()" class="space-y-6">
+    <!-- Loading State -->
+    <div x-show="loading" class="text-center py-12">
+        <i class="fas fa-spinner fa-spin text-blue-400 text-4xl mb-4"></i>
+        <p class="text-gray-400 text-lg">Загрузка отчетов...</p>
+    </div>
+
     <!-- Stats Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+    <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div class="glass-effect rounded-2xl p-6 card-hover">
             <div class="flex items-center justify-between">
                 <div>
@@ -152,9 +158,11 @@ document.addEventListener('alpine:init', () => {
         stats: {},
         statusStats: [],
         countryStats: [],
+        loading: true,
         
         async init() {
             await this.loadReportsData();
+            this.loading = false;
         },
         
         async loadReportsData() {
