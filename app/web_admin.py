@@ -199,6 +199,33 @@ async def admin_users_page(request: Request, current_admin: dict = Depends(get_c
         "current_page": "admin_users"
     })
 
+@app.get("/admin-users/new", response_class=HTMLResponse)
+async def new_admin_user_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    # Проверяем права супер-админа вручную
+    check_super_admin(current_admin)
+    
+    return templates.TemplateResponse("admin_user_form.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "admin_users"
+    })
+
+@app.get("/admin-users/{user_id}/edit", response_class=HTMLResponse)
+async def edit_admin_user_page(request: Request, user_id: int, current_admin: dict = Depends(get_current_admin)):
+    # Проверяем права супер-админа вручную
+    check_super_admin(current_admin)
+    
+    user = await AdminService.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Admin user not found")
+    
+    return templates.TemplateResponse("admin_user_form.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "admin_users",
+        "user": user
+    })
+
 @app.get("/admin-chat", response_class=HTMLResponse)
 async def admin_chat_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("admin_chat.html", {
