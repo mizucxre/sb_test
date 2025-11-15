@@ -226,6 +226,14 @@ async def edit_admin_user_page(request: Request, user_id: int, current_admin: di
         "user": user
     })
 
+@app.get("/addresses", response_class=HTMLResponse)
+async def addresses_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    return templates.TemplateResponse("addresses.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "addresses"
+    })
+
 @app.get("/admin-chat", response_class=HTMLResponse)
 async def admin_chat_page(request: Request, current_admin: dict = Depends(get_current_admin)):
     return templates.TemplateResponse("admin_chat.html", {
@@ -404,6 +412,7 @@ async def get_stats(current_admin: dict = Depends(get_current_admin)):
         active_orders = len([o for o in orders if o.status in active_statuses])
         
         all_participants = []
+        total_participants = 0
         for order in orders:
             participants = await ParticipantService.get_participants(order.order_id)
             all_participants.extend(participants)
@@ -417,7 +426,7 @@ async def get_stats(current_admin: dict = Depends(get_current_admin)):
         return {
             "total_orders": total_orders,
             "active_orders": active_orders,
-            "total_participants": total_participants,
+            "total_participants": unique_participants,
             "total_subscriptions": total_subscriptions
         }
     except Exception as e:
@@ -1164,3 +1173,209 @@ async def bulk_delete_orders(
     except Exception as e:
         logger.error(f"Error in bulk delete: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# Новые API endpoints для адресов и отчетов
+@app.get("/api/addresses")
+async def get_addresses(
+    search_name: Optional[str] = None,
+    search_username: Optional[str] = None,
+    city: Optional[str] = None,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """API для получения списка адресов"""
+    try:
+        addresses = await AddressService.get_all_addresses()
+        
+        # Фильтрация по имени
+        if search_name:
+            addresses = [a for a in addresses if search_name.lower() in a.get('full_name', '').lower()]
+        
+        # Фильтрация по username
+        if search_username:
+            addresses = [a for a in addresses if search_username.lower() in a.get('username', '').lower()]
+        
+        # Фильтрация по городу
+        if city:
+            addresses = [a for a in addresses if a.get('city') == city]
+        
+        return {"addresses": addresses}
+    except Exception as e:
+        logger.error(f"Error fetching addresses: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/addresses/export/xlsx")
+async def export_addresses_xlsx(current_admin: dict = Depends(get_current_admin)):
+    """Экспорт адресов в XLSX"""
+    try:
+        addresses = await AddressService.get_all_addresses()
+        
+        # Создаем DataFrame
+        import pandas as pd
+        df = pd.DataFrame(addresses)
+        
+        # Создаем Excel файл
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+            df.to_excel(writer, sheet_name='Addresses', index=False)
+        
+        output.seek(0)
+        
+        # Возвращаем файл
+        filename = f"addresses_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        return Response(
+            content=output.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting addresses: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/reports/analytics")
+async def get_reports_analytics(current_admin: dict = Depends(get_current_admin)):
+    """API для получения аналитики отчетов"""
+    try:
+        # Получаем все заказы
+        orders = await OrderService.list_recent_orders(10000)
+        
+        # Базовая статистика
+        total_orders = len(orders)
+        completed_orders = len([o for o in orders if "доставлен" in o.status.lower() or "получен" in o.status.lower()])
+        
+        # Статистика по статусам
+        status_stats = {}
+        for order in orders:
+            status = order.status
+            status_stats[status] = status_stats.get(status, 0) + 1
+        
+        # Статистика по странам
+        country_stats = {}
+        for order in orders:
+            country = order.country
+            country_stats[country] = country_stats.get(country, 0) + 1
+        
+        # Статистика платежей
+        all_participants = []
+        for order in orders:
+            participants = await ParticipantService.get_participants(order.order_id)
+            all_participants.extend(participants)
+        
+        paid_participants = [p for p in all_participants if p.paid]
+        unpaid_participants = [p for p in all_participants if not p.paid]
+        
+        return {
+            "total_orders": total_orders,
+            "completed_orders": completed_orders,
+            "unique_participants": len(set(p.username for p in all_participants)),
+            "status_stats": status_stats,
+            "country_stats": country_stats,
+            "payment_stats": {
+                "total": len(all_participants),
+                "paid": len(paid_participants),
+                "unpaid": len(unpaid_participants)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Error fetching reports analytics: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/reports/export/{report_type}")
+async def export_report(
+    report_type: str,
+    format: str = Query("csv"),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Экспорт отчетов"""
+    try:
+        if report_type == "orders":
+            orders = await OrderService.list_recent_orders(10000)
+            
+            if format == "csv":
+                # Создаем CSV
+                import csv
+                output = io.StringIO()
+                writer = csv.writer(output)
+                
+                # Заголовки
+                writer.writerow(["Order ID", "Client Name", "Country", "Status", "Note", "Created At", "Updated At"])
+                
+                # Данные
+                for order in orders:
+                    writer.writerow([
+                        order.order_id,
+                        order.client_name,
+                        order.country,
+                        order.status,
+                        order.note or "",
+                        order.created_at.isoformat() if order.created_at else "",
+                        order.updated_at.isoformat() if order.updated_at else ""
+                    ])
+                
+                content = output.getvalue()
+                filename = f"orders_{datetime.now().strftime('%Y-%m-%d')}.csv"
+                
+                return {
+                    "content": content,
+                    "filename": filename
+                }
+            
+        elif report_type == "participants":
+            if format == "csv":
+                # Получаем всех участников
+                result = await ParticipantService.get_participants_paginated(limit=10000)
+                participants = result["participants"]
+                
+                # Создаем CSV
+                import csv
+                output = io.StringIO()
+                writer = csv.writer(output)
+                
+                # Заголовки
+                writer.writerow(["Order ID", "Username", "Paid", "Created At", "Updated At"])
+                
+                # Данные
+                for participant in participants:
+                    writer.writerow([
+                        participant.order_id,
+                        participant.username,
+                        "Да" if participant.paid else "Нет",
+                        participant.created_at.isoformat() if participant.created_at else "",
+                        participant.updated_at.isoformat() if participant.updated_at else ""
+                    ])
+                
+                content = output.getvalue()
+                filename = f"participants_{datetime.now().strftime('%Y-%m-%d')}.csv"
+                
+                return {
+                    "content": content,
+                    "filename": filename
+                }
+            
+            elif format == "json":
+                # Получаем все данные
+                orders = await OrderService.list_recent_orders(10000)
+                all_participants = []
+                
+                for order in orders:
+                    participants = await ParticipantService.get_participants(order.order_id)
+                    all_participants.extend(participants)
+                
+                # Сериализуем данные
+                data = {
+                    "orders": [serialize_model(order) for order in orders],
+                    "participants": [serialize_model(participant) for participant in all_participants]
+                }
+                
+                filename = f"data_{datetime.now().strftime('%Y-%m-%d')}.json"
+                
+                return {
+                    "content": json.dumps(data, indent=2, ensure_ascii=False, default=str),
+                    "filename": filename
+                }
+        
+        raise HTTPException(400, "Неверный тип отчета или формат")
+        
+    except Exception as e:
+        logger.error(f"Error exporting report {report_type}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
