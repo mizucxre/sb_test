@@ -37,11 +37,20 @@
         <!-- Импорт через форму -->
         <div x-show="activeTab === 'form'">
             <div class="space-y-4">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-400 mb-2">ID заказа</label>
-                        <input type="text" x-model="formData.order_id" placeholder="ORD-001" 
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Номер заказа</label>
+                        <input type="text" x-model="formData.order_number" placeholder="12345" 
                                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                        <p class="text-xs text-gray-500 mt-1">Только цифры, префикс добавится автоматически</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
+                        <select x-model="formData.country" 
+                                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                            <option value="CN">Китай (CN)</option>
+                            <option value="KR">Корея (KR)</option>
+                        </select>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-400 mb-2">Имя клиента</label>
@@ -49,7 +58,7 @@
                                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
                     </div>
                 </div>
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
@@ -121,6 +130,49 @@
         <!-- Импорт через Excel -->
         <div x-show="activeTab === 'excel'">
             <div class="space-y-4">
+                <!-- Подсказка по шаблону -->
+                <div class="glass-effect rounded-2xl p-6">
+                    <h3 class="text-lg font-semibold mb-4">Шаблон Excel файла</h3>
+                    <div class="bg-white/5 rounded-2xl p-4">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="border-b border-white/10">
+                                        <th class="text-left py-2 px-3 text-gray-400 font-medium">order_number</th>
+                                        <th class="text-left py-2 px-3 text-gray-400 font-medium">country</th>
+                                        <th class="text-left py-2 px-3 text-gray-400 font-medium">client_name</th>
+                                        <th class="text-left py-2 px-3 text-gray-400 font-medium">status</th>
+                                        <th class="text-left py-2 px-3 text-gray-400 font-medium">note</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b border-white/5">
+                                        <td class="py-2 px-3 font-mono">12345</td>
+                                        <td class="py-2 px-3">CN</td>
+                                        <td class="py-2 px-3">@username</td>
+                                        <td class="py-2 px-3">В обработке</td>
+                                        <td class="py-2 px-3">Примечание</td>
+                                    </tr>
+                                    <tr>
+                                        <td class="py-2 px-3 font-mono">67890</td>
+                                        <td class="py-2 px-3">KR</td>
+                                        <td class="py-2 px-3">@username2</td>
+                                        <td class="py-2 px-3">В пути</td>
+                                        <td class="py-2 px-3"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="mt-4 text-xs text-gray-400 space-y-1">
+                            <p>• <span class="font-semibold">order_number</span> - только цифры (префикс CN- или KR- добавится автоматически)</p>
+                            <p>• <span class="font-semibold">country</span> - CN (Китай) или KR (Корея)</p>
+                            <p>• <span class="font-semibold">client_name</span> - имя клиента или @username</p>
+                            <p>• <span class="font-semibold">status</span> - статус заказа (опционально)</p>
+                            <p>• <span class="font-semibold">note</span> - примечание (опционально)</p>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="border-2 border-dashed border-white/10 rounded-2xl p-8 text-center">
                     <i class="fas fa-file-excel text-green-400 text-4xl mb-4"></i>
                     <p class="text-lg font-semibold mb-2">Загрузите Excel файл</p>
@@ -217,9 +269,9 @@ document.addEventListener('alpine:init', () => {
         activeTab: 'form',
         loading: false,
         formData: {
-            order_id: '',
+            order_number: '',
             client_name: '',
-            country: 'RU',
+            country: 'CN',
             status: '{{ statuses[0] if statuses else "В обработке" }}',
             note: ''
         },
@@ -229,26 +281,43 @@ document.addEventListener('alpine:init', () => {
         importResults: null,
         
         addOrder() {
-            if (!this.formData.order_id || !this.formData.client_name) {
-                this.showNotification('Заполните ID заказа и имя клиента', 'error');
+            if (!this.formData.order_number || !this.formData.client_name) {
+                this.showNotification('Заполните номер заказа и имя клиента', 'error');
                 return;
             }
             
+            // Очищаем номер от лишних символов, оставляем только цифры
+            const cleanNumber = this.formData.order_number.replace(/\D/g, '');
+            if (!cleanNumber) {
+                this.showNotification('Номер заказа должен содержать цифры', 'error');
+                return;
+            }
+            
+            // Автоматически добавляем префикс страны
+            const orderId = `${this.formData.country}-${cleanNumber}`;
+            
             // Проверяем дубликат в текущем списке
-            const exists = this.ordersToImport.some(order => order.order_id === this.formData.order_id);
+            const exists = this.ordersToImport.some(order => order.order_id === orderId);
             if (exists) {
                 this.showNotification('Заказ с таким ID уже в списке', 'warning');
                 return;
             }
             
-            this.ordersToImport.push({...this.formData});
+            // Добавляем заказ с автогенерированным ID
+            this.ordersToImport.push({
+                order_id: orderId,
+                client_name: this.formData.client_name,
+                country: this.formData.country,
+                status: this.formData.status,
+                note: this.formData.note
+            });
             
             // Очищаем форму
-            this.formData.order_id = '';
+            this.formData.order_number = '';
             this.formData.client_name = '';
             this.formData.note = '';
             
-            this.showNotification('Заказ добавлен в список', 'success');
+            this.showNotification(`Заказ ${orderId} добавлен в список`, 'success');
         },
         
         removeOrder(index) {
