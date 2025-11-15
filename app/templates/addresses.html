@@ -3,35 +3,48 @@
 {% block page_title %}Адреса клиентов{% endblock %}
 
 {% block content %}
-<div x-data="addresses" class="space-y-6">
+<div x-data="addresses" class="space-y-4 lg:space-y-6">
     <!-- Header -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Адреса клиентов</h3>
-            <div class="flex items-center space-x-4">
-                <button @click="exportToXLSX()" class="btn-primary px-4 py-2 rounded-2xl font-medium">
-                    <i class="fas fa-file-excel mr-2"></i>Выгрузить в XLSX
-                </button>
-            </div>
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
+            <h3 class="text-lg lg:text-xl font-semibold">Адреса клиентов</h3>
+            <button @click="exportToXLSX()" class="btn-primary px-4 py-3 rounded-2xl font-medium text-sm lg:text-base" data-touch-target>
+                <i class="fas fa-file-excel mr-2"></i>Выгрузить в XLSX
+            </button>
         </div>
     </div>
 
     <!-- Search and Filters -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="glass-effect rounded-2xl p-4 lg:p-6" x-data="{ showFilters: window.matchMedia('(min-width: 1024px)').matches }">
+        <!-- Mobile Filter Toggle Button -->
+        <div class="lg:hidden flex justify-between items-center mb-4">
+            <h3 class="text-lg font-semibold">Фильтры</h3>
+            <button @click="showFilters = !showFilters" 
+                    class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200"
+                    data-touch-target>
+                <i class="fas fa-filter mr-2"></i>
+                <span x-text="showFilters ? 'Скрыть' : 'Показать'"></span>
+            </button>
+        </div>
+        
+        <div x-show="showFilters || window.matchMedia('(min-width: 1024px)').matches" class="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск по имени</label>
                 <input type="text" x-model="searchName" placeholder="Введите имя..."
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       data-touch-target>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск по username</label>
                 <input type="text" x-model="searchUsername" placeholder="Введите username..."
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       data-touch-target>
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Город</label>
-                <select x-model="selectedCity" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2">
+                <select x-model="selectedCity" 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все города</option>
                     <template x-for="city in cities" :key="city">
                         <option x-text="city" :value="city"></option>
@@ -40,7 +53,9 @@
             </div>
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Сортировка</label>
-                <select x-model="sortBy" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2">
+                <select x-model="sortBy" 
+                        class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="username">По username (A-Z)</option>
                     <option value="full_name">По имени (A-Z)</option>
                     <option value="city">По городу</option>
@@ -51,73 +66,132 @@
     </div>
 
     <!-- Addresses List -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead>
-                    <tr class="border-b border-white/10">
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Контакт</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Адрес</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Обновлено</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-if="loading">
-                        <tr>
-                            <td colspan="4" class="py-8 text-center text-gray-400">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Загрузка адресов...</p>
-                            </td>
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <!-- Mobile Card View -->
+        <div class="lg:hidden space-y-3">
+            <template x-if="loading">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-400">Загрузка адресов...</p>
+                </div>
+            </template>
+            
+            <template x-if="!loading && filteredAddresses.length === 0">
+                <div class="text-center py-8">
+                    <i class="fas fa-map-marker-alt text-2xl mb-2"></i>
+                    <p class="text-gray-400">Адреса не найдены</p>
+                </div>
+            </template>
+            
+            <template x-for="address in filteredAddresses" :key="address.user_id">
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition-all duration-200">
+                    <!-- Header -->
+                    <div class="flex items-center space-x-3 mb-3">
+                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user text-white text-sm"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate" x-text="address.full_name || 'Не указано'"></p>
+                            <p class="text-sm text-gray-400 truncate" x-text="'@' + address.username"></p>
+                        </div>
+                    </div>
+                    
+                    <!-- Details -->
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Телефон:</span>
+                            <span x-text="address.phone || 'Не указан'" class="truncate max-w-[120px]"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Город:</span>
+                            <span class="font-medium" x-text="address.city || 'Не указан'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Адрес:</span>
+                            <span class="text-gray-400 text-xs truncate max-w-[120px]" x-text="address.address || 'Не указан'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Индекс:</span>
+                            <span class="text-gray-400 text-xs" x-text="address.postcode || 'Не указан'"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Обновлен:</span>
+                            <span class="text-gray-400 text-xs" x-text="formatDate(address.updated_at)"></span>
+                        </div>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Desktop Table View -->
+        <div class="hidden lg:block">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Контакт</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Адрес</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Обновлено</th>
                         </tr>
-                    </template>
-                    <template x-if="!loading && filteredAddresses.length === 0">
-                        <tr>
-                            <td colspan="4" class="py-8 text-center text-gray-400">
-                                <i class="fas fa-map-marker-alt text-2xl mb-2"></i>
-                                <p>Адреса не найдены</p>
-                            </td>
-                        </tr>
-                    </template>
-                    <template x-for="address in filteredAddresses" :key="address.user_id">
-                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
-                            <td class="py-4 px-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                        <i class="fas fa-user text-white text-sm"></i>
+                    </thead>
+                    <tbody>
+                        <template x-if="loading">
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Загрузка адресов...</p>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-if="!loading && filteredAddresses.length === 0">
+                            <tr>
+                                <td colspan="4" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-map-marker-alt text-2xl mb-2"></i>
+                                    <p>Адреса не найдены</p>
+                                </td>
+                            </tr>
+                        </template>
+                        <template x-for="address in filteredAddresses" :key="address.user_id">
+                            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                                <td class="py-4 px-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-user text-white text-sm"></i>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium" x-text="address.full_name || 'Не указано'"></p>
+                                            <p class="text-sm text-gray-400" x-text="'@' + address.username"></p>
+                                        </div>
                                     </div>
-                                    <div>
-                                        <p class="font-medium" x-text="address.full_name || 'Не указано'"></p>
-                                        <p class="text-sm text-gray-400" x-text="'@' + address.username"></p>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <div class="space-y-1">
+                                        <p class="text-sm" x-text="address.phone || 'Не указан'"></p>
+                                        <p class="text-xs text-gray-400">Telegram ID: <span x-text="address.user_id"></span></p>
                                     </div>
-                                </div>
-                            </td>
-                            <td class="py-4 px-4">
-                                <div class="space-y-1">
-                                    <p class="text-sm" x-text="address.phone || 'Не указан'"></p>
-                                    <p class="text-xs text-gray-400">Telegram ID: <span x-text="address.user_id"></span></p>
-                                </div>
-                            </td>
-                            <td class="py-4 px-4">
-                                <div class="space-y-1">
-                                    <p class="text-sm font-medium" x-text="address.city || 'Город не указан'"></p>
-                                    <p class="text-sm text-gray-400" x-text="address.address || 'Адрес не указан'"></p>
-                                    <p class="text-xs text-gray-400" x-text="address.postcode || 'Индекс не указан'"></p>
-                                </div>
-                            </td>
-                            <td class="py-4 px-4 text-gray-400 text-sm">
-                                <span x-text="formatDate(address.updated_at)"></span>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <div class="space-y-1">
+                                        <p class="text-sm font-medium" x-text="address.city || 'Город не указан'"></p>
+                                        <p class="text-sm text-gray-400" x-text="address.address || 'Адрес не указан'"></p>
+                                        <p class="text-xs text-gray-400" x-text="address.postcode || 'Индекс не указан'"></p>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4 text-gray-400 text-sm">
+                                    <span x-text="formatDate(address.updated_at)"></span>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </div>
         
         <!-- Pagination -->
-        <div class="flex items-center justify-between mt-6" x-show="!loading && filteredAddresses.length > 0">
-            <div class="text-sm text-gray-400">
-                Показано <span x-text="filteredAddresses.length"></span> из <span x-text="addresses.length"></span> адресов
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mt-4 lg:mt-6" x-show="!loading && filteredAddresses.length > 0">
+            <div class="text-sm text-gray-400 text-center lg:text-left">
+                Показано <span x-text="filteredAddresses.length" class="font-semibold text-white"></span> из <span x-text="addresses.length" class="font-semibold text-white"></span> адресов
             </div>
         </div>
     </div>
