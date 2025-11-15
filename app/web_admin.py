@@ -646,36 +646,23 @@ async def delete_order_api(
 async def get_participants(
     order_id: Optional[str] = None,
     paid: Optional[bool] = None,
-    limit: int = Query(50, ge=1, le=5000),
+    limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_admin: dict = Depends(get_current_admin)
 ):
-    """API для получения списка участников"""
+    """API для получения списка участников с оптимизированной пагинацией"""
     try:
-        if order_id:
-            participants = await ParticipantService.get_participants(order_id)
-        else:
-            # Получаем всех участников из всех заказов
-            all_participants = []
-            orders = await OrderService.list_recent_orders(10000)
-            for order in orders:
-                participants = await ParticipantService.get_participants(order.order_id)
-                all_participants.extend(participants)
-            participants = all_participants
-        
-        # Фильтрация по статусу оплаты
-        if paid is not None:
-            participants = [p for p in participants if p.paid == paid]
-        
-        # Общее количество участников (после фильтрации)
-        total_participants = len(participants)
-        
-        # Пагинация
-        paginated_participants = participants[offset:offset + limit]
+        # Используем новый метод для получения участников с пагинацией на уровне БД
+        result = await ParticipantService.get_participants_paginated(
+            order_id=order_id,
+            paid=paid,
+            limit=limit,
+            offset=offset
+        )
         
         # Convert to dict for JSON serialization
         participants_data = []
-        for participant in paginated_participants:
+        for participant in result["participants"]:
             participant_data = serialize_model(participant)
             if participant_data.get('created_at') and isinstance(participant_data['created_at'], datetime):
                 participant_data['created_at'] = participant_data['created_at'].isoformat()
@@ -685,8 +672,8 @@ async def get_participants(
         
         return {
             "participants": participants_data,
-            "total": total_participants,
-            "has_more": total_participants > offset + limit,
+            "total": result["total"],
+            "has_more": result["has_more"],
             "offset": offset,
             "limit": limit
         }
@@ -779,7 +766,7 @@ async def broadcast_unpaid(
                 failed_count += 1
         
         return {
-            "success": True, 
+            "success": True,
             "message": "Рассылка завершена",
             "result": {
                 "sent": sent_count,
@@ -914,6 +901,20 @@ async def send_reminder(
 async def get_statuses(current_admin: dict = Depends(get_current_admin)):
     """API для получения списка статусов"""
     return {"statuses": STATUSES}
+
+@app.get("/api/telegram/posts")
+async def get_telegram_posts(
+    limit: int = Query(5, ge=1, le=10),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """API для получения постов из Telegram канала"""
+    try:
+        from app.services.telegram_service import telegram_service
+        posts = await telegram_service.get_channel_posts(limit)
+        return {"posts": posts}
+    except Exception as e:
+        logger.error(f"Error fetching Telegram posts: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/orders/{order_id}", response_class=HTMLResponse)
 async def view_order_page(request: Request, order_id: str, current_admin: dict = Depends(get_current_admin)):
