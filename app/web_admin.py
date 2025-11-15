@@ -403,36 +403,47 @@ async def change_password(request: Request, current_admin: dict = Depends(get_cu
 
 @app.get("/api/stats")
 async def get_stats(current_admin: dict = Depends(get_current_admin)):
-    """Получение статистики для дашборда"""
+    """Оптимизированное получение статистики для дашборда"""
     try:
-        orders = await OrderService.list_recent_orders(1000)
-        total_orders = len(orders)
-        
-        active_statuses = [s for s in STATUSES if "получен" not in s.lower() and "доставлен" not in s.lower()]
-        active_orders = len([o for o in orders if o.status in active_statuses])
-        
-        all_participants = []
-        total_participants = 0
-        for order in orders:
-            participants = await ParticipantService.get_participants(order.order_id)
-            all_participants.extend(participants)
-            total_participants += len(participants)
-        
-        unique_participants = len(set(p.username for p in all_participants))
-        
-        subscriptions = await SubscriptionService.get_all_subscriptions()
-        total_subscriptions = len(subscriptions)
+        # Используем один SQL запрос для получения всей статистики
+        async with db.pool.acquire() as conn:
+            # Получаем общее количество заказов
+            total_orders = await conn.fetchval("SELECT COUNT(*) FROM orders")
+            
+            # Получаем количество активных заказов
+            active_statuses = [s for s in STATUSES if "получен" not in s.lower() and "доставлен" not in s.lower()]
+            if active_statuses:
+                active_orders = await conn.fetchval(
+                    "SELECT COUNT(*) FROM orders WHERE status = ANY($1)",
+                    active_statuses
+                )
+            else:
+                active_orders = 0
+            
+            # Получаем количество уникальных участников одним запросом
+            unique_participants = await conn.fetchval(
+                "SELECT COUNT(DISTINCT username) FROM participants"
+            )
+            
+            # Получаем количество подписок
+            total_subscriptions = await conn.fetchval("SELECT COUNT(*) FROM subscriptions")
         
         return {
-            "total_orders": total_orders,
-            "active_orders": active_orders,
-            "total_participants": unique_participants,
-            "total_subscriptions": total_subscriptions
+            "total_orders": total_orders or 0,
+            "active_orders": active_orders or 0,
+            "total_participants": unique_participants or 0,
+            "total_subscriptions": total_subscriptions or 0
         }
     except Exception as e:
         logger.error(f"Error fetching stats: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
+        # Возвращаем базовые значения в случае ошибки
+        return {
+            "total_orders": 0,
+            "active_orders": 0,
+            "total_participants": 0,
+            "total_subscriptions": 0
+        }
+        
 # Middleware для проверки аутентификации
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -478,7 +489,7 @@ async def get_orders(
         else:
             # Получаем все заказы для правильного подсчета total
             orders = await OrderService.list_recent_orders(10000)
-        
+            
         # Фильтрация по стране
         if country:
             orders = [o for o in orders if o.country == country.upper()]
