@@ -1,0 +1,45 @@
+/* Telegram Channel Posts Styling */
+.line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.line-clamp-3 {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Telegram post animations */
+.telegram-post {
+    transition: all 0.3s ease;
+}
+
+.telegram-post:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* Telegram gradient */
+.telegram-gradient {
+    background: linear-gradient(135deg, #0088cc 0%, #00a8ff 100%);
+}
+
+/* Post image styling */
+.post-image {
+    border-radius: 12px;
+    object-fit: cover;
+}
+
+/* Loading animation for posts */
+.posts-loading {
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
