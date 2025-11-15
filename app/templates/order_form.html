@@ -6,12 +6,50 @@
 <div x-data="orderForm()" class="max-w-2xl mx-auto">
     <div class="glass-effect rounded-2xl p-6">
         <form @submit.prevent="submitForm()" class="space-y-6">
-            <!-- Order ID -->
+            <!-- Order Number -->
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Order ID *</label>
-                <input type="text" x-model="formData.order_id" required
-                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
-                       placeholder="CN-12345">
+                <label class="block text-sm font-medium text-gray-400 mb-2">Номер заказа *</label>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-1">
+                        <input type="text" x-model="formData.order_number" required
+                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
+                               placeholder="12345">
+                        <p class="text-xs text-gray-400 mt-1">Только цифры</p>
+                    </div>
+                    <div class="md:col-span-2">
+                        <div class="flex items-center space-x-4">
+                            <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200 flex-1"
+                                   :class="formData.country === 'CN' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
+                                <input type="radio" x-model="formData.country" value="CN" class="hidden">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                                         :class="formData.country === 'CN' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
+                                        <i class="fas fa-check text-white text-xs" x-show="formData.country === 'CN'"></i>
+                                    </div>
+                                    <span>Китай (CN)</span>
+                                </div>
+                            </label>
+                            
+                            <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200 flex-1"
+                                   :class="formData.country === 'KR' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
+                                <input type="radio" x-model="formData.country" value="KR" class="hidden">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
+                                         :class="formData.country === 'KR' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
+                                        <i class="fas fa-check text-white text-xs" x-show="formData.country === 'KR'"></i>
+                                    </div>
+                                    <span>Корея (KR)</span>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2 p-3 bg-white/5 rounded-2xl">
+                    <p class="text-sm text-gray-400">
+                        <span class="font-semibold">Будет создан заказ:</span> 
+                        <span x-text="formData.order_number && formData.country ? formData.country + '-' + formData.order_number.replace(/\D/g, '') : '...'" class="font-mono text-blue-400"></span>
+                    </p>
+                </div>
             </div>
 
             <!-- Client Name -->
@@ -113,9 +151,9 @@ document.addEventListener('alpine:init', () => {
         successMessage: '',
         errorMessage: '',
         formData: {
-            order_id: '',
+            order_number: '',
             client_name: '',
-            country: '',
+            country: 'CN',
             status: '',
             note: ''
         },
@@ -138,8 +176,11 @@ document.addEventListener('alpine:init', () => {
                 const data = await response.json();
                 
                 if (data.order) {
+                    // Извлекаем номер из order_id (убираем префикс)
+                    const orderNumber = data.order.order_id.replace(/^(CN|KR)-/, '');
+                    
                     this.formData = {
-                        order_id: data.order.order_id,
+                        order_number: orderNumber,
                         client_name: data.order.client_name,
                         country: data.order.country,
                         status: data.order.status,
@@ -157,6 +198,33 @@ document.addEventListener('alpine:init', () => {
             this.hideMessages();
             
             try {
+                // Проверяем обязательные поля
+                if (!this.formData.order_number || !this.formData.client_name || !this.formData.country || !this.formData.status) {
+                    this.showError('Заполните все обязательные поля');
+                    this.loading = false;
+                    return;
+                }
+                
+                // Очищаем номер от лишних символов, оставляем только цифры
+                const cleanNumber = this.formData.order_number.replace(/\D/g, '');
+                if (!cleanNumber) {
+                    this.showError('Номер заказа должен содержать цифры');
+                    this.loading = false;
+                    return;
+                }
+                
+                // Автоматически создаем order_id с префиксом
+                const orderId = `${this.formData.country}-${cleanNumber}`;
+                
+                // Создаем данные для отправки
+                const submitData = {
+                    order_id: orderId,
+                    client_name: this.formData.client_name,
+                    country: this.formData.country,
+                    status: this.formData.status,
+                    note: this.formData.note || ''
+                };
+                
                 const url = '/admin/api/orders/create';
                 const method = 'POST';
                 
@@ -165,13 +233,13 @@ document.addEventListener('alpine:init', () => {
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify(this.formData)
+                    body: JSON.stringify(submitData)
                 });
                 
                 const data = await response.json();
                 
                 if (response.ok) {
-                    this.showSuccess(data.message || 'Заказ успешно создан');
+                    this.showSuccess(data.message || `Заказ ${orderId} успешно создан`);
                     setTimeout(() => {
                         window.location.href = '/admin/orders';
                     }, 2000);
