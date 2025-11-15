@@ -366,13 +366,10 @@ async def change_password(request: Request, current_admin: dict = Depends(get_cu
         logger.error(f"Error changing password: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
-# ... остальной код без изменений (существующие API endpoints для заказов, участников и т.д.) ...
-# Существующие API endpoints (остаются без изменений, но добавляем проверку авторизации)
 @app.get("/api/stats")
 async def get_stats(current_admin: dict = Depends(get_current_admin)):
     """Получение статистики для дашборда"""
     try:
-        # ... существующий код ...
         orders = await OrderService.list_recent_orders(1000)
         total_orders = len(orders)
         
@@ -398,8 +395,6 @@ async def get_stats(current_admin: dict = Depends(get_current_admin)):
         logger.error(f"Error fetching stats: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-# ... остальные существующие API endpoints с добавлением current_admin: dict = Depends(get_current_admin) ...
-
 # Middleware для проверки аутентификации
 @app.middleware("http")
 async def auth_middleware(request: Request, call_next):
@@ -423,8 +418,6 @@ async def auth_middleware(request: Request, call_next):
     
     response = await call_next(request)
     return response
-
-# ... продолжение web_admin.py после middleware ...
 
 # Существующие API endpoints с новой аутентификацией
 @app.get("/api/orders")
@@ -1103,7 +1096,6 @@ async def bulk_delete_orders(
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 # Создаем директорию для аватарок
-# Создаем директорию для аватарок
 AVATAR_DIR = os.path.join(STATIC_DIR, "avatars")
 os.makedirs(AVATAR_DIR, exist_ok=True)
 
@@ -1115,33 +1107,66 @@ async def upload_avatar(
     """Загрузка аватарки пользователя"""
     try:
         # Проверяем тип файла
-        if not avatar.content_type.startswith('image/'):
+        if not avatar.content_type or not avatar.content_type.startswith("image/"):
             raise HTTPException(400, "Файл должен быть изображением")
         
-        # Проверяем размер файла
-        if avatar.size > 5 * 1024 * 1024:  # 5MB
+        # Читаем содержимое файла
+        contents = await avatar.read()
+        
+        # Проверяем размер файла (не более 5MB)
+        max_size = 5 * 1024 * 1024  # 5 MB
+        if len(contents) > max_size:
             raise HTTPException(400, "Размер файла не должен превышать 5MB")
         
-        # Читаем и обрабатываем изображение
-        contents = await avatar.read()
+        # Открываем изображение через PIL
         image = Image.open(io.BytesIO(contents))
-        ...
-        filename = f"{current_admin['user_id']}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        
+        # Конвертируем в RGB при необходимости
+        if image.mode in ("RGBA", "LA", "P"):
+            image = image.convert("RGB")
+        
+        # Ресайзим до 200x200
+        try:
+            resampling = Image.Resampling.LANCZOS
+        except AttributeError:
+            resampling = Image.LANCZOS
+        image.thumbnail((200, 200), resampling)
+        
+        # Определяем расширение файла
+        original_name = avatar.filename or "avatar"
+        if "." in original_name:
+            ext = original_name.rsplit(".", 1)[1].lower()
+        else:
+            ext = "jpg"
+        
+        if ext not in ["jpg", "jpeg", "png"]:
+            ext = "jpg"
+        
+        # Генерируем уникальное имя файла
+        filename = f"{current_admin['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
         save_path = os.path.join(AVATAR_DIR, filename)
         
+        # Пересоздаём директорию на всякий случай (если вдруг её удалили)
+        os.makedirs(AVATAR_DIR, exist_ok=True)
+        
         # Сохраняем изображение
-        image.save(save_path, 'JPEG' if file_extension in ['jpg', 'jpeg'] else 'PNG', quality=85)
+        image.save(save_path, "JPEG" if ext in ["jpg", "jpeg"] else "PNG", quality=85)
         
         # Обновляем аватарку в базе данных
         avatar_url = f"/static/avatars/{filename}"
-        user = await AdminService.update_user(current_admin["user_id"], AdminUserUpdate(avatar_url=avatar_url))
+        user = await AdminService.update_user(
+            current_admin["user_id"],
+            AdminUserUpdate(avatar_url=avatar_url)
+        )
         
         return {
-            "success": True, 
-            "message": "Аватарка успешно обновлена", 
+            "success": True,
+            "message": "Аватарка успешно обновлена",
             "avatar_url": avatar_url
         }
         
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error uploading avatar: {e}")
         raise HTTPException(500, "Ошибка при загрузке аватарки")
