@@ -172,12 +172,14 @@
                 Показано <span x-text="filteredOrders.length"></span> из <span x-text="totalOrders"></span> заказов
             </div>
             <div class="flex items-center space-x-2">
-                <button @click="prevPage()" :disabled="currentPage === 1" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <i class="fas fa-chevron-left"></i>
+                <button @click="prevPage()" :disabled="currentPage === 1 || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i x-show="!loading" class="fas fa-chevron-left"></i>
+                    <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
                 <span class="px-4 py-2 text-sm">Страница <span x-text="currentPage"></span></span>
-                <button @click="nextPage()" :disabled="!hasMore" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <i class="fas fa-chevron-right"></i>
+                <button @click="nextPage()" :disabled="!hasMore || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i x-show="!loading" class="fas fa-chevron-right"></i>
+                    <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
             </div>
         </div>
@@ -242,6 +244,22 @@ document.addEventListener('alpine:init', () => {
                 this.showNotification('Ошибка загрузки заказов', 'error');
             } finally {
                 this.loading = false;
+            }
+        },
+        
+        async prevPage() {
+            if (this.currentPage > 1) {
+                this.loading = true;
+                this.currentPage--;
+                await this.loadOrders();
+            }
+        },
+        
+        async nextPage() {
+            if (this.hasMore) {
+                this.loading = true;
+                this.currentPage++;
+                await this.loadOrders();
             }
         },
         
