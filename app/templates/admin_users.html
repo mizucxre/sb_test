@@ -3,7 +3,7 @@
 {% block page_title %}Управление администраторами{% endblock %}
 
 {% block content %}
-<div x-data="adminUsers()" class="space-y-6">
+<div x-data="adminUsers" class="space-y-6">
     <!-- Header -->
     <div class="glass-effect rounded-2xl p-6">
         <div class="flex items-center justify-between">
@@ -236,7 +236,7 @@ document.addEventListener('alpine:init', () => {
                     this.closeForm();
                     await this.loadUsers();
                 } else {
-                    this.showNotification(result.detail, 'error');
+                    this.showNotification(result.detail || 'Ошибка при сохранении', 'error');
                 }
                 
             } catch (error) {
@@ -248,7 +248,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         closeForm() {
-            this.showModal = false;  // Исправлено закрытие модалки
+            this.showModal = false;
             this.editingUser = null;
             this.formData = {
                 username: '',
@@ -274,7 +274,7 @@ document.addEventListener('alpine:init', () => {
         },
         
         showNotification(message, type = 'info') {
-            // Используем утилиту из base.html
+            // Используем утилиту из base.html, если она есть
             if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
                 Alpine.$data.pageUtils.showNotification(message, type);
             } else {
