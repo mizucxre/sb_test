@@ -8,7 +8,7 @@
     <div class="glass-effect rounded-2xl p-6">
         <div class="flex items-center justify-between">
             <h3 class="text-lg font-semibold">Администраторы системы</h3>
-            <button @click="showCreateForm = true" class="btn-primary px-4 py-2 rounded-2xl font-medium">
+            <button @click="openCreateForm()" class="btn-primary px-4 py-2 rounded-2xl font-medium">
                 <i class="fas fa-plus mr-2"></i>Добавить администратора
             </button>
         </div>
@@ -142,7 +142,7 @@ document.addEventListener('alpine:init', () => {
     Alpine.data('adminUsers', () => ({
         users: [],
         loading: true,
-        showModal: false,  // Изменено с showCreateForm на showModal
+        showModal: false,
         editingUser: null,
         formData: {
             username: '',
@@ -169,6 +169,17 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
+        openCreateForm() {
+            this.editingUser = null;
+            this.formData = {
+                username: '',
+                email: '',
+                role: 'admin',
+                password: ''
+            };
+            this.showModal = true;
+        },
+        
         editUser(user) {
             this.editingUser = user;
             this.formData = {
@@ -177,7 +188,7 @@ document.addEventListener('alpine:init', () => {
                 role: user.role,
                 password: ''
             };
-            this.showModal = true;  // Добавлено открытие модалки при редактировании
+            this.showModal = true;
         },
         
         async deleteUser(user) {
