@@ -182,15 +182,42 @@ document.addEventListener('alpine:init', () => {
         
         async loadParticipants() {
             try {
+                this.loading = true;
                 const offset = (this.currentPage - 1) * this.itemsPerPage;
-                const response = await fetch(`/admin/api/participants?limit=${this.itemsPerPage}&offset=${offset}`);
+                
+                // Строим URL с фильтрами
+                let url = `/admin/api/participants?limit=${this.itemsPerPage}&offset=${offset}`;
+                
+                if (this.filters.order_id) {
+                    url += `&order_id=${encodeURIComponent(this.filters.order_id)}`;
+                }
+                
+                if (this.filters.paid !== '') {
+                    url += `&paid=${this.filters.paid}`;
+                }
+                
+                if (this.filters.search) {
+                    url += `&search=${encodeURIComponent(this.filters.search)}`;
+                }
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
                 const data = await response.json();
                 this.participants = data.participants || [];
                 this.totalParticipants = data.total || 0;
                 this.hasMore = data.has_more || false;
+                
             } catch (error) {
                 console.error('Error loading participants:', error);
                 this.participants = [];
+                this.totalParticipants = 0;
+                this.hasMore = false;
+            } finally {
+                this.loading = false;
             }
         },
         
