@@ -1,4 +1,8 @@
 import logging
+import os
+import uuid
+from fastapi import UploadFile, File
+from PIL import Image
 from fastapi import FastAPI, Depends, HTTPException, Request, Form, Query, Response
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,6 +10,7 @@ from fastapi.templating import Jinja2Templates
 from typing import List, Optional
 from datetime import datetime, timedelta
 import json
+import io
 
 from app.database import db
 from app.services.order_service import OrderService, ParticipantService
@@ -1091,3 +1096,57 @@ async def bulk_delete_orders(
     except Exception as e:
         logger.error(f"Error in bulk delete orders: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
+
+# Создаем директорию для аватарок
+os.makedirs("app/static/avatars", exist_ok=True)
+
+@app.post("/api/admin/profile/avatar")
+async def upload_avatar(
+    avatar: UploadFile = File(...),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Загрузка аватарки пользователя"""
+    try:
+        # Проверяем тип файла
+        if not avatar.content_type.startswith('image/'):
+            raise HTTPException(400, "Файл должен быть изображением")
+        
+        # Проверяем размер файла
+        if avatar.size > 5 * 1024 * 1024:  # 5MB
+            raise HTTPException(400, "Размер файла не должен превышать 5MB")
+        
+        # Читаем и обрабатываем изображение
+        contents = await avatar.read()
+        image = Image.open(io.BytesIO(contents))
+        
+        # Конвертируем в RGB если нужно
+        if image.mode in ('RGBA', 'LA', 'P'):
+            image = image.convert('RGB')
+        
+        # Ресайзим изображение до 200x200
+        image.thumbnail((200, 200), Image.Resampling.LANCZOS)
+        
+        # Генерируем уникальное имя файла
+        file_extension = avatar.filename.split('.')[-1].lower()
+        if file_extension not in ['jpg', 'jpeg', 'png', 'gif']:
+            file_extension = 'jpg'
+        
+        filename = f"{current_admin['user_id']}_{uuid.uuid4().hex[:8]}.{file_extension}"
+        save_path = f"app/static/avatars/{filename}"
+        
+        # Сохраняем изображение
+        image.save(save_path, 'JPEG' if file_extension in ['jpg', 'jpeg'] else 'PNG', quality=85)
+        
+        # Обновляем аватарку в базе данных
+        avatar_url = f"/static/avatars/{filename}"
+        user = await AdminService.update_user(current_admin["user_id"], AdminUserUpdate(avatar_url=avatar_url))
+        
+        return {
+            "success": True, 
+            "message": "Аватарка успешно обновлена", 
+            "avatar_url": avatar_url
+        }
+        
+    except Exception as e:
+        logger.error(f"Error uploading avatar: {e}")
+        raise HTTPException(500, "Ошибка при загрузке аватарки")
