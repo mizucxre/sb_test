@@ -152,6 +152,8 @@ document.addEventListener('alpine:init', () => {
         },
         
         async init() {
+            // Убеждаемся, что модальное окно закрыто при инициализации
+            this.showModal = false;
             await this.loadUsers();
         },
         
