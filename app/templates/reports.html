@@ -179,13 +179,13 @@ document.addEventListener('alpine:init', () => {
                 this.statusStats = Object.entries(analyticsData.status_stats || {}).map(([name, count]) => ({
                     name,
                     count,
-                    percentage: (count / analyticsData.total_orders * 100).toFixed(1)
+                    percentage: analyticsData.total_orders > 0 ? (count / analyticsData.total_orders * 100).toFixed(1) : 0
                 }));
                 
                 this.countryStats = Object.entries(analyticsData.country_stats || {}).map(([name, count]) => ({
                     name: name === 'CN' ? 'Китай' : name === 'KR' ? 'Корея' : name,
                     count,
-                    percentage: (count / analyticsData.total_orders * 100).toFixed(1)
+                    percentage: analyticsData.total_orders > 0 ? (count / analyticsData.total_orders * 100).toFixed(1) : 0
                 }));
                 
             } catch (error) {
