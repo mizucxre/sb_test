@@ -217,6 +217,20 @@ class SubscriptionService:
             return []
     
     @staticmethod
+    async def get_last_sent_status(user_id: int, order_id: str) -> Optional[str]:
+        """Получить последний отправленный статус"""
+        try:
+            async with db.pool.acquire() as conn:
+                status = await conn.fetchval(
+                    "SELECT last_sent_status FROM subscriptions WHERE user_id = $1 AND order_id = $2",
+                    user_id, order_id
+                )
+                return status
+        except Exception as e:
+            logger.error(f"Error getting last sent status: {e}")
+            return None
+    
+    @staticmethod
     async def set_last_sent_status(user_id: int, order_id: str, status: str) -> bool:
         """Обновить последний отправленный статус"""
         try:
