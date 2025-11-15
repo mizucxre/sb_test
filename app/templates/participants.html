@@ -119,15 +119,17 @@
                 Страница <span x-text="currentPage"></span>
             </div>
             <div class="flex items-center space-x-2">
-                <button @click="prevPage()" :disabled="currentPage === 1" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <i class="fas fa-chevron-left"></i>
+                <button @click="prevPage()" :disabled="currentPage === 1 || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i x-show="!loading" class="fas fa-chevron-left"></i>
+                    <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
                 <span class="px-4 py-2 text-sm">
                     <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> - 
                     <span x-text="Math.min(currentPage * itemsPerPage, totalParticipants)"></span>
                 </span>
-                <button @click="nextPage()" :disabled="!hasMore" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
-                    <i class="fas fa-chevron-right"></i>
+                <button @click="nextPage()" :disabled="!hasMore || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                    <i x-show="!loading" class="fas fa-chevron-right"></i>
+                    <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
             </div>
         </div>
@@ -236,9 +238,32 @@ document.addEventListener('alpine:init', () => {
             alert('Просмотр пользователя: @' + username);
         },
         
-        sendReminder(participant) {
-            // Логика отправки напоминания
-            alert(`Напоминание отправлено @${participant.username} по заказу ${participant.order_id}`);
+        async sendReminder(participant) {
+            try {
+                // Отправляем напоминание через API
+                const response = await fetch('/admin/api/broadcast/unpaid', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: `🔔 Напоминание о задолженности по заказу ${participant.order_id}. Пожалуйста, оплатите ваш заказ.`,
+                        usernames: [participant.username]
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Ошибка отправки напоминания');
+                }
+                
+                const result = await response.json();
+                this.showNotification(`Напоминание отправлено @${participant.username}`, 'success');
+                
+            } catch (error) {
+                console.error('Error sending reminder:', error);
+                this.showNotification('Ошибка отправки напоминания', 'error');
+            }
         },
         
         exportParticipants() {
@@ -251,17 +276,19 @@ document.addEventListener('alpine:init', () => {
             window.location.href = '/admin/broadcast';
         },
         
-        prevPage() {
+        async prevPage() {
             if (this.currentPage > 1) {
+                this.loading = true;
                 this.currentPage--;
-                this.loadParticipants();
+                await this.loadParticipants();
             }
         },
         
-        nextPage() {
+        async nextPage() {
             if (this.hasMore) {
+                this.loading = true;
                 this.currentPage++;
-                this.loadParticipants();
+                await this.loadParticipants();
             }
         },
         
@@ -296,6 +323,30 @@ document.addEventListener('alpine:init', () => {
                 hour: '2-digit',
                 minute: '2-digit'
             });
+        },
+        
+        showNotification(message, type = 'info') {
+            const notification = document.createElement('div');
+            const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
+                           type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
+                           'bg-blue-500/20 border-blue-500/50';
+            
+            notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
+            notification.innerHTML = `
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
+                        ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
+                    <span>${message}</span>
+                </div>
+            `;
+            
+            document.body.appendChild(notification);
+            
+            setTimeout(() => {
+                if (notification.parentNode) {
+                    notification.parentNode.removeChild(notification);
+                }
+            }, 5000);
         }
     }));
 });
