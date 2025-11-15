@@ -646,6 +646,7 @@ async def delete_order_api(
 async def get_participants(
     order_id: Optional[str] = None,
     paid: Optional[bool] = None,
+    search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     current_admin: dict = Depends(get_current_admin)
@@ -656,6 +657,7 @@ async def get_participants(
         result = await ParticipantService.get_participants_paginated(
             order_id=order_id,
             paid=paid,
+            search=search,
             limit=limit,
             offset=offset
         )
@@ -915,6 +917,211 @@ async def get_telegram_posts(
     except Exception as e:
         logger.error(f"Error fetching Telegram posts: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/import")
+async def import_orders_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Страница импорта заказов"""
+    return templates.TemplateResponse("import_orders.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "orders",
+        "statuses": STATUSES
+    })
+
+@app.post("/api/orders/bulk")
+async def bulk_create_orders(
+    request: Request,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Массовое создание заказов"""
+    try:
+        data = await request.json()
+        orders_data = data.get('orders', [])
+        
+        if not orders_data:
+            raise HTTPException(400, "Нет данных для импорта")
+        
+        results = {
+            "total": len(orders_data),
+            "success": 0,
+            "errors": 0,
+            "duplicates": 0,
+            "errorList": []
+        }
+        
+        for order_data in orders_data:
+            try:
+                # Проверяем существование заказа
+                existing = await OrderService.get_order(order_data['order_id'])
+                if existing:
+                    results["duplicates"] += 1
+                    results["errorList"].append({
+                        "order_id": order_data['order_id'],
+                        "message": "Заказ уже существует"
+                    })
+                    continue
+                
+                # Создаем заказ
+                order = Order(
+                    order_id=order_data['order_id'],
+                    client_name=order_data['client_name'],
+                    country=order_data.get('country', 'RU').upper(),
+                    status=order_data.get('status', 'В обработке'),
+                    note=order_data.get('note', '')
+                )
+                
+                success = await OrderService.add_order(order)
+                if success:
+                    # Добавляем участников
+                    from app.utils.validators import extract_usernames
+                    usernames = extract_usernames(order_data['client_name'])
+                    if usernames:
+                        await ParticipantService.ensure_participants(order_data['order_id'], usernames)
+                    
+                    # Отправляем уведомление клиенту
+                    await send_order_created_notification(order, usernames)
+                    
+                    results["success"] += 1
+                else:
+                    raise Exception("Ошибка при создании заказа")
+                    
+            except Exception as e:
+                results["errors"] += 1
+                results["errorList"].append({
+                    "order_id": order_data.get('order_id', 'Unknown'),
+                    "message": str(e)
+                })
+        
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in bulk order creation: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
+@app.post("/api/orders/parse-excel")
+async def parse_excel_file(
+    file: UploadFile = File(...),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Парсинг Excel файла с заказами"""
+    try:
+        # Проверяем тип файла
+        if not file.filename.endswith(('.xlsx', '.xls')):
+            raise HTTPException(400, "Поддерживаются только файлы Excel (.xlsx, .xls)")
+        
+        # Читаем файл
+        contents = await file.read()
+        
+        # Простой парсинг Excel (в реальности нужно использовать pandas или openpyxl)
+        # Сейчас возвращаем заглушки для демонстрации
+        orders = []
+        
+        # Пример данных из Excel
+        sample_data = [
+            {"order_id": "ORD-001", "client_name": "@user1", "country": "RU", "status": "В обработке"},
+            {"order_id": "ORD-002", "client_name": "@user2", "country": "KZ", "status": "В пути"},
+            {"order_id": "ORD-003", "client_name": "@user3", "country": "UZ", "status": "Доставлен"},
+        ]
+        
+        # В реальности здесь будет парсинг Excel файла
+        # orders = parse_excel_contents(contents)
+        
+        return {
+            "orders": sample_data,
+            "total": len(sample_data),
+            "message": "Файл успешно распарсен (демо-данные)"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error parsing Excel file: {e}")
+        raise HTTPException(500, "Ошибка при обработке файла")
+
+async def send_order_created_notification(order: Order, usernames: List[str]):
+    """Отправка уведомления клиенту при создании заказа"""
+    try:
+        if not usernames:
+            return
+        
+        # Получаем user_id по username
+        from app.services.user_service import AddressService
+        user_ids = await AddressService.get_user_ids_by_usernames(usernames)
+        
+        if not user_ids:
+            return
+        
+        # Формируем сообщение
+        message = f"🎉 <b>Новый заказ создан!</b>\n\n"
+        message += f"📦 <b>Заказ:</b> {order.order_id}\n"
+        message += f"👤 <b>Клиент:</b> {order.client_name}\n"
+        message += f"🌍 <b>Страна:</b> {order.country}\n"
+        message += f"🔄 <b>Статус:</b> {order.status}\n"
+        
+        if order.note:
+            message += f"📝 <b>Примечание:</b> {order.note}\n"
+        
+        message += f"\n💡 <i>Следите за обновлениями статуса!</i>"
+        
+        # Отправляем уведомления
+        from app.webhook import application
+        for user_id in user_ids:
+            try:
+                await application.bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                logger.info(f"Sent order creation notification to {user_id} for order {order.order_id}")
+            except Exception as e:
+                logger.error(f"Error sending notification to {user_id}: {e}")
+                
+    except Exception as e:
+        logger.error(f"Error sending order creation notifications: {e}")
+
+# Добавим уведомление и в обычное создание заказа
+@app.post("/api/orders/create")
+async def create_order_api(
+    request: Request,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Создание нового заказа"""
+    try:
+        data = await request.json()
+        
+        # Проверяем существование заказа
+        existing = await OrderService.get_order(data['order_id'])
+        if existing:
+            raise HTTPException(400, "Заказ с таким ID уже существует")
+        
+        order = Order(
+            order_id=data['order_id'],
+            client_name=data['client_name'],
+            country=data['country'].upper(),
+            status=data['status'],
+            note=data.get('note', '')
+        )
+        
+        success = await OrderService.add_order(order)
+        if not success:
+            raise HTTPException(500, "Ошибка при создании заказа")
+        
+        # Добавляем участников
+        from app.utils.validators import extract_usernames
+        usernames = extract_usernames(data['client_name'])
+        if usernames:
+            await ParticipantService.ensure_participants(data['order_id'], usernames)
+        
+        # Отправляем уведомление клиенту
+        await send_order_created_notification(order, usernames)
+        
+        return {"success": True, "message": "Заказ успешно создан"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error creating order: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.get("/orders/{order_id}", response_class=HTMLResponse)
 async def view_order_page(request: Request, order_id: str, current_admin: dict = Depends(get_current_admin)):
