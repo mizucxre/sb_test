@@ -61,11 +61,9 @@
                 <label class="block text-sm font-medium text-gray-400 mb-2">Метка Админа</label>
                 <select x-model="filters.note" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
                     <option value="">Все метки</option>
-                    {% if admin_notes %}
-                    {% for note in admin_notes %}
-                    <option value="{{ note }}">{{ note }}</option>
-                    {% endfor %}
-                    {% endif %}
+                    <template x-for="note in uniqueNotes" :key="note">
+                        <option x-text="note" :value="note"></option>
+                    </template>
                 </select>
             </div>
             <div class="md:col-span-2">
@@ -231,6 +229,7 @@ document.addEventListener('alpine:init', () => {
         totalOrders: 0,
         hasMore: false,
         loading: true,
+        uniqueNotes: [],
         
         init() {
             this.loadOrders();
@@ -268,6 +267,13 @@ document.addEventListener('alpine:init', () => {
                 this.orders = data.orders || [];
                 this.totalOrders = data.total || 0;
                 this.hasMore = data.has_more || false;
+                
+                // Получаем уникальные метки из загруженных заказов
+                this.uniqueNotes = [...new Set(this.orders
+                    .filter(order => order.note && order.note.trim() !== '')
+                    .map(order => order.note)
+                    .filter(note => note !== null && note !== undefined))];
+                
                 this.applyFilters();
             } catch (error) {
                 console.error('Error loading orders:', error);
@@ -296,6 +302,22 @@ document.addEventListener('alpine:init', () => {
         applyFilters() {
             let filtered = this.orders;
             
+            // Фильтр по статусу
+            if (this.filters.status) {
+                filtered = filtered.filter(order => order.status === this.filters.status);
+            }
+            
+            // Фильтр по стране
+            if (this.filters.country) {
+                filtered = filtered.filter(order => order.country === this.filters.country);
+            }
+            
+            // Фильтр по метке админа
+            if (this.filters.note) {
+                filtered = filtered.filter(order => order.note === this.filters.note);
+            }
+            
+            // Поиск по всем полям
             if (this.filters.search) {
                 const searchTerm = this.filters.search.toLowerCase();
                 filtered = filtered.filter(order => 
