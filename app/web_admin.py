@@ -560,7 +560,7 @@ async def get_order(order_id: str, current_admin: dict = Depends(get_current_adm
 @app.post("/api/orders/create")
 async def create_order_api(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)):
+    current_admin: dict = Depends(get_current_admin)
 ):
     """Создание нового заказа"""
     try:
