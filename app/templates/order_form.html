@@ -6,39 +6,40 @@
 <div x-data="orderForm()" class="max-w-2xl mx-auto">
     <div class="glass-effect rounded-2xl p-6">
         <form @submit.prevent="submitForm()" class="space-y-6">
-            <!-- Order Number -->
+            <!-- Order Number and Country -->
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Номер заказа *</label>
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div class="md:col-span-1">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
                         <input type="text" x-model="formData.order_number" required
                                class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
                                placeholder="12345">
                         <p class="text-xs text-gray-400 mt-1">Только цифры</p>
                     </div>
-                    <div class="md:col-span-2">
-                        <div class="flex items-center space-x-4">
-                            <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200 flex-1"
+                    <div>
+                        <label class="block text-sm font-medium text-gray-400 mb-2">Страна *</label>
+                        <div class="flex space-x-2">
+                            <label class="flex-1 flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
                                    :class="formData.country === 'CN' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
-                                <input type="radio" x-model="formData.country" value="CN" class="hidden">
-                                <div class="flex items-center space-x-3">
+                                <input type="radio" x-model="formData.country" value="CN" class="hidden" required>
+                                <div class="flex items-center space-x-3 w-full">
                                     <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
                                          :class="formData.country === 'CN' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
                                         <i class="fas fa-check text-white text-xs" x-show="formData.country === 'CN'"></i>
                                     </div>
-                                    <span>Китай (CN)</span>
+                                    <span class="flex-1 text-center">Китай (CN)</span>
                                 </div>
                             </label>
                             
-                            <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200 flex-1"
+                            <label class="flex-1 flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
                                    :class="formData.country === 'KR' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
-                                <input type="radio" x-model="formData.country" value="KR" class="hidden">
-                                <div class="flex items-center space-x-3">
+                                <input type="radio" x-model="formData.country" value="KR" class="hidden" required>
+                                <div class="flex items-center space-x-3 w-full">
                                     <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
                                          :class="formData.country === 'KR' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
                                         <i class="fas fa-check text-white text-xs" x-show="formData.country === 'KR'"></i>
                                     </div>
-                                    <span>Корея (KR)</span>
+                                    <span class="flex-1 text-center">Корея (KR)</span>
                                 </div>
                             </label>
                         </div>
@@ -61,36 +62,6 @@
                 <p class="text-xs text-gray-400 mt-1">Можно указать несколько @username через запятую</p>
             </div>
 
-            <!-- Country -->
-            <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Страна *</label>
-                <div class="grid grid-cols-2 gap-4">
-                    <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
-                           :class="formData.country === 'CN' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
-                        <input type="radio" x-model="formData.country" value="CN" class="hidden">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
-                                 :class="formData.country === 'CN' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
-                                <i class="fas fa-check text-white text-xs" x-show="formData.country === 'CN'"></i>
-                            </div>
-                            <span>Китай (CN)</span>
-                        </div>
-                    </label>
-                    
-                    <label class="flex items-center p-4 rounded-2xl border border-white/10 hover:border-blue-500/50 cursor-pointer transition-all duration-200"
-                           :class="formData.country === 'KR' ? 'bg-blue-500/20 border-blue-500/50' : 'bg-white/5'">
-                        <input type="radio" x-model="formData.country" value="KR" class="hidden">
-                        <div class="flex items-center space-x-3">
-                            <div class="w-6 h-6 rounded-full border-2 flex items-center justify-center"
-                                 :class="formData.country === 'KR' ? 'border-blue-400 bg-blue-400' : 'border-gray-400'">
-                                <i class="fas fa-check text-white text-xs" x-show="formData.country === 'KR'"></i>
-                            </div>
-                            <span>Корея (KR)</span>
-                        </div>
-                    </label>
-                </div>
-            </div>
-
             <!-- Status -->
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус *</label>
@@ -103,12 +74,12 @@
                 </select>
             </div>
 
-            <!-- Note -->
+            <!-- Admin Label -->
             <div>
-                <label class="block text-sm font-medium text-gray-400 mb-2">Примечание</label>
-                <textarea x-model="formData.note" rows="3"
+                <label class="block text-sm font-medium text-gray-400 mb-2">Метка Админа</label>
+                <textarea x-model="formData.note" rows="2"
                           class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200"
-                          placeholder="Дополнительная информация..."></textarea>
+                          placeholder="Смайлик или слово для идентификации заказа админом..."></textarea>
             </div>
 
             <!-- Actions -->
