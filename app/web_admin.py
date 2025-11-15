@@ -430,14 +430,19 @@ async def get_orders(
 ):
     """API для получения списка заказов с пагинацией"""
     try:
+        # Получаем все заказы для фильтрации
         if status:
             orders = await OrderService.list_orders_by_status([status])
         else:
-            orders = await OrderService.list_recent_orders(limit + offset)
+            # Получаем все заказы для правильного подсчета total
+            orders = await OrderService.list_recent_orders(10000)
         
         # Фильтрация по стране
         if country:
             orders = [o for o in orders if o.country == country.upper()]
+        
+        # Общее количество заказов (после фильтрации)
+        total_orders = len(orders)
         
         # Пагинация
         paginated_orders = orders[offset:offset + limit]
@@ -455,8 +460,10 @@ async def get_orders(
         
         return {
             "orders": orders_data,
-            "total": len(orders),
-            "has_more": len(orders) > offset + limit
+            "total": total_orders,
+            "has_more": total_orders > offset + limit,
+            "offset": offset,
+            "limit": limit
         }
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
@@ -612,7 +619,7 @@ async def delete_order_api(
 async def get_participants(
     order_id: Optional[str] = None,
     paid: Optional[bool] = None,
-    limit: int = Query(1000, ge=1, le=5000),
+    limit: int = Query(50, ge=1, le=5000),
     offset: int = Query(0, ge=0),
     current_admin: dict = Depends(get_current_admin)
 ):
@@ -623,7 +630,7 @@ async def get_participants(
         else:
             # Получаем всех участников из всех заказов
             all_participants = []
-            orders = await OrderService.list_recent_orders(1000)
+            orders = await OrderService.list_recent_orders(10000)
             for order in orders:
                 participants = await ParticipantService.get_participants(order.order_id)
                 all_participants.extend(participants)
@@ -632,6 +639,9 @@ async def get_participants(
         # Фильтрация по статусу оплаты
         if paid is not None:
             participants = [p for p in participants if p.paid == paid]
+        
+        # Общее количество участников (после фильтрации)
+        total_participants = len(participants)
         
         # Пагинация
         paginated_participants = participants[offset:offset + limit]
@@ -648,8 +658,10 @@ async def get_participants(
         
         return {
             "participants": participants_data,
-            "total": len(participants),
-            "has_more": len(participants) > offset + limit
+            "total": total_participants,
+            "has_more": total_participants > offset + limit,
+            "offset": offset,
+            "limit": limit
         }
     except Exception as e:
         logger.error(f"Error fetching participants: {e}")
@@ -1123,12 +1135,23 @@ async def addresses_page(request: Request, current_admin: dict = Depends(get_cur
 
 
 @app.get("/api/addresses")
-async def get_addresses(current_admin: dict = Depends(get_current_admin)):
-    """API для получения списка адресов"""
+async def get_addresses(
+    limit: int = Query(50, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    current_admin: dict = Depends(get_current_admin)
+):
+    """API для получения списка адресов с пагинацией"""
     try:
         addresses = await AddressService.get_all_addresses()
+        
+        # Общее количество адресов
+        total_addresses = len(addresses)
+        
+        # Пагинация
+        paginated_addresses = addresses[offset:offset + limit]
+        
         addresses_data = []
-        for address in addresses:
+        for address in paginated_addresses:
             address_data = serialize_model(address)
             if address_data.get('created_at') and isinstance(address_data['created_at'], datetime):
                 address_data['created_at'] = address_data['created_at'].isoformat()
@@ -1136,7 +1159,13 @@ async def get_addresses(current_admin: dict = Depends(get_current_admin)):
                 address_data['updated_at'] = address_data['updated_at'].isoformat()
             addresses_data.append(address_data)
         
-        return {"addresses": addresses_data}
+        return {
+            "addresses": addresses_data,
+            "total": total_addresses,
+            "has_more": total_addresses > offset + limit,
+            "offset": offset,
+            "limit": limit
+        }
     except Exception as e:
         logger.error(f"Error fetching addresses: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
