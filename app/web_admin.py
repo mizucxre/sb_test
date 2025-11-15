@@ -1028,8 +1028,9 @@ async def parse_excel_file(
     current_admin: dict = Depends(get_current_admin)):
     """Парсинг Excel файла с заказами"""
     try:
-        if not file.filename.endswith('.xlsx'):
-            raise HTTPException(400, "Формат файла не поддерживается. Используйте .xlsx")
+        # Проверяем расширение файла
+        if not file.filename.lower().endswith(('.xlsx', '.xls')):
+            raise HTTPException(400, "Формат файла не поддерживается. Используйте .xlsx или .xls")
         
         # Читаем файл
         contents = await file.read()
@@ -1038,20 +1039,44 @@ async def parse_excel_file(
         import pandas as pd
         df = pd.read_excel(io.BytesIO(contents))
         
+        # Логируем заголовки столбцов для отладки
+        logger.info(f"Excel columns: {list(df.columns)}")
+        
         # Преобразуем в JSON
         orders = []
-        for _, row in df.iterrows():
-            order = {
-                "order_id": str(row.get('order_id', '')).strip(),
-                "client_name": str(row.get('client_name', '')).strip(),
-                "country": str(row.get('country', 'RU')).strip().upper(),
-                "status": str(row.get('status', 'В обработке')).strip(),
-                "note": str(row.get('note', '')).strip()
-            }
+        for index, row in df.iterrows():
+            # Пробуем разные варианты названий столбцов
+            order_number = str(row.get('order_number', row.get('order_id', ''))).strip()
+            client_name = str(row.get('client_name', row.get('client', ''))).strip()
+            country = str(row.get('country', 'CN')).strip().upper()
+            status = str(row.get('status', 'В обработке')).strip()
+            note = str(row.get('note', '')).strip()
+            
+            # Если номер заказа пустой, пропускаем
+            if not order_number:
+                continue
+                
+            # Формируем полный ID заказа
+            if country == 'CN':
+                order_id = f"CN-{order_number}"
+            elif country == 'KR':
+                order_id = f"KR-{order_number}"
+            else:
+                order_id = f"{country}-{order_number}"
             
             # Проверяем обязательные поля
-            if order["order_id"] and order["client_name"]:
-                orders.append(order)
+            if order_number and client_name:
+                order_data = {
+                    "order_id": order_id,
+                    "client_name": client_name,
+                    "country": country,
+                    "status": status,
+                    "note": note
+                }
+                orders.append(order_data)
+                logger.info(f"Parsed order {index}: {order_data}")
+        
+        logger.info(f"Successfully parsed {len(orders)} orders from Excel file")
         
         return {
             "success": True,
@@ -1061,7 +1086,7 @@ async def parse_excel_file(
         
     except Exception as e:
         logger.error(f"Error parsing Excel file: {e}")
-        raise HTTPException(500, "Ошибка при обработке файла")
+        raise HTTPException(500, f"Ошибка при обработке файла: {str(e)}")
 
 async def send_order_created_notification(order, usernames):
     """Отправка уведомления о создании заказа"""
