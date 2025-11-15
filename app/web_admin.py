@@ -609,6 +609,9 @@ async def create_order_api(
         if usernames:
             await ParticipantService.ensure_participants(data['order_id'], usernames)
         
+        # Отправляем уведомление клиенту
+        await send_order_created_notification(order, usernames)
+        
         return {"success": True, "message": "Заказ успешно создан"}
         
     except HTTPException:
