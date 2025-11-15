@@ -407,7 +407,9 @@ async def get_stats(current_admin: dict = Depends(get_current_admin)):
         for order in orders:
             participants = await ParticipantService.get_participants(order.order_id)
             all_participants.extend(participants)
-        total_participants = len(set(p.username for p in all_participants))
+            total_participants += len(participants)
+        
+        unique_participants = len(set(p.username for p in all_participants))
         
         subscriptions = await SubscriptionService.get_all_subscriptions()
         total_subscriptions = len(subscriptions)
@@ -451,14 +453,18 @@ async def auth_middleware(request: Request, call_next):
 async def get_orders(
     status: Optional[str] = None,
     country: Optional[str] = None,
+    note: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     current_admin: dict = Depends(get_current_admin)
 ):
-    """API для получения списка заказов с пагинацией"""
+    """API для получения списка заказов с пагинацией и фильтрацией по меткам"""
     try:
-        # Получаем все заказы для фильтрации
-        if status:
+        # Получаем заказы с фильтрацией по меткам
+        if note:
+            orders = await OrderService.list_orders_by_note(note)
+        elif status:
             orders = await OrderService.list_orders_by_status([status])
         else:
             # Получаем все заказы для правильного подсчета total
@@ -467,6 +473,14 @@ async def get_orders(
         # Фильтрация по стране
         if country:
             orders = [o for o in orders if o.country == country.upper()]
+        
+        # Фильтрация по поиску
+        if search:
+            search_lower = search.lower()
+            orders = [o for o in orders if 
+                     search_lower in o.order_id.lower() or 
+                     search_lower in o.client_name.lower() or
+                     (o.note and search_lower in o.note.lower())]
         
         # Общее количество заказов (после фильтрации)
         total_orders = len(orders)
@@ -494,6 +508,16 @@ async def get_orders(
         }
     except Exception as e:
         logger.error(f"Error fetching orders: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+@app.get("/api/orders/unique-notes")
+async def get_unique_notes(current_admin: dict = Depends(get_current_admin)):
+    """API для получения уникальных меток из заказов"""
+    try:
+        notes = await OrderService.get_unique_notes()
+        return {"notes": notes}
+    except Exception as e:
+        logger.error(f"Error fetching unique notes: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/api/orders/{order_id}")
@@ -536,7 +560,7 @@ async def get_order(order_id: str, current_admin: dict = Depends(get_current_adm
 @app.post("/api/orders/create")
 async def create_order_api(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
+    current_admin: dict = Depends(get_current_admin)):
 ):
     """Создание нового заказа"""
     try:
@@ -577,8 +601,7 @@ async def create_order_api(
 async def update_order_api(
     order_id: str,
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Обновление заказа"""
     try:
         order = await OrderService.get_order(order_id)
@@ -621,8 +644,7 @@ async def update_order_api(
 @app.delete("/api/orders/{order_id}")
 async def delete_order_api(
     order_id: str,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Удаление заказа"""
     try:
         # Проверяем существование заказа
@@ -649,8 +671,7 @@ async def get_participants(
     search: Optional[str] = None,
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """API для получения списка участников с оптимизированной пагинацией"""
     try:
         # Используем новый метод для получения участников с пагинацией на уровне БД
@@ -688,8 +709,7 @@ async def update_participant_paid(
     order_id: str,
     username: str,
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Изменение статуса оплаты участника"""
     try:
         # Используем toggle метод вместо получения данных из тела
@@ -706,8 +726,7 @@ async def update_participant_paid(
 @app.post("/api/broadcast/unpaid")
 async def broadcast_unpaid(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Рассылка уведомлений неплательщикам"""
     try:
         # Проверяем, что тело запроса не пустое
@@ -783,11 +802,65 @@ async def broadcast_unpaid(
         logger.error(f"Error broadcasting to unpaid: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
+@app.post("/api/broadcast/reminder")
+async def send_reminder(
+    request: Request,
+    current_admin: dict = Depends(get_current_admin)):
+    """Отправка напоминания конкретному пользователю"""
+    try:
+        data = await request.json()
+        message = data.get('message', '')
+        usernames = data.get('usernames', [])
+        
+        if not message or not usernames:
+            raise HTTPException(400, "Сообщение и список пользователей обязательны")
+        
+        # Получаем user_id по username
+        user_ids = await AddressService.get_user_ids_by_usernames(usernames)
+        
+        if not user_ids:
+            return {
+                "success": False,
+                "message": "Пользователи не найдены"
+            }
+        
+        sent_count = 0
+        failed_count = 0
+        
+        # Отправляем сообщения через Telegram бота
+        for user_id in user_ids:
+            try:
+                from app.webhook import application
+                await application.bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Error sending reminder to {user_id}: {e}")
+                failed_count += 1
+        
+        return {
+            "success": True,
+            "message": f"Напоминания отправлены ({sent_count}/{len(user_ids)})",
+            "result": {
+                "sent": sent_count,
+                "failed": failed_count,
+                "total": len(user_ids)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending reminders: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
 @app.post("/api/broadcast/all")
 async def broadcast_all(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Рассылка сообщения всем пользователям"""
     try:
         body = await request.body()
@@ -843,62 +916,6 @@ async def broadcast_all(
         logger.error(f"Error broadcasting to all users: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
-@app.post("/api/broadcast/reminder")
-async def send_reminder(
-    request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
-    """Отправка напоминания конкретному пользователю"""
-    try:
-        data = await request.json()
-        message = data.get('message', '')
-        usernames = data.get('usernames', [])
-        
-        if not message or not usernames:
-            raise HTTPException(400, "Сообщение и список пользователей обязательны")
-        
-        # Получаем user_id по username
-        user_ids = await AddressService.get_user_ids_by_usernames(usernames)
-        
-        if not user_ids:
-            return {
-                "success": False,
-                "message": "Пользователи не найдены"
-            }
-        
-        sent_count = 0
-        failed_count = 0
-        
-        # Отправляем сообщения через Telegram бота
-        for user_id in user_ids:
-            try:
-                from app.webhook import application
-                await application.bot.send_message(
-                    chat_id=user_id,
-                    text=message,
-                    parse_mode='HTML'
-                )
-                sent_count += 1
-            except Exception as e:
-                logger.error(f"Error sending reminder to {user_id}: {e}")
-                failed_count += 1
-        
-        return {
-            "success": True,
-            "message": f"Напоминания отправлены ({sent_count}/{len(user_ids)})",
-            "result": {
-                "sent": sent_count,
-                "failed": failed_count,
-                "total": len(user_ids)
-            }
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error sending reminders: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
 @app.get("/api/statuses")
 async def get_statuses(current_admin: dict = Depends(get_current_admin)):
     """API для получения списка статусов"""
@@ -907,8 +924,7 @@ async def get_statuses(current_admin: dict = Depends(get_current_admin)):
 @app.get("/api/telegram/posts")
 async def get_telegram_posts(
     limit: int = Query(5, ge=1, le=10),
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """API для получения постов из Telegram канала"""
     try:
         from app.services.telegram_service import telegram_service
@@ -931,8 +947,7 @@ async def import_orders_page(request: Request, current_admin: dict = Depends(get
 @app.post("/api/orders/bulk")
 async def bulk_create_orders(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Массовое создание заказов"""
     try:
         data = await request.json()
@@ -1001,702 +1016,151 @@ async def bulk_create_orders(
 @app.post("/api/orders/parse-excel")
 async def parse_excel_file(
     file: UploadFile = File(...),
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Парсинг Excel файла с заказами"""
     try:
-        # Проверяем тип файла
-        if not file.filename.endswith(('.xlsx', '.xls')):
-            raise HTTPException(400, "Поддерживаются только файлы Excel (.xlsx, .xls)")
+        if not file.filename.endswith('.xlsx'):
+            raise HTTPException(400, "Формат файла не поддерживается. Используйте .xlsx")
         
         # Читаем файл
         contents = await file.read()
         
-        # Простой парсинг Excel (в реальности нужно использовать pandas или openpyxl)
-        # Сейчас возвращаем заглушки для демонстрации
+        # Парсим Excel
+        import pandas as pd
+        df = pd.read_excel(io.BytesIO(contents))
+        
+        # Преобразуем в JSON
         orders = []
-        
-        # Пример данных из Excel
-        sample_data = [
-            {"order_id": "ORD-001", "client_name": "@user1", "country": "RU", "status": "В обработке"},
-            {"order_id": "ORD-002", "client_name": "@user2", "country": "KZ", "status": "В пути"},
-            {"order_id": "ORD-003", "client_name": "@user3", "country": "UZ", "status": "Доставлен"},
-        ]
-        
-        # В реальности здесь будет парсинг Excel файла
-        # orders = parse_excel_contents(contents)
+        for _, row in df.iterrows():
+            order = {
+                "order_id": str(row.get('order_id', '')).strip(),
+                "client_name": str(row.get('client_name', '')).strip(),
+                "country": str(row.get('country', 'RU')).strip().upper(),
+                "status": str(row.get('status', 'В обработке')).strip(),
+                "note": str(row.get('note', '')).strip()
+            }
+            
+            # Проверяем обязательные поля
+            if order["order_id"] and order["client_name"]:
+                orders.append(order)
         
         return {
-            "orders": sample_data,
-            "total": len(sample_data),
-            "message": "Файл успешно распарсен (демо-данные)"
+            "success": True,
+            "orders": orders,
+            "total": len(orders)
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error(f"Error parsing Excel file: {e}")
         raise HTTPException(500, "Ошибка при обработке файла")
 
-async def send_order_created_notification(order: Order, usernames: List[str]):
-    """Отправка уведомления клиенту при создании заказа"""
+async def send_order_created_notification(order, usernames):
+    """Отправка уведомления о создании заказа"""
     try:
         if not usernames:
             return
         
         # Получаем user_id по username
-        from app.services.user_service import AddressService
         user_ids = await AddressService.get_user_ids_by_usernames(usernames)
         
-        if not user_ids:
-            return
+        message = f"""
+📦 <b>Новый заказ создан!</b>
+
+🆔 <b>Order ID:</b> {order.order_id}
+👤 <b>Клиент:</b> {order.client_name}
+🌍 <b>Страна:</b> {order.country}
+📊 <b>Статус:</b> {order.status}
+
+Следите за обновлениями статуса заказа!
+"""
         
-        # Формируем сообщение
-        message = f"🎉 <b>Новый заказ создан!</b>\n\n"
-        message += f"📦 <b>Заказ:</b> {order.order_id}\n"
-        message += f"👤 <b>Клиент:</b> {order.client_name}\n"
-        message += f"🌍 <b>Страна:</b> {order.country}\n"
-        message += f"🔄 <b>Статус:</b> {order.status}\n"
-        
-        if order.note:
-            message += f"📝 <b>Примечание:</b> {order.note}\n"
-        
-        message += f"\n💡 <i>Следите за обновлениями статуса!</i>"
-        
-        # Отправляем уведомления
-        from app.webhook import application
+        # Отправляем сообщения через Telegram бота
         for user_id in user_ids:
             try:
+                from app.webhook import application
                 await application.bot.send_message(
                     chat_id=user_id,
                     text=message,
                     parse_mode='HTML'
                 )
-                logger.info(f"Sent order creation notification to {user_id} for order {order.order_id}")
             except Exception as e:
-                logger.error(f"Error sending notification to {user_id}: {e}")
+                logger.error(f"Error sending order notification to {user_id}: {e}")
                 
     except Exception as e:
-        logger.error(f"Error sending order creation notifications: {e}")
+        logger.error(f"Error in send_order_created_notification: {e}")
 
-# Добавим уведомление и в обычное создание заказа
-@app.post("/api/orders/create")
-async def create_order_api(
-    request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
-    """Создание нового заказа"""
-    try:
-        data = await request.json()
-        
-        # Проверяем существование заказа
-        existing = await OrderService.get_order(data['order_id'])
-        if existing:
-            raise HTTPException(400, "Заказ с таким ID уже существует")
-        
-        order = Order(
-            order_id=data['order_id'],
-            client_name=data['client_name'],
-            country=data['country'].upper(),
-            status=data['status'],
-            note=data.get('note', '')
-        )
-        
-        success = await OrderService.add_order(order)
-        if not success:
-            raise HTTPException(500, "Ошибка при создании заказа")
-        
-        # Добавляем участников
-        from app.utils.validators import extract_usernames
-        usernames = extract_usernames(data['client_name'])
-        if usernames:
-            await ParticipantService.ensure_participants(data['order_id'], usernames)
-        
-        # Отправляем уведомление клиенту
-        await send_order_created_notification(order, usernames)
-        
-        return {"success": True, "message": "Заказ успешно создан"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error creating order: {e}")
-        raise HTTPException(500, "Внутренняя ошибка сервера")
-
-@app.get("/orders/{order_id}", response_class=HTMLResponse)
-async def view_order_page(request: Request, order_id: str, current_admin: dict = Depends(get_current_admin)):
-    """Страница просмотра заказа"""
-    try:
-        order = await OrderService.get_order(order_id)
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
-        participants = await ParticipantService.get_participants(order_id)
-        
-        return templates.TemplateResponse("order_view.html", {
-            "request": request,
-            "current_admin": current_admin,
-            "current_page": "orders",
-            "order": order,
-            "participants": participants
-        })
-    except Exception as e:
-        logger.error(f"Error loading order page {order_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.get("/api/reports/analytics")
-async def get_analytics(
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    current_admin: dict = Depends(get_current_admin)
-):
-    """API для получения аналитики"""
-    try:
-        # Получаем все заказы для анализа
-        orders = await OrderService.list_recent_orders(1000)
-        
-        # Статистика по статусам
-        status_stats = {}
-        for status in STATUSES:
-            count = len([o for o in orders if o.status == status])
-            if count > 0:
-                status_stats[status] = count
-        
-        # Статистика по странам
-        country_stats = {}
-        for order in orders:
-            country = order.country
-            country_stats[country] = country_stats.get(country, 0) + 1
-        
-        # Статистика по платежам
-        total_participants = 0
-        paid_participants = 0
-        
-        # Получаем всех участников
-        all_participants = []
-        for order in orders:
-            participants = await ParticipantService.get_participants(order.order_id)
-            all_participants.extend(participants)
-            total_participants += len(participants)
-            paid_participants += len([p for p in participants if p.paid])
-        
-        # Уникальные участники
-        unique_participants = len(set(p.username for p in all_participants))
-        
-        return {
-            "status_stats": status_stats,
-            "country_stats": country_stats,
-            "payment_stats": {
-                "total": total_participants,
-                "paid": paid_participants,
-                "unpaid": total_participants - paid_participants
-            },
-            "total_orders": len(orders),
-            "unique_participants": unique_participants,
-            "completed_orders": len([o for o in orders if "доставлен" in o.status.lower() or "получен" in o.status.lower()])
-        }
-    except Exception as e:
-        logger.error(f"Error generating analytics: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.get("/api/reports/export/participants")
-async def export_participants(
-    format: str = Query("csv", regex="^(csv|json|xlsx)$"),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """Экспорт участников"""
-    try:
-        # Получаем всех участников
-        all_participants = []
-        orders = await OrderService.list_recent_orders(1000)
-        for order in orders:
-            participants = await ParticipantService.get_participants(order.order_id)
-            for p in participants:
-                participant_data = serialize_model(p)
-                participant_data["order_client_name"] = order.client_name
-                participant_data["order_status"] = order.status
-                participant_data["order_country"] = order.country
-                all_participants.append(participant_data)
-        
-        if format == "xlsx":
-            # Экспорт в XLSX
-            import io
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment
-            
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Участники заказов"
-            
-            # Заголовки
-            headers = ["Username", "ID заказа", "Имя клиента", "Статус", "Страна", "Оплачено", "Обновлен"]
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                cell.alignment = Alignment(horizontal="center")
-            
-            # Данные
-            for row, p in enumerate(all_participants, 2):
-                ws.cell(row=row, column=1, value=f"@{p['username']}")
-                ws.cell(row=row, column=2, value=p['order_id'])
-                ws.cell(row=row, column=3, value=p['order_client_name'])
-                ws.cell(row=row, column=4, value=p['order_status'])
-                ws.cell(row=row, column=5, value=p['order_country'])
-                ws.cell(row=row, column=6, value="Да" if p['paid'] else "Нет")
-                ws.cell(row=row, column=7, value=p.get('updated_at', ''))
-            
-            # Автоматическая ширина колонок
-            for column in ws.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                ws.column_dimensions[column_letter].width = adjusted_width
-            
-            buffer = io.BytesIO()
-            wb.save(buffer)
-            buffer.seek(0)
-            
-            filename = f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            return Response(
-                content=buffer.getvalue(),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f"attachment; filename={filename}"}
-            )
-        
-        elif format == "csv":
-            import csv
-            from io import StringIO
-            
-            output = StringIO()
-            writer = csv.writer(output)
-            
-            # Заголовки
-            writer.writerow(["Username", "Order ID", "Client Name", "Status", "Country", "Paid", "Updated At"])
-            
-            for p in all_participants:
-                writer.writerow([
-                    f"@{p['username']}",
-                    p['order_id'],
-                    p['order_client_name'],
-                    p['order_status'],
-                    p['order_country'],
-                    "Да" if p['paid'] else "Нет",
-                    p.get('updated_at', '')
-                ])
-            
-            content = output.getvalue()
-            return JSONResponse({
-                "content": content,
-                "filename": f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            })
-            
-        else:  # json
-            return {
-                "participants": all_participants,
-                "filename": f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            }
-            
-    except Exception as e:
-        logger.error(f"Error exporting participants: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-@app.get("/api/reports/export/orders")
-async def export_orders(
-    format: str = Query("csv", regex="^(csv|json|xlsx)$"),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """Экспорт заказов"""
-    try:
-        orders = await OrderService.list_recent_orders(1000)
-        
-        if format == "xlsx":
-            # Экспорт в XLSX
-            import io
-            from openpyxl import Workbook
-            from openpyxl.styles import Font, PatternFill, Alignment
-            
-            wb = Workbook()
-            ws = wb.active
-            ws.title = "Заказы"
-            
-            # Заголовки
-            headers = ["ID заказа", "Имя клиента", "Страна", "Статус", "Примечание", "Создан", "Обновлен"]
-            for col, header in enumerate(headers, 1):
-                cell = ws.cell(row=1, column=col, value=header)
-                cell.font = Font(bold=True)
-                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-                cell.alignment = Alignment(horizontal="center")
-            
-            # Данные
-            for row, order in enumerate(orders, 2):
-                ws.cell(row=row, column=1, value=order.order_id)
-                ws.cell(row=row, column=2, value=order.client_name)
-                ws.cell(row=row, column=3, value=order.country)
-                ws.cell(row=row, column=4, value=order.status)
-                ws.cell(row=row, column=5, value=order.note or "")
-                ws.cell(row=row, column=6, value=order.created_at.isoformat() if order.created_at else "")
-                ws.cell(row=row, column=7, value=order.updated_at.isoformat() if order.updated_at else "")
-            
-            # Автоматическая ширина колонок
-            for column in ws.columns:
-                max_length = 0
-                column_letter = column[0].column_letter
-                for cell in column:
-                    try:
-                        if len(str(cell.value)) > max_length:
-                            max_length = len(str(cell.value))
-                    except:
-                        pass
-                adjusted_width = min(max_length + 2, 50)
-                ws.column_dimensions[column_letter].width = adjusted_width
-            
-            buffer = io.BytesIO()
-            wb.save(buffer)
-            buffer.seek(0)
-            
-            filename = f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            return Response(
-                content=buffer.getvalue(),
-                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                headers={"Content-Disposition": f"attachment; filename={filename}"}
-            )
-        
-        elif format == "csv":
-            import csv
-            from io import StringIO
-            
-            output = StringIO()
-            writer = csv.writer(output)
-            
-            # Заголовки
-            writer.writerow(["Order ID", "Client Name", "Country", "Status", "Note", "Created At", "Updated At"])
-            
-            for order in orders:
-                writer.writerow([
-                    order.order_id,
-                    order.client_name,
-                    order.country,
-                    order.status,
-                    order.note or "",
-                    order.created_at.isoformat() if order.created_at else "",
-                    order.updated_at.isoformat() if order.updated_at else ""
-                ])
-            
-            content = output.getvalue()
-            return JSONResponse({
-                "content": content,
-                "filename": f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            })
-            
-        else:  # json
-            orders_data = []
-            for order in orders:
-                order_data = serialize_model(order)
-                if order_data.get('created_at') and isinstance(order_data['created_at'], datetime):
-                    order_data['created_at'] = order_data['created_at'].isoformat()
-                if order_data.get('updated_at') and isinstance(order_data['updated_at'], datetime):
-                    order_data['updated_at'] = order_data['updated_at'].isoformat()
-                orders_data.append(order_data)
-            
-            return {
-                "orders": orders_data,
-                "filename": f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-            }
-            
-    except Exception as e:
-        logger.error(f"Error exporting orders: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.get("/addresses", response_class=HTMLResponse)
-async def addresses_page(request: Request, current_admin: dict = Depends(get_current_admin)):
-    """Страница адресов клиентов"""
-    return templates.TemplateResponse("addresses.html", {
-        "request": request,
-        "current_admin": current_admin,
-        "current_page": "addresses"
-    })
-
-
-@app.get("/api/addresses")
-async def get_addresses(
-    limit: int = Query(50, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """API для получения списка адресов с пагинацией"""
-    try:
-        addresses = await AddressService.get_all_addresses()
-        
-        # Общее количество адресов
-        total_addresses = len(addresses)
-        
-        # Пагинация
-        paginated_addresses = addresses[offset:offset + limit]
-        
-        addresses_data = []
-        for address in paginated_addresses:
-            address_data = serialize_model(address)
-            if address_data.get('created_at') and isinstance(address_data['created_at'], datetime):
-                address_data['created_at'] = address_data['created_at'].isoformat()
-            if address_data.get('updated_at') and isinstance(address_data['updated_at'], datetime):
-                address_data['updated_at'] = address_data['updated_at'].isoformat()
-            addresses_data.append(address_data)
-        
-        return {
-            "addresses": addresses_data,
-            "total": total_addresses,
-            "has_more": total_addresses > offset + limit,
-            "offset": offset,
-            "limit": limit
-        }
-    except Exception as e:
-        logger.error(f"Error fetching addresses: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
-
-@app.get("/api/addresses/export/xlsx")
-async def export_addresses_xlsx(current_admin: dict = Depends(get_current_admin)):
-    """Экспорт адресов в XLSX"""
-    try:
-        addresses = await AddressService.get_all_addresses()
-        
-        import io
-        from openpyxl import Workbook
-        from openpyxl.styles import Font, PatternFill, Alignment
-        
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Адреса клиентов"
-        
-        # Заголовки
-        headers = ["Telegram ID", "Username", "Имя", "Телефон", "Город", "Адрес", "Индекс", "Обновлен"]
-        for col, header in enumerate(headers, 1):
-            cell = ws.cell(row=1, column=col, value=header)
-            cell.font = Font(bold=True)
-            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
-            cell.alignment = Alignment(horizontal="center")
-        
-        # Данные
-        for row, address in enumerate(addresses, 2):
-            ws.cell(row=row, column=1, value=address.user_id)
-            ws.cell(row=row, column=2, value=f"@{address.username}")
-            ws.cell(row=row, column=3, value=address.full_name or "")
-            ws.cell(row=row, column=4, value=address.phone or "")
-            ws.cell(row=row, column=5, value=address.city or "")
-            ws.cell(row=row, column=6, value=address.address or "")
-            ws.cell(row=row, column=7, value=address.postcode or "")
-            ws.cell(row=row, column=8, value=address.updated_at.isoformat() if address.updated_at else "")
-        
-        # Автоматическая ширина колонок
-        for column in ws.columns:
-            max_length = 0
-            column_letter = column[0].column_letter
-            for cell in column:
-                try:
-                    if len(str(cell.value)) > max_length:
-                        max_length = len(str(cell.value))
-                except:
-                    pass
-            adjusted_width = min(max_length + 2, 50)
-            ws.column_dimensions[column_letter].width = adjusted_width
-        
-        buffer = io.BytesIO()
-        wb.save(buffer)
-        buffer.seek(0)
-        
-        filename = f"addresses_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-        return Response(
-            content=buffer.getvalue(),
-            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
-        
-    except Exception as e:
-        logger.error(f"Error exporting addresses: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
+# Добавляем новые API endpoints для массовых операций
 @app.post("/api/orders/bulk-update-status")
-async def bulk_update_order_status(
+async def bulk_update_status(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Массовое обновление статусов заказов"""
     try:
         data = await request.json()
         order_ids = data.get('order_ids', [])
-        new_status = data.get('status', '')
+        status = data.get('status')
         
-        if not order_ids:
-            raise HTTPException(400, "Не выбраны заказы для обновления")
+        if not order_ids or not status:
+            raise HTTPException(400, "Необходимо указать список заказов и статус")
         
-        if not new_status:
-            raise HTTPException(400, "Не указан новый статус")
-        
-        if new_status not in STATUSES:
-            raise HTTPException(400, f"Неверный статус. Допустимые значения: {STATUSES}")
-        
-        success_count = 0
-        failed_count = 0
+        updated_count = 0
+        error_count = 0
         
         for order_id in order_ids:
             try:
-                # Получаем старый статус для проверки изменений
-                old_order = await OrderService.get_order(order_id)
-                old_status = old_order.status if old_order else ""
-                
-                success = await OrderService.update_order_status(order_id, new_status)
+                success = await OrderService.update_order(order_id, {"status": status})
                 if success:
-                    success_count += 1
-                    # Отправляем уведомления если статус изменился
-                    if old_status != new_status:
-                        await OrderService._send_status_notifications(order_id, new_status)
+                    updated_count += 1
                 else:
-                    failed_count += 1
+                    error_count += 1
             except Exception as e:
                 logger.error(f"Error updating order {order_id}: {e}")
-                failed_count += 1
-        
-        message = f"Обновлено {success_count} заказов"
-        if failed_count > 0:
-            message += f", не удалось обновить {failed_count}"
+                error_count += 1
         
         return {
             "success": True,
-            "message": message,
-            "updated": success_count,
-            "failed": failed_count
+            "message": f"Обновлено {updated_count} из {len(order_ids)} заказов",
+            "updated": updated_count,
+            "errors": error_count
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in bulk update order status: {e}")
+        logger.error(f"Error in bulk update status: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
 @app.post("/api/orders/bulk-delete")
 async def bulk_delete_orders(
     request: Request,
-    current_admin: dict = Depends(get_current_admin)
-):
+    current_admin: dict = Depends(get_current_admin)):
     """Массовое удаление заказов"""
     try:
         data = await request.json()
         order_ids = data.get('order_ids', [])
         
         if not order_ids:
-            raise HTTPException(400, "Не выбраны заказы для удаления")
+            raise HTTPException(400, "Необходимо указать список заказов")
         
-        success_count = 0
-        failed_count = 0
+        deleted_count = 0
+        error_count = 0
         
         for order_id in order_ids:
             try:
                 success = await OrderService.delete_order(order_id)
                 if success:
-                    success_count += 1
+                    deleted_count += 1
                 else:
-                    failed_count += 1
+                    error_count += 1
             except Exception as e:
                 logger.error(f"Error deleting order {order_id}: {e}")
-                failed_count += 1
-        
-        message = f"Удалено {success_count} заказов"
-        if failed_count > 0:
-            message += f", не удалось удалить {failed_count}"
+                error_count += 1
         
         return {
             "success": True,
-            "message": message,
-            "deleted": success_count,
-            "failed": failed_count
+            "message": f"Удалено {deleted_count} из {len(order_ids)} заказов",
+            "deleted": deleted_count,
+            "errors": error_count
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
-        logger.error(f"Error in bulk delete orders: {e}")
+        logger.error(f"Error in bulk delete: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
-
-# Создаем директорию для аватарок
-AVATAR_DIR = os.path.join(STATIC_DIR, "avatars")
-os.makedirs(AVATAR_DIR, exist_ok=True)
-
-@app.post("/api/admin/profile/avatar")
-async def upload_avatar(
-    avatar: UploadFile = File(...),
-    current_admin: dict = Depends(get_current_admin)
-):
-    """Загрузка аватарки пользователя"""
-    try:
-        # Проверяем тип файла
-        if not avatar.content_type or not avatar.content_type.startswith("image/"):
-            raise HTTPException(400, "Файл должен быть изображением")
-        
-        # Читаем содержимое файла
-        contents = await avatar.read()
-        
-        # Проверяем размер файла (не более 5MB)
-        max_size = 5 * 1024 * 1024  # 5 MB
-        if len(contents) > max_size:
-            raise HTTPException(400, "Размер файла не должен превышать 5MB")
-        
-        # Открываем изображение через PIL
-        image = Image.open(io.BytesIO(contents))
-        
-        # Конвертируем в RGB при необходимости
-        if image.mode in ("RGBA", "LA", "P"):
-            image = image.convert("RGB")
-        
-        # Ресайзим до 200x200
-        try:
-            resampling = Image.Resampling.LANCZOS
-        except AttributeError:
-            resampling = Image.LANCZOS
-        image.thumbnail((200, 200), resampling)
-        
-        # Определяем расширение файла
-        original_name = avatar.filename or "avatar"
-        if "." in original_name:
-            ext = original_name.rsplit(".", 1)[1].lower()
-        else:
-            ext = "jpg"
-        
-        if ext not in ["jpg", "jpeg", "png"]:
-            ext = "jpg"
-        
-        # Генерируем уникальное имя файла
-        filename = f"{current_admin['user_id']}_{uuid.uuid4().hex[:8]}.{ext}"
-        save_path = os.path.join(AVATAR_DIR, filename)
-        
-        # Пересоздаём директорию на всякий случай (если вдруг её удалили)
-        os.makedirs(AVATAR_DIR, exist_ok=True)
-        
-        # Сохраняем изображение
-        image.save(save_path, "JPEG" if ext in ["jpg", "jpeg"] else "PNG", quality=85)
-        
-        # Обновляем аватарку в базе данных
-        avatar_url = f"/static/avatars/{filename}"
-        user = await AdminService.update_user(
-            current_admin["user_id"],
-            AdminUserUpdate(avatar_url=avatar_url)
-        )
-        
-        return {
-            "success": True,
-            "message": "Аватарка успешно обновлена",
-            "avatar_url": avatar_url
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error uploading avatar: {e}")
-        raise HTTPException(500, "Ошибка при загрузке аватарки")
