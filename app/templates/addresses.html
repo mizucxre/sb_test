@@ -15,19 +15,8 @@
     </div>
 
     <!-- Search and Filters -->
-    <div class="glass-effect rounded-2xl p-4 lg:p-6" x-data="{ showFilters: window.matchMedia('(min-width: 1024px)').matches }">
-        <!-- Mobile Filter Toggle Button -->
-        <div class="lg:hidden flex justify-between items-center mb-4">
-            <h3 class="text-lg font-semibold">Фильтры</h3>
-            <button @click="showFilters = !showFilters" 
-                    class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200"
-                    data-touch-target>
-                <i class="fas fa-filter mr-2"></i>
-                <span x-text="showFilters ? 'Скрыть' : 'Показать'"></span>
-            </button>
-        </div>
-        
-        <div x-show="showFilters || window.matchMedia('(min-width: 1024px)').matches" class="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-4">
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <div class="grid grid-cols-1 lg:grid-cols-4 gap-3 lg:gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск по имени</label>
                 <input type="text" x-model="searchName" placeholder="Введите имя..."
