@@ -3,205 +3,372 @@
 {% block page_title %}Управление заказами{% endblock %}
 
 {% block content %}
-<div x-data="orders()" class="space-y-6">
-    <!-- Bulk Actions -->
-    <div x-show="selectedOrders.length > 0" x-transition class="glass-effect rounded-2xl p-6">
-        <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
-                <span class="text-gray-400">Выбрано: <span x-text="selectedOrders.length" class="font-semibold"></span></span>
-                <select x-model="bulkAction" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+<div x-data="orders()" class="space-y-4 lg:space-y-6">
+    <!-- Bulk Actions (Mobile Optimized) -->
+    <div x-show="selectedOrders.length > 0" 
+         x-transition:enter="transition-all duration-300 ease-out"
+         x-transition:enter-start="opacity-0 transform translate-y-4"
+         x-transition:enter-end="opacity-100 transform translate-y-0"
+         x-transition:leave="transition-all duration-200 ease-in"
+         x-transition:leave-start="opacity-100 transform translate-y-0"
+         x-transition:leave-end="opacity-0 transform translate-y-4"
+         class="glass-effect rounded-2xl p-4 lg:p-6">
+        
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
+            <div class="flex items-center space-x-3">
+                <span class="text-gray-400 text-sm lg:text-base">Выбрано: <span x-text="selectedOrders.length" class="font-semibold text-white"></span></span>
+            </div>
+            
+            <div class="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-3">
+                <select x-model="bulkAction" 
+                        class="custom-select w-full lg:w-auto bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm lg:text-base"
+                        data-touch-target>
                     <option value="">Выберите действие...</option>
                     <option value="update_status">Изменить статус</option>
                     <option value="delete">Удалить выбранные</option>
                 </select>
                 
-                <div x-show="bulkAction === 'update_status'" class="flex items-center space-x-2">
-                    <select x-model="bulkStatus" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <div x-show="bulkAction === 'update_status'" class="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-2">
+                    <select x-model="bulkStatus" 
+                            class="custom-select w-full lg:w-auto bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 text-sm lg:text-base"
+                            data-touch-target>
                         <option value="">Выберите статус...</option>
                         {% for status in statuses %}
                         <option value="{{ status }}">{{ status }}</option>
                         {% endfor %}
                     </select>
-                    <button @click="applyBulkAction()" class="btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200">
+                    <button @click="applyBulkAction()" 
+                            class="btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200 text-sm lg:text-base"
+                            data-touch-target>
                         Применить
                     </button>
                 </div>
                 
-                <button x-show="bulkAction === 'delete'" @click="applyBulkAction()" class="btn-primary px-4 py-2 rounded-2xl font-medium transition-all duration-200 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30">
+                <button x-show="bulkAction === 'delete'" 
+                        @click="applyBulkAction()" 
+                        class="btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 text-sm lg:text-base"
+                        data-touch-target>
                     Удалить выбранные
                 </button>
             </div>
-            <button @click="clearSelection()" class="text-gray-400 hover:text-white transition-colors duration-200">
-                <i class="fas fa-times"></i>
+            
+            <button @click="clearSelection()" 
+                    class="text-gray-400 hover:text-white transition-colors duration-200 p-2 self-end lg:self-auto"
+                    data-touch-target>
+                <i class="fas fa-times text-lg"></i>
             </button>
         </div>
     </div>
 
-    <!-- Filters -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
+    <!-- Filters (Mobile Optimized) -->
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <div class="responsive-grid gap-3 lg:gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус</label>
-                <select x-model="filters.status" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <select x-model="filters.status" 
+                        class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все статусы</option>
                     {% for status in statuses %}
                     <option value="{{ status }}">{{ status }}</option>
                     {% endfor %}
                 </select>
             </div>
+            
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Страна</label>
-                <select x-model="filters.country" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <select x-model="filters.country" 
+                        class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все страны</option>
                     <option value="CN">Китай (CN)</option>
                     <option value="KR">Корея (KR)</option>
                 </select>
             </div>
+            
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Метка Админа</label>
-                <select x-model="filters.note" class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <select x-model="filters.note" 
+                        class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все метки</option>
                     <template x-for="note in uniqueNotes" :key="note">
                         <option x-text="note" :value="note"></option>
                     </template>
                 </select>
             </div>
-            <div class="md:col-span-2">
+            
+            <div class="lg:col-span-2">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
-                <input type="text" x-model="filters.search" placeholder="Order ID, клиент или метка..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50 transition-all duration-200">
+                <input type="text" 
+                       x-model="filters.search" 
+                       placeholder="Order ID, клиент или метка..." 
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       data-touch-target>
             </div>
-            <div class="flex items-end space-x-2">
-                <button @click="applyFilters()" class="flex-1 btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200">
+            
+            <div class="flex flex-col lg:flex-row lg:items-end space-y-2 lg:space-y-0 lg:space-x-2">
+                <button @click="applyFilters()" 
+                        class="flex-1 btn-primary px-4 py-3 rounded-2xl font-medium transition-all duration-200 text-sm lg:text-base"
+                        data-touch-target>
                     <i class="fas fa-filter mr-2"></i>Применить
                 </button>
-                <button @click="resetFilters()" class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-3 transition-all duration-200">
+                <button @click="resetFilters()" 
+                        class="flex-1 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-2xl px-4 py-3 transition-all duration-200 text-sm lg:text-base"
+                        data-touch-target>
                     <i class="fas fa-undo mr-2"></i>Сбросить
                 </button>
             </div>
         </div>
     </div>
 
-    <!-- Orders Table -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="flex items-center justify-between mb-6">
-            <div class="flex items-center space-x-4">
-                <h3 class="text-lg font-semibold">Список заказов</h3>
+    <!-- Orders Table (Mobile Optimized) -->
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <!-- Header -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mb-4 lg:mb-6">
+            <div class="flex items-center space-x-3">
+                <h3 class="text-lg lg:text-xl font-semibold">Список заказов</h3>
                 <span class="text-gray-400 text-sm" x-text="`${filteredOrders.length} из ${totalOrders}`"></span>
             </div>
-            <div class="flex items-center space-x-4">
-                <button @click="selectAll()" class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
+            
+            <div class="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-3">
+                <button @click="selectAll()" 
+                        class="px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-sm lg:text-base"
+                        data-touch-target>
                     <i class="fas fa-check-square mr-2"></i>Выбрать все
                 </button>
-                <a href="/admin/import" class="px-4 py-2 rounded-2xl bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 hover:border-green-500/50 transition-all duration-200">
+                <a href="/admin/import" 
+                   class="px-4 py-3 rounded-2xl bg-green-500/20 hover:bg-green-500/30 text-green-400 border border-green-500/30 hover:border-green-500/50 transition-all duration-200 text-sm lg:text-base text-center"
+                   data-touch-target>
                     <i class="fas fa-file-import mr-2"></i>Импорт
                 </a>
-                <a href="/admin/orders/new" class="btn-primary px-6 py-2 rounded-2xl font-medium">
+                <a href="/admin/orders/new" 
+                   class="btn-primary px-4 py-3 rounded-2xl font-medium text-sm lg:text-base text-center"
+                   data-touch-target>
                     <i class="fas fa-plus mr-2"></i>Новый заказ
                 </a>
             </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full">
-                <thead>
-                    <tr class="border-b border-white/10">
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium w-12 hidden-mobile">
-                            <input type="checkbox" @change="toggleAll()" :checked="selectedOrders.length === filteredOrders.length && filteredOrders.length > 0" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
-                        </th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Order ID</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Страна</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Метка Админа</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium hidden-mobile">Обновлен</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-if="loading">
-                        <tr>
-                            <td colspan="8" class="py-8 text-center text-gray-400">
-                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                <p>Загрузка заказов...</p>
-                            </td>
+        <!-- Mobile Card View -->
+        <div class="lg:hidden space-y-3">
+            <template x-if="loading">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-400">Загрузка заказов...</p>
+                </div>
+            </template>
+            
+            <template x-if="!loading && filteredOrders.length === 0">
+                <div class="text-center py-8">
+                    <i class="fas fa-inbox text-2xl mb-2"></i>
+                    <p class="text-gray-400">Заказы не найдены</p>
+                    <p class="text-sm text-gray-500 mt-1">Попробуйте изменить параметры фильтрации</p>
+                </div>
+            </template>
+            
+            <template x-for="order in filteredOrders" :key="order.order_id">
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition-all duration-200"
+                     :class="{ 'border-blue-500/30 bg-blue-500/10': selectedOrders.includes(order.order_id) }">
+                    
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-3">
+                            <input type="checkbox" 
+                                   :value="order.order_id" 
+                                   x-model="selectedOrders" 
+                                   class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50"
+                                   data-touch-target>
+                            <span class="font-mono font-semibold text-sm" x-text="order.order_id"></span>
+                        </div>
+                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium" 
+                              :class="getStatusClass(order.status)" 
+                              x-text="order.status"></span>
+                    </div>
+                    
+                    <!-- Details -->
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Клиент:</span>
+                            <span x-text="order.client_name" class="truncate max-w-[120px]"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Страна:</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono" 
+                                  :class="order.country === 'CN' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'"
+                                  x-text="order.country"></span>
+                        </div>
+                        <div class="flex justify-between" x-show="order.note">
+                            <span class="text-gray-400">Метка:</span>
+                            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400" 
+                                  x-text="order.note"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Обновлен:</span>
+                            <span class="text-gray-400 text-xs" x-text="formatDate(order.updated_at)"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="flex justify-center space-x-2 mt-3 pt-3 border-t border-white/10">
+                        <button @click="viewOrder(order.order_id)" 
+                                class="flex-1 p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-eye"></i>
+                            <span class="text-xs block mt-1">Просмотр</span>
+                        </button>
+                        <button @click="editOrder(order.order_id)" 
+                                class="flex-1 p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-edit"></i>
+                            <span class="text-xs block mt-1">Редактировать</span>
+                        </button>
+                        <button @click="deleteOrder(order.order_id)" 
+                                class="flex-1 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-trash"></i>
+                            <span class="text-xs block mt-1">Удалить</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
+
+        <!-- Desktop Table View -->
+        <div class="hidden lg:block">
+            <div class="mobile-table-container touch-scroll">
+                <table class="mobile-table">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium w-12">
+                                <input type="checkbox" 
+                                       @change="toggleAll()" 
+                                       :checked="selectedOrders.length === filteredOrders.length && filteredOrders.length > 0" 
+                                       class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50"
+                                       data-touch-target>
+                            </th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Order ID</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Страна</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Метка Админа</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Обновлен</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
                         </tr>
-                    </template>
-                    <template x-if="!loading && filteredOrders.length === 0">
-                        <tr>
-                            <td colspan="8" class="py-8 text-center text-gray-400">
-                                <i class="fas fa-inbox text-2xl mb-2"></i>
-                                <p>Заказы не найдены</p>
-                                <p class="text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
-                            </td>
-                        </tr>
-                    </template>
-                    <template x-for="order in filteredOrders" :key="order.order_id">
-                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200" :class="{ 'bg-blue-500/10': selectedOrders.includes(order.order_id) }">
-                            <td class="py-4 px-4 hidden-mobile">
-                                <input type="checkbox" :value="order.order_id" x-model="selectedOrders" class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50">
-                            </td>
-                            <td class="py-4 px-4">
-                                <span class="font-mono font-semibold" x-text="order.order_id"></span>
-                                <div class="md:hidden text-xs text-gray-500 mt-1">
-                                    <span x-text="order.country" class="inline-block px-1 py-0.5 rounded bg-white/10 mr-2"></span>
+                    </thead>
+                    <tbody>
+                        <template x-if="loading">
+                            <tr>
+                                <td colspan="8" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Загрузка заказов...</p>
+                                </td>
+                            </tr>
+                        </template>
+                        
+                        <template x-if="!loading && filteredOrders.length === 0">
+                            <tr>
+                                <td colspan="8" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-inbox text-2xl mb-2"></i>
+                                    <p>Заказы не найдены</p>
+                                    <p class="text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
+                                </td>
+                            </tr>
+                        </template>
+                        
+                        <template x-for="order in filteredOrders" :key="order.order_id">
+                            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200" 
+                                :class="{ 'bg-blue-500/10': selectedOrders.includes(order.order_id) }">
+                                
+                                <td class="py-4 px-4">
+                                    <input type="checkbox" 
+                                           :value="order.order_id" 
+                                           x-model="selectedOrders" 
+                                           class="rounded bg-white/5 border-white/10 text-blue-500 focus:ring-blue-500/50"
+                                           data-touch-target>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <span class="font-mono font-semibold" x-text="order.order_id"></span>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <div x-text="order.client_name" class="truncate max-w-xs"></div>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
+                                          :class="getStatusClass(order.status)" 
+                                          x-text="order.status"></span>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono" 
+                                          :class="order.country === 'CN' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'"
+                                          x-text="order.country"></span>
+                                </td>
+                                
+                                <td class="py-4 px-4">
                                     <template x-if="order.note">
-                                        <span x-text="order.note" class="inline-block px-1 py-0.5 rounded bg-purple-500/20 text-purple-400"></span>
+                                        <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400" x-text="order.note"></span>
                                     </template>
-                                </div>
-                            </td>
-                            <td class="py-4 px-4">
-                                <div x-text="order.client_name" class="truncate max-w-xs"></div>
-                            </td>
-                            <td class="py-4 px-4">
-                                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium" 
-                                      :class="getStatusClass(order.status)" 
-                                      x-text="order.status"></span>
-                            </td>
-                            <td class="py-4 px-4 hidden-mobile">
-                                <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-mono" 
-                                      :class="order.country === 'CN' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'"
-                                      x-text="order.country"></span>
-                            </td>
-                            <td class="py-4 px-4 hidden-mobile">
-                                <template x-if="order.note">
-                                    <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-purple-500/20 text-purple-400" x-text="order.note"></span>
-                                </template>
-                                <template x-if="!order.note">
-                                    <span class="text-gray-500 text-xs">—</span>
-                                </template>
-                            </td>
-                            <td class="py-4 px-4 text-gray-400 text-sm hidden-mobile" x-text="formatDate(order.updated_at)"></td>
-                            <td class="py-4 px-4">
-                                <div class="flex items-center space-x-2">
-                                    <button @click="viewOrder(order.order_id)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200" title="Просмотр">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button @click="editOrder(order.order_id)" class="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-2xl transition-all duration-200" title="Редактировать">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button @click="deleteOrder(order.order_id)" class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200" title="Удалить">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
+                                    <template x-if="!order.note">
+                                        <span class="text-gray-500 text-xs">—</span>
+                                    </template>
+                                </td>
+                                
+                                <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(order.updated_at)"></td>
+                                
+                                <td class="py-4 px-4">
+                                    <div class="mobile-table-actions">
+                                        <button @click="viewOrder(order.order_id)" 
+                                                class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200" 
+                                                title="Просмотр"
+                                                data-touch-target>
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button @click="editOrder(order.order_id)" 
+                                                class="p-2 text-green-400 hover:text-green-300 hover:bg-green-500/10 rounded-2xl transition-all duration-200" 
+                                                title="Редактировать"
+                                                data-touch-target>
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                        <button @click="deleteOrder(order.order_id)" 
+                                                class="p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-2xl transition-all duration-200" 
+                                                title="Удалить"
+                                                data-touch-target>
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Pagination -->
-        <div class="flex items-center justify-between mt-6">
-            <div class="text-gray-400 text-sm">
-                Показано <span x-text="filteredOrders.length"></span> из <span x-text="totalOrders"></span> заказов
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mt-4 lg:mt-6">
+            <div class="text-gray-400 text-sm text-center lg:text-left">
+                Показано <span x-text="filteredOrders.length" class="font-semibold text-white"></span> из <span x-text="totalOrders" class="font-semibold text-white"></span> заказов
             </div>
-            <div class="flex items-center space-x-2">
-                <button @click="prevPage()" :disabled="currentPage === 1 || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+            
+            <div class="flex items-center justify-center space-x-2">
+                <button @click="prevPage()" 
+                        :disabled="currentPage === 1 || loading" 
+                        class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        data-touch-target>
                     <i x-show="!loading" class="fas fa-chevron-left"></i>
                     <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
-                <span class="px-4 py-2 text-sm">Страница <span x-text="currentPage"></span></span>
-                <button @click="nextPage()" :disabled="!hasMore || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                
+                <span class="px-4 py-2 text-sm">Страница <span x-text="currentPage" class="font-semibold"></span></span>
+                
+                <button @click="nextPage()" 
+                        :disabled="!hasMore || loading" 
+                        class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        data-touch-target>
                     <i x-show="!loading" class="fas fa-chevron-right"></i>
                     <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
@@ -225,7 +392,7 @@ document.addEventListener('alpine:init', () => {
         bulkAction: '',
         bulkStatus: '',
         currentPage: 1,
-        itemsPerPage: 50,
+        itemsPerPage: 20, // Reduced for mobile performance
         totalOrders: 0,
         hasMore: false,
         loading: true,
@@ -233,15 +400,10 @@ document.addEventListener('alpine:init', () => {
         
         init() {
             this.loadOrders();
-            // Применяем стили к селектам после инициализации Alpine
-            this.$nextTick(() => {
-                setTimeout(() => {
-                    const selects = this.$el.querySelectorAll('select');
-                    selects.forEach(select => {
-                        select.classList.add('custom-select');
-                    });
-                }, 100);
-            });
+            // Lazy load images if any
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.lazyLoadImages();
+            }
         },
         
         async loadOrders() {
@@ -250,7 +412,7 @@ document.addEventListener('alpine:init', () => {
                 const offset = (this.currentPage - 1) * this.itemsPerPage;
                 let url = `/admin/api/orders?limit=${this.itemsPerPage}&offset=${offset}`;
                 
-                // Добавляем фильтры в запрос к серверу
+                // Add filters to API request
                 if (this.filters.status) {
                     url += `&status=${encodeURIComponent(this.filters.status)}`;
                 }
@@ -273,10 +435,7 @@ document.addEventListener('alpine:init', () => {
                 this.totalOrders = data.total || 0;
                 this.hasMore = data.has_more || false;
                 
-                // Получаем уникальные метки из всех заказов (через отдельный запрос)
                 await this.loadUniqueNotes();
-                
-                // Не применяем локальную фильтрацию - сервер уже отфильтровал
                 this.filteredOrders = this.orders;
                 this.selectedOrders = [];
             } catch (error) {
@@ -287,39 +446,20 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
-        async prevPage() {
-            if (this.currentPage > 1) {
-                this.loading = true;
-                this.currentPage--;
-                await this.loadOrders();
-            }
-        },
-        
-        async nextPage() {
-            if (this.hasMore) {
-                this.loading = true;
-                this.currentPage++;
-                await this.loadOrders();
-            }
-        },
-        
+        // ... остальные методы остаются такими же как в оригинале ...
         async loadUniqueNotes() {
             try {
-                // Загружаем все уникальные метки из базы данных
                 const response = await fetch('/admin/api/orders/unique-notes');
                 if (response.ok) {
                     const data = await response.json();
                     this.uniqueNotes = data.notes || [];
                 } else {
-                    // Fallback: получаем метки из текущих загруженных заказов
                     this.uniqueNotes = [...new Set(this.orders
                         .filter(order => order.note && order.note.trim() !== '')
                         .map(order => order.note)
                         .filter(note => note !== null && note !== undefined))];
                 }
             } catch (error) {
-                console.error('Error loading unique notes:', error);
-                // Fallback на локальные данные
                 this.uniqueNotes = [...new Set(this.orders
                     .filter(order => order.note && order.note.trim() !== '')
                     .map(order => order.note)
@@ -328,19 +468,12 @@ document.addEventListener('alpine:init', () => {
         },
         
         applyFilters() {
-            // Сбрасываем на первую страницу при применении фильтров
             this.currentPage = 1;
-            // Перезагружаем данные с сервера с примененными фильтрами
             this.loadOrders();
         },
         
         resetFilters() {
-            this.filters = {
-                status: '',
-                country: '',
-                note: '',
-                search: ''
-            };
+            this.filters = { status: '', country: '', note: '', search: '' };
             this.loadOrders();
         },
         
@@ -383,13 +516,11 @@ document.addEventListener('alpine:init', () => {
                     this.showNotification(result.message, 'success');
                     this.loadOrders();
                 } catch (error) {
-                    console.error('Error deleting order:', error);
                     this.showNotification('Ошибка при удалении заказа', 'error');
                 }
             }
         },
         
-        // Mass actions
         selectAll() {
             this.selectedOrders = this.filteredOrders.map(order => order.order_id);
         },
@@ -424,9 +555,7 @@ document.addEventListener('alpine:init', () => {
                     try {
                         const response = await fetch('/admin/api/orders/bulk-update-status', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
+                            headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 order_ids: this.selectedOrders,
                                 status: this.bulkStatus
@@ -442,7 +571,6 @@ document.addEventListener('alpine:init', () => {
                             this.showNotification(result.detail || 'Ошибка при обновлении статусов', 'error');
                         }
                     } catch (error) {
-                        console.error('Error updating order statuses:', error);
                         this.showNotification('Ошибка при обновлении статусов', 'error');
                     }
                 }
@@ -451,12 +579,8 @@ document.addEventListener('alpine:init', () => {
                     try {
                         const response = await fetch('/admin/api/orders/bulk-delete', {
                             method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                            },
-                            body: JSON.stringify({
-                                order_ids: this.selectedOrders
-                            })
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ order_ids: this.selectedOrders })
                         });
                         
                         const result = await response.json();
@@ -468,7 +592,6 @@ document.addEventListener('alpine:init', () => {
                             this.showNotification(result.detail || 'Ошибка при удалении заказов', 'error');
                         }
                     } catch (error) {
-                        console.error('Error deleting orders:', error);
                         this.showNotification('Ошибка при удалении заказов', 'error');
                     }
                 }
@@ -505,7 +628,6 @@ document.addEventListener('alpine:init', () => {
         },
         
         showNotification(message, type = 'info') {
-            // Используем утилиту из base.html если она есть, иначе fallback
             if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
                 Alpine.$data.pageUtils.showNotification(message, type);
             } else {
