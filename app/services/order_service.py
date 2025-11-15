@@ -65,13 +65,13 @@ class OrderService:
             return False
     
     @staticmethod
-    async def get_orders_by_note(marker: str) -> List[Order]:
+    async def list_orders_by_note(note: str) -> List[Order]:
         """Найти заказы по метке в примечании"""
         try:
             async with db.pool.acquire() as conn:
                 rows = await conn.fetch(
-                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders WHERE note ILIKE $1",
-                    f"%{marker}%"
+                    "SELECT order_id, client_name, phone, origin, status, note, country, created_at, updated_at FROM orders WHERE note ILIKE $1 ORDER BY updated_at DESC",
+                    f"%{note}%"
                 )
                 orders = []
                 for row in rows:
@@ -82,6 +82,19 @@ class OrderService:
                 return orders
         except Exception as e:
             logger.error(f"Error getting orders by note: {e}")
+            return []
+    
+    @staticmethod
+    async def get_unique_notes() -> List[str]:
+        """Получить список уникальных меток из заказов"""
+        try:
+            async with db.pool.acquire() as conn:
+                rows = await conn.fetch(
+                    "SELECT DISTINCT note FROM orders WHERE note IS NOT NULL AND note != '' ORDER BY note"
+                )
+                return [row['note'] for row in rows if row['note']]
+        except Exception as e:
+            logger.error(f"Error getting unique notes: {e}")
             return []
     
     @staticmethod
@@ -103,7 +116,7 @@ class OrderService:
         except Exception as e:
             logger.error(f"Error listing recent orders: {e}")
             return []
-    
+
     @staticmethod
     async def list_orders_by_status(statuses: List[str]) -> List[Order]:
         """Список заказов по статусам"""
@@ -231,8 +244,6 @@ class OrderService:
             logger.error(f"Error deleting order {order_id}: {e}")
             return False
             
-# ДОБАВИТЬ в класс OrderService:
-
     @staticmethod
     async def bulk_update_order_statuses(order_ids: List[str], new_status: str) -> bool:
         """Массовое обновление статусов заказов"""
@@ -246,7 +257,7 @@ class OrderService:
         except Exception as e:
             logger.error(f"Error bulk updating order statuses: {e}")
             return False
-    
+
 class ParticipantService:
     
     @staticmethod
@@ -450,23 +461,3 @@ class ParticipantService:
         except Exception as e:
             logger.error(f"Error getting paginated participants: {e}")
             return {"participants": [], "total": 0, "has_more": False}
-
-    @staticmethod
-    async def get_all_participants(limit: int = 5000) -> List[Participant]:
-        """Получить всех участников из всех заказов"""
-        try:
-            async with db.pool.acquire() as conn:
-                rows = await conn.fetch(
-                    "SELECT order_id, username, paid, created_at, updated_at FROM participants ORDER BY updated_at DESC LIMIT $1",
-                    limit
-                )
-                participants = []
-                for row in rows:
-                    participant_dict = dict(row)
-                    if 'id' in participant_dict:
-                        del participant_dict['id']
-                    participants.append(Participant(**participant_dict))
-                return participants
-        except Exception as e:
-            logger.error(f"Error getting all participants: {e}")
-            return []
