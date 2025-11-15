@@ -198,7 +198,7 @@ document.addEventListener('alpine:init', () => {
         bulkAction: '',
         bulkStatus: '',
         currentPage: 1,
-        itemsPerPage: 10,
+        itemsPerPage: 50,
         totalOrders: 0,
         hasMore: false,
         loading: true,
@@ -219,7 +219,8 @@ document.addEventListener('alpine:init', () => {
         async loadOrders() {
             this.loading = true;
             try {
-                let url = '/admin/api/orders?limit=100';
+                const offset = (this.currentPage - 1) * this.itemsPerPage;
+                let url = `/admin/api/orders?limit=${this.itemsPerPage}&offset=${offset}`;
                 if (this.filters.status) {
                     url += `&status=${encodeURIComponent(this.filters.status)}`;
                 }
