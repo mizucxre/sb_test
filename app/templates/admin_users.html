@@ -294,9 +294,9 @@
                                 </h1>
                                 <p class="text-gray-400 mt-1">Управление доступом к панели администратора</p>
                             </div>
-                            <button @click="showAddModal = true" class="btn-primary px-6 py-3 rounded-2xl font-medium">
+                            <a href="/admin/admin-users/new" class="btn-primary px-6 py-3 rounded-2xl font-medium">
                                 <i class="fas fa-plus mr-2"></i>Добавить администратора
-                            </button>
+                            </a>
                         </div>
 
                         <!-- Карточка со списком администраторов -->
@@ -354,9 +354,9 @@
                                                 <td class="py-4 px-4 text-gray-300" x-text="formatDate(user.last_login)"></td>
                                                 <td class="py-4 px-4">
                                                     <div class="flex items-center space-x-2">
-                                                        <button @click="editUser(user)" class="text-blue-400 hover:text-blue-300 p-2 rounded-2xl hover:bg-white/5 transition-colors">
+                                                        <a :href="`/admin/admin-users/${user.id}/edit`" class="text-blue-400 hover:text-blue-300 p-2 rounded-2xl hover:bg-white/5 transition-colors">
                                                             <i class="fas fa-edit"></i>
-                                                        </button>
+                                                        </a>
                                                         <button @click="deleteUser(user)" class="text-red-400 hover:text-red-300 p-2 rounded-2xl hover:bg-white/5 transition-colors">
                                                             <i class="fas fa-trash"></i>
                                                         </button>
@@ -374,58 +374,6 @@
                                         </template>
                                     </tbody>
                                 </table>
-                            </div>
-                        </div>
-
-                        <!-- Модальное окно добавления/редактирования -->
-                        <div x-show="showAddModal || showEditModal" 
-                             x-transition:enter="transition-opacity ease-out duration-300"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition-opacity ease-in duration-200"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="fixed inset-0 z-50 bg-black bg-opacity-60 flex items-center justify-center p-4">
-                            <div class="glass-effect rounded-2xl p-6 w-full max-w-md"
-                                 @click.away="closeModal()">
-                                <h3 class="text-xl font-semibold mb-4" x-text="showEditModal ? 'Редактировать администратора' : 'Добавить администратора'"></h3>
-                                
-                                <form @submit.prevent="showEditModal ? updateUser() : createUser()" class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Имя пользователя</label>
-                                        <input type="text" x-model="currentUser.username" required
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                                        <input type="email" x-model="currentUser.email"
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Пароль</label>
-                                        <input type="password" :required="!showEditModal" x-model="currentUser.password"
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Роль</label>
-                                        <select x-model="currentUser.role" class="custom-select">
-                                            <option value="admin">Администратор</option>
-                                            <option value="super_admin">Супер-администратор</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="flex items-center space-x-4 pt-4">
-                                        <button type="submit" class="btn-primary flex-1 py-3 rounded-2xl font-medium">
-                                            <span x-text="showEditModal ? 'Сохранить' : 'Создать'"></span>
-                                        </button>
-                                        <button type="button" @click="closeModal()" class="flex-1 py-3 rounded-2xl font-medium border border-white/10 text-white hover:bg-white/5 transition-colors">
-                                            Отмена
-                                        </button>
-                                    </div>
-                                </form>
                             </div>
                         </div>
                     </div>
@@ -530,16 +478,6 @@
         function adminUsers() {
             return {
                 users: [],
-                showAddModal: false,
-                showEditModal: false,
-                currentUser: {
-                    id: null,
-                    username: '',
-                    email: '',
-                    password: '',
-                    role: 'admin',
-                    is_active: true
-                },
                 
                 async init() {
                     await this.loadUsers();
@@ -554,52 +492,6 @@
                     } catch (error) {
                         console.error('Ошибка загрузки администраторов:', error);
                         this.showNotification('Ошибка загрузки списка администраторов', 'error');
-                    }
-                },
-                
-                async createUser() {
-                    try {
-                        const response = await fetch('/admin/api/admin/users', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.currentUser)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.detail || 'Ошибка создания');
-                        }
-                        
-                        const data = await response.json();
-                        this.showNotification(data.message || 'Администратор создан', 'success');
-                        this.closeModal();
-                        await this.loadUsers();
-                    } catch (error) {
-                        console.error('Ошибка создания администратора:', error);
-                        this.showNotification(error.message, 'error');
-                    }
-                },
-                
-                async updateUser() {
-                    try {
-                        const response = await fetch(`/admin/api/admin/users/${this.currentUser.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.currentUser)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.detail || 'Ошибка обновления');
-                        }
-                        
-                        const data = await response.json();
-                        this.showNotification(data.message || 'Администратор обновлен', 'success');
-                        this.closeModal();
-                        await this.loadUsers();
-                    } catch (error) {
-                        console.error('Ошибка обновления администратора:', error);
-                        this.showNotification(error.message, 'error');
                     }
                 },
                 
@@ -625,31 +517,6 @@
                         console.error('Ошибка удаления администратора:', error);
                         this.showNotification(error.message, 'error');
                     }
-                },
-                
-                editUser(user) {
-                    this.currentUser = {
-                        id: user.id,
-                        username: user.username,
-                        email: user.email || '',
-                        password: '',
-                        role: user.role,
-                        is_active: user.is_active
-                    };
-                    this.showEditModal = true;
-                },
-                
-                closeModal() {
-                    this.showAddModal = false;
-                    this.showEditModal = false;
-                    this.currentUser = {
-                        id: null,
-                        username: '',
-                        email: '',
-                        password: '',
-                        role: 'admin',
-                        is_active: true
-                    };
                 },
                 
                 formatDate(dateString) {
