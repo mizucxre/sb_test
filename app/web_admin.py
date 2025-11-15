@@ -854,6 +854,62 @@ async def broadcast_all(
         logger.error(f"Error broadcasting to all users: {e}")
         raise HTTPException(500, "Внутренняя ошибка сервера")
 
+@app.post("/api/broadcast/reminder")
+async def send_reminder(
+    request: Request,
+    current_admin: dict = Depends(get_current_admin)
+):
+    """Отправка напоминания конкретному пользователю"""
+    try:
+        data = await request.json()
+        message = data.get('message', '')
+        usernames = data.get('usernames', [])
+        
+        if not message or not usernames:
+            raise HTTPException(400, "Сообщение и список пользователей обязательны")
+        
+        # Получаем user_id по username
+        user_ids = await AddressService.get_user_ids_by_usernames(usernames)
+        
+        if not user_ids:
+            return {
+                "success": False,
+                "message": "Пользователи не найдены"
+            }
+        
+        sent_count = 0
+        failed_count = 0
+        
+        # Отправляем сообщения через Telegram бота
+        for user_id in user_ids:
+            try:
+                from app.webhook import application
+                await application.bot.send_message(
+                    chat_id=user_id,
+                    text=message,
+                    parse_mode='HTML'
+                )
+                sent_count += 1
+            except Exception as e:
+                logger.error(f"Error sending reminder to {user_id}: {e}")
+                failed_count += 1
+        
+        return {
+            "success": True,
+            "message": f"Напоминания отправлены ({sent_count}/{len(user_ids)})",
+            "result": {
+                "sent": sent_count,
+                "failed": failed_count,
+                "total": len(user_ids)
+            }
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error sending reminders: {e}")
+        raise HTTPException(500, "Внутренняя ошибка сервера")
+
 @app.get("/api/statuses")
 async def get_statuses(current_admin: dict = Depends(get_current_admin)):
     """API для получения списка статусов"""
