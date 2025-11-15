@@ -104,10 +104,9 @@
                 </div>
             </div>
 
-            <!-- Recent Activity and Telegram Posts -->
-            <div class="lg:col-span-2 space-y-6">
-                <!-- Recent Orders -->
-                <div class="glass-effect rounded-2xl p-6">
+            <!-- Recent Orders -->
+            <div class="lg:col-span-2">
+                <div class="glass-effect rounded-2xl p-6 h-full">
                     <div class="flex items-center justify-between mb-6">
                         <h3 class="text-lg font-semibold">Последние заказы</h3>
                         <a href="/admin/orders" class="text-blue-400 hover:text-blue-300 text-sm font-medium">Все заказы →</a>
@@ -117,21 +116,6 @@
                         <div class="text-center py-8 text-gray-500">
                             <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
                             <p>Загрузка заказов...</p>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Telegram Channel Posts -->
-                <div class="glass-effect rounded-2xl p-6">
-                    <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold">SEABLUU Telegram</h3>
-                        <a href="https://t.me/seabluushop" target="_blank" class="text-blue-400 hover:text-blue-300 text-sm font-medium">Открыть канал →</a>
-                    </div>
-                    
-                    <div class="space-y-4" id="telegram-posts">
-                        <div class="text-center py-8 text-gray-500">
-                            <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                            <p>Загрузка постов...</p>
                         </div>
                     </div>
                 </div>
@@ -155,10 +139,9 @@ document.addEventListener('alpine:init', () => {
                 console.log('Starting data load...');
                 
                 // Параллельная загрузка данных для лучшей производительности
-                const [statsResponse, ordersResponse, postsResponse] = await Promise.all([
+                const [statsResponse, ordersResponse] = await Promise.all([
                     fetch('/admin/api/stats'),
-                    fetch('/admin/api/orders?limit=5'),
-                    fetch('/admin/api/telegram/posts?limit=5')
+                    fetch('/admin/api/orders?limit=5')
                 ]);
                 
                 // Обработка статистики
@@ -175,19 +158,9 @@ document.addEventListener('alpine:init', () => {
                 const ordersData = await ordersResponse.json();
                 this.displayRecentOrders(ordersData.orders || []);
                 
-                // Обработка постов из Telegram
-                if (!postsResponse.ok) {
-                    console.warn('Failed to load Telegram posts, continuing without them');
-                    this.displayTelegramPosts([]);
-                } else {
-                    const postsData = await postsResponse.json();
-                    this.displayTelegramPosts(postsData.posts || []);
-                }
-                
             } catch (error) {
                 console.error('Error loading dashboard data:', error);
                 this.showError('Ошибка загрузки данных: ' + error.message);
-                this.displayTelegramPosts([]);
             } finally {
                 this.loading = false;
             }
@@ -232,80 +205,6 @@ document.addEventListener('alpine:init', () => {
                     </div>
                 </div>
             `).join('');
-        },
-        
-        displayTelegramPosts(posts) {
-            const container = document.getElementById('telegram-posts');
-            if (!container) {
-                console.error('Telegram posts container not found');
-                return;
-            }
-            
-            if (posts.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-8">
-                        <i class="fab fa-telegram text-gray-500 text-4xl mb-4"></i>
-                        <p class="text-gray-400">Посты не найдены</p>
-                        <p class="text-sm text-gray-500 mt-2">Попробуйте позже</p>
-                    </div>
-                `;
-                return;
-            }
-            
-            container.innerHTML = posts.map(post => `
-                <div class="bg-white/5 rounded-2xl p-4 hover:bg-white/10 transition-all duration-200 border border-white/10">
-                    <div class="flex items-start space-x-4">
-                        <div class="flex-shrink-0">
-                            <div class="w-10 h-10 bg-gradient-to-r from-blue-400 to-purple-500 rounded-2xl flex items-center justify-center">
-                                <i class="fab fa-telegram text-white text-lg"></i>
-                            </div>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="flex items-center justify-between mb-2">
-                                <h4 class="font-semibold text-white truncate">${post.title || 'Пост из Telegram'}</h4>
-                                <span class="text-xs text-gray-400">${this.formatPostDate(post.date)}</span>
-                            </div>
-                            <p class="text-sm text-gray-300 mb-3 line-clamp-2">${post.content || 'Содержимое поста'}</p>
-                            <div class="flex items-center space-x-4 text-xs text-gray-400">
-                                <span class="flex items-center">
-                                    <i class="fas fa-eye mr-1"></i>
-                                    ${post.views || 0}
-                                </span>
-                                <span class="flex items-center">
-                                    <i class="fas fa-heart mr-1"></i>
-                                    ${post.likes || 0}
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            `).join('');
-        },
-        
-        formatPostDate(dateString) {
-            if (!dateString) return 'Неизвестно';
-            try {
-                const date = new Date(dateString);
-                const now = new Date();
-                const diffMs = now - date;
-                const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-                const diffMinutes = Math.floor(diffMs / (1000 * 60));
-                
-                if (diffDays > 7) {
-                    return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
-                } else if (diffDays > 0) {
-                    return `${diffDays} дн. назад`;
-                } else if (diffHours > 0) {
-                    return `${diffHours} ч. назад`;
-                } else if (diffMinutes > 0) {
-                    return `${diffMinutes} мин. назад`;
-                } else {
-                    return 'только что';
-                }
-            } catch (e) {
-                return 'Неизвестно';
-            }
         },
         
         getStatusColor(status) {
