@@ -2,7 +2,7 @@
 <html lang="ru" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>{% block title %}SEABLUU Admin{% endblock %}</title>
     
     <!-- Tailwind CSS -->
@@ -23,9 +23,25 @@
     <link href="/static/css/responsive.css" rel="stylesheet">
     
     <style>
-        /* Кастомные стили для темной темы iOS */
+        /* Mobile-first стили */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            font-size: 16px; /* Базовый размер для мобильных */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        /* Touch-оптимизированные элементы */
+        [data-touch-target] {
+            min-height: 44px;
+            min-width: 44px;
+            touch-action: manipulation;
+        }
+        
+        button, a[class*="btn"], .btn-primary {
+            min-height: 44px;
+            padding: 12px 16px;
+            font-size: 16px; /* Предотвращает масштабирование в iOS */
         }
         
         .glass-effect {
@@ -77,177 +93,81 @@
             }
         }
         
-        /* Стили для скроллбара */
-        ::-webkit-scrollbar {
-            width: 6px;
+        /* Mobile Navigation */
+        .mobile-bottom-nav {
+            padding-bottom: env(safe-area-inset-bottom);
         }
         
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
+        .mobile-nav-item {
+            min-height: 60px;
+            padding: 8px 4px;
         }
         
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
+        /* Touch Scroll Optimization */
+        .touch-scroll {
+            -webkit-overflow-scrolling: touch;
+            scroll-behavior: smooth;
         }
         
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
+        /* Mobile Table Adaptations */
+        .mobile-table-container {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
         }
 
-        /* Стили для выпадающих списков */
-        select {
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            appearance: none !important;
-            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
-            padding-right: 40px !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 1rem !important;
-            padding: 0.5rem 1rem !important;
-            color: white !important;
-            font-size: 0.875rem !important;
-            line-height: 1.25rem !important;
-            width: 100% !important;
+        .mobile-table {
+            min-width: 700px;
         }
-
-        select:focus {
-            outline: none !important;
-            border-color: rgba(0, 122, 255, 0.5) !important;
-            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1) !important;
-            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23007AFF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
+        
+        /* Form Optimization */
+        input, select, textarea {
+            font-size: 16px !important;
+            min-height: 44px;
+            padding: 12px 16px;
         }
-
-        select option {
-            background: #1f2937 !important;
-            color: white !important;
+        
+        /* Responsive Grid */
+        .responsive-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 16px;
         }
-
-        /* Скрываем стандартную стрелку в IE */
-        select::-ms-expand {
-            display: none !important;
+        
+        @media (min-width: 768px) {
+            .responsive-grid {
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+            }
         }
-
-        /* Мобильная адаптация */
-        @media (max-width: 768px) {
+        
+        @media (min-width: 1024px) {
+            .responsive-grid {
+                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+                gap: 24px;
+            }
+        }
+        
+        /* Desktop-only improvements */
+        @media (min-width: 1024px) {
             body {
                 font-size: 14px;
             }
             
-            .glass-effect {
-                margin: 0.5rem;
-                padding: 1rem;
-            }
-            
-            .max-w-2xl, .max-w-4xl, .max-w-6xl {
-                max-width: 100% !important;
-                margin: 0.5rem;
-            }
-            
-            /* Адаптация таблиц для мобильных */
-            table {
-                font-size: 0.75rem;
-                width: 100%;
-            }
-            
-            td, th {
-                padding: 0.5rem 0.25rem;
-                white-space: nowrap;
-            }
-            
-            /* Адаптация форм для мобильных */
-            .grid {
-                gap: 0.5rem;
-            }
-            
-            .grid-cols-1, .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6 {
-                grid-template-columns: 1fr !important;
-            }
-            
-            input, select, textarea {
-                font-size: 16px !important; /* Отключаем масштабирование на iOS */
-                min-height: 44px; /* Минимальный размер для удобного нажатия */
-            }
-            
-            /* Скрываем сложные элементы на мобильных */
-            .hidden-mobile {
-                display: none !important;
-            }
-            
-            /* Показываем важные элементы на мобильных */
-            .show-mobile {
-                display: block !important;
-            }
-            
-            /* Улучшаем кнопки для мобильных */
-            button, .btn-primary, a[class*="btn"] {
-                min-height: 44px; /* Минимальный размер для удобного нажатия */
-                padding: 0.75rem 1rem;
+            button, a[class*="btn"], .btn-primary {
+                min-height: 40px;
+                padding: 8px 16px;
                 font-size: 14px;
-            }
-            
-            /* Адаптация навигации */
-            .flex.space-x-2, .flex.space-x-3, .flex.space-x-4 {
-                flex-wrap: wrap;
-                gap: 0.5rem;
-            }
-            
-            /* Адаптация sidebar для мобильных */
-            .w-64 {
-                width: 100vw;
-            }
-            
-            /* Улучшаем скролл на мобильных */
-            .overflow-x-auto {
-                -webkit-overflow-scrolling: touch;
-                overflow-x: auto;
-            }
-            
-            /* Адаптация заголовков */
-            h1, h2, h3 {
-                font-size: 1.25rem;
-            }
-            
-            /* Адаптация отступов */
-            .p-6 {
-                padding: 1rem;
-            }
-            
-            .space-y-6 > * + * {
-                margin-top: 1rem;
-            }
-            
-            /* Компактные элементы на мобильных */
-            .compact-mobile {
-                padding: 0.5rem;
-                margin: 0.25rem;
-            }
-        }
-
-        /* Дополнительные улучшения для очень маленьких экранов */
-        @media (max-width: 480px) {
-            body {
-                font-size: 14px;
-            }
-            
-            h1, h2, h3 {
-                font-size: 1.25rem;
-            }
-            
-            .p-6 {
-                padding: 1rem;
-            }
-            
-            .space-y-6 > * + * {
-                margin-top: 1rem;
             }
         }
     </style>
 </head>
 <body class="h-full bg-gradient-to-br from-gray-900 to-black text-white">
-    <!-- Sidebar Navigation -->
-    <div x-data="{ sidebarOpen: false }" class="flex h-full">
+    <div x-data="{ sidebarOpen: false, touchStartX: 0, touchEndX: 0 }" 
+         class="flex h-full"
+         @touchstart="touchStartX = $event.touches[0].clientX"
+         @touchend="touchEndX = $event.changedTouches[0].clientX; 
+                   if (touchEndX < touchStartX - 50 && window.innerWidth < 1024) sidebarOpen = true;">
+        
         <!-- Mobile sidebar backdrop -->
         <div x-show="sidebarOpen" 
              x-transition:enter="transition-opacity ease-linear duration-300"
@@ -281,57 +201,56 @@
                             SEABLUU
                         </span>
                     </div>
-                    <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
+                    <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white p-2 rounded-xl" data-touch-target>
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
 
                 <!-- Navigation -->
                 <nav class="flex-1 p-4 space-y-2">
-                    <a href="/admin/" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-chart-pie w-5"></i>
                         <span>Дашборд</span>
                     </a>
                     
-                    <a href="/admin/orders" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'orders' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/orders" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'orders' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-box w-5"></i>
                         <span>Заказы</span>
                     </a>
                     
-                    <a href="/admin/participants" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/participants" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-users w-5"></i>
                         <span>Участники</span>
                     </a>
                     
-                    <a href="/admin/addresses" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'addresses' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/addresses" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'addresses' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-map-marker-alt w-5"></i>
                         <span>Адреса</span>
                     </a>
                     
-                    <a href="/admin/reports" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'reports' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/reports" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'reports' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-chart-bar w-5"></i>
                         <span>Отчеты</span>
                     </a>
 
-                    <a href="/admin/broadcast" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'broadcast' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/broadcast" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'broadcast' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-bullhorn w-5"></i>
                         <span>Рассылки</span>
                     </a>
 
-                    <!-- Новые пункты меню -->
                     {% if current_admin.role == 'super_admin' %}
-                    <a href="/admin/admin-users" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_users' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/admin-users" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_users' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-user-shield w-5"></i>
                         <span>Администраторы</span>
                     </a>
                     {% endif %}
                     
-                    <a href="/admin/admin-chat" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/admin-chat" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-comments w-5"></i>
                         <span>Чат админов</span>
                     </a>
                     
-                    <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'settings' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
+                    <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'settings' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                         <i class="fas fa-cog w-5"></i>
                         <span>Настройки</span>
                     </a>
@@ -357,11 +276,11 @@
                                 {% endif %}
                             </p>
                         </div>
-                        <a href="/admin/profile" class="text-gray-400 hover:text-white">
+                        <a href="/admin/profile" class="text-gray-400 hover:text-white p-2 rounded-xl" data-touch-target>
                             <i class="fas fa-edit"></i>
                         </a>
                     </div>
-                    <a href="/admin/logout" class="block w-full mt-2 text-center text-sm text-gray-400 hover:text-white p-2 rounded-2xl hover:bg-white/5 transition-all duration-200">
+                    <a href="/admin/logout" class="block w-full mt-2 text-center text-sm text-gray-400 hover:text-white p-2 rounded-2xl hover:bg-white/5 transition-all duration-200" data-touch-target>
                         <i class="fas fa-sign-out-alt mr-2"></i>Выйти
                     </a>
                 </div>
@@ -369,15 +288,15 @@
         </div>
 
         <!-- Main content -->
-        <div class="flex-1 flex flex-col lg:ml-0">
+        <div class="flex-1 flex flex-col lg:ml-0 pb-16 lg:pb-0"> <!-- Padding для мобильной навигации -->
             <!-- Top bar -->
             <header class="glass-effect border-b border-white/10">
                 <div class="flex items-center justify-between p-4">
                     <div class="flex items-center space-x-4">
-                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-2 rounded-2xl hover:bg-white/5">
+                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-3 rounded-2xl hover:bg-white/5" data-touch-target>
                             <i class="fas fa-bars"></i>
                         </button>
-                        <h1 class="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                        <h1 class="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
                             {% block page_title %}Панель управления{% endblock %}
                         </h1>
                     </div>
@@ -399,18 +318,43 @@
             </header>
 
             <!-- Page content -->
-            <main class="flex-1 overflow-auto p-6">
+            <main class="flex-1 overflow-auto p-4 lg:p-6 touch-scroll">
                 <div class="fade-in">
                     {% block content %}{% endblock %}
                 </div>
             </main>
         </div>
+
+        <!-- Mobile Bottom Navigation -->
+        <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-white/10 z-40 p-2 mobile-bottom-nav">
+            <div class="grid grid-cols-5 gap-1">
+                <a href="/admin/" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
+                    <i class="fas fa-chart-pie text-sm mb-1"></i>
+                    <span class="text-xs">Главная</span>
+                </a>
+                <a href="/admin/orders" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'orders' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
+                    <i class="fas fa-box text-sm mb-1"></i>
+                    <span class="text-xs">Заказы</span>
+                </a>
+                <a href="/admin/participants" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
+                    <i class="fas fa-users text-sm mb-1"></i>
+                    <span class="text-xs">Люди</span>
+                </a>
+                <a href="/admin/reports" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'reports' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
+                    <i class="fas fa-chart-bar text-sm mb-1"></i>
+                    <span class="text-xs">Отчеты</span>
+                </a>
+                <button @click="sidebarOpen = true" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200" data-touch-target>
+                    <i class="fas fa-bars text-sm mb-1"></i>
+                    <span class="text-xs">Еще</span>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Инициализация Alpine.js - только базовые функции
+        // Инициализация Alpine.js
         document.addEventListener('alpine:init', () => {
-            // Базовые утилиты для всех страниц
             Alpine.data('pageUtils', () => ({
                 formatDate(dateString) {
                     if (!dateString) return 'Неизвестно';
@@ -428,7 +372,6 @@
                 },
                 
                 showNotification(message, type = 'info') {
-                    // Создаем уведомление
                     const notification = document.createElement('div');
                     const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
                                    type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
@@ -445,7 +388,6 @@
                     
                     document.body.appendChild(notification);
                     
-                    // Автоматически удаляем через 5 секунд
                     setTimeout(() => {
                         if (notification.parentNode) {
                             notification.parentNode.removeChild(notification);
@@ -453,49 +395,48 @@
                     }, 5000);
                 },
                 
-                async apiCall(url, options = {}) {
-                    try {
-                        const response = await fetch(url, {
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...options.headers
-                            },
-                            ...options
+                // Lazy Loading для изображений
+                lazyLoadImages() {
+                    const images = document.querySelectorAll('img[data-src]');
+                    const imageObserver = new IntersectionObserver((entries, observer) => {
+                        entries.forEach(entry => {
+                            if (entry.isIntersecting) {
+                                const img = entry.target;
+                                img.src = img.dataset.src;
+                                img.classList.remove('lazy');
+                                imageObserver.unobserve(img);
+                            }
                         });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json().catch(() => ({}));
-                            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                        }
-                        
-                        return await response.json();
-                    } catch (error) {
-                        console.error('API call error:', error);
-                        this.showNotification(error.message, 'error');
-                        throw error;
-                    }
+                    });
+                    
+                    images.forEach(img => imageObserver.observe(img));
                 }
             }));
         });
 
-        // Принудительное применение стилей к выпадающим спискам
-        function applySelectStyles() {
-            const allSelects = document.querySelectorAll('select');
-            allSelects.forEach(select => {
-                select.classList.add('custom-select');
+        // Touch optimization
+        document.addEventListener('DOMContentLoaded', function() {
+            // Apply touch target styles
+            const touchTargets = document.querySelectorAll('[data-touch-target]');
+            touchTargets.forEach(el => {
+                el.style.minHeight = '44px';
+                el.style.minWidth = '44px';
             });
-        }
-
-        // Применяем стили после загрузки
-        document.addEventListener('DOMContentLoaded', applySelectStyles);
-        document.addEventListener('alpine:init', applySelectStyles);
-        
-        // Периодически проверяем и применяем стили (для динамического контента)
-        setInterval(applySelectStyles, 1000);
-
-        // Обработка ошибок загрузки страницы
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
+            
+            // Prevent zoom on double-tap
+            let lastTouchEnd = 0;
+            document.addEventListener('touchend', function (event) {
+                const now = (new Date()).getTime();
+                if (now - lastTouchEnd <= 300) {
+                    event.preventDefault();
+                }
+                lastTouchEnd = now;
+            }, false);
+            
+            // Initialize lazy loading
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.lazyLoadImages();
+            }
         });
     </script>
 </body>
