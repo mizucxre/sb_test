@@ -31,6 +31,10 @@
 
 @media (max-width: 768px) {
     /* Основные настройки для мобильных */
+    body {
+        font-size: 14px;
+    }
+    
     .space-y-6 > * + * {
         margin-top: 1rem !important;
     }
@@ -46,14 +50,19 @@
         font-size: 1.125rem !important;
     }
     
-    /* Адаптивная таблица участников */
-    .participants-table {
-        font-size: 0.75rem;
+    .text-lg {
+        font-size: 1rem !important;
     }
     
-    .participants-table th,
-    .participants-table td {
-        padding: 0.5rem !important;
+    /* Адаптивная таблица адресов */
+    .table-container {
+        width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+    
+    .table-container table {
+        min-width: 600px;
     }
     
     /* Компактные кнопки действий */
@@ -89,11 +98,6 @@
         gap: 1rem !important;
     }
     
-    /* Скрываем сложные элементы на мобильных */
-    .complex-element {
-        display: none !important;
-    }
-    
     /* Увеличиваем зону клика для мобильных */
     button, a {
         min-height: 44px !important;
@@ -108,17 +112,8 @@
     .fa-2x {
         font-size: 1.5em !important;
     }
-}
-
-@media (max-width: 640px) {
-    /* Еще более компактные стили для маленьких экранов */
-    .glass-effect {
-        margin: 0.5rem !important;
-        padding: 0.75rem !important;
-        border-radius: 1rem !important;
-    }
     
-    /* Минимальные отступы */
+    /* Улучшенные отступы для мобильных */
     .p-6 {
         padding: 1rem !important;
     }
@@ -133,33 +128,67 @@
         padding-bottom: 0.75rem !important;
     }
     
-    /* Компактные заголовки */
-    .text-lg {
-        font-size: 1rem !important;
+    /* Улучшенные карточки для мобильных */
+    .glass-effect {
+        margin: 0.5rem !important;
+        padding: 0.75rem !important;
+        border-radius: 1rem !important;
     }
     
-    /* Адаптивные таблицы с горизонтальным скроллом */
-    .table-container {
-        width: 100%;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
+    /* Компактный текст */
+    .text-sm {
+        font-size: 0.75rem !important;
     }
     
-    .table-container table {
-        min-width: 600px;
+    /* Адаптивные поля ввода */
+    input, select, textarea {
+        font-size: 16px !important; /* Предотвращает масштабирование в iOS */
+        padding: 0.75rem !important;
     }
     
-    /* Скрываем лишние колонки в таблицах */
+    /* Специфичные стили для таблиц на мобильных */
+    .mobile-table th,
+    .mobile-table td {
+        padding: 0.5rem !important;
+        font-size: 0.75rem;
+    }
+    
+    /* Скрываем сложные элементы на мобильных */
+    .desktop-only {
+        display: none !important;
+    }
+    
     .mobile-hidden {
         display: none !important;
     }
     
-    /* Показываем важную информацию в компактном виде */
     .mobile-visible {
         display: block !important;
     }
+}
+
+@media (max-width: 640px) {
+    /* Еще более компактные стили для маленьких экранов */
+    body {
+        font-size: 13px;
+    }
     
-    /* Адаптивные кнопки с иконками */
+    .container {
+        padding: 0.5rem !important;
+    }
+    
+    /* Минимальные отступы */
+    .p-6 {
+        padding: 0.75rem !important;
+    }
+    
+    /* Уменьшаем размер аватаров */
+    .avatar-sm {
+        width: 32px !important;
+        height: 32px !important;
+    }
+    
+    /* Компактные кнопки с иконками */
     .icon-button {
         padding: 0.5rem !important;
         margin: 0.25rem !important;
@@ -169,38 +198,17 @@
         font-size: 1rem !important;
     }
     
-    /* Адаптивный текст */
-    .text-sm {
-        font-size: 0.75rem !important;
-    }
-    
     /* Компактные карточки */
     .card-compact {
         padding: 0.75rem !important;
         margin: 0.25rem !important;
-    }
-    
-    /* Уменьшаем размер аватаров */
-    .avatar-sm {
-        width: 32px !important;
-        height: 32px !important;
-    }
-    
-    /* Адаптивные поля ввода */
-    input, select, textarea {
-        font-size: 16px !important; /* Предотвращает масштабирование в iOS */
-        padding: 0.75rem !important;
     }
 }
 
 @media (max-width: 480px) {
     /* Крайне компактные стили для очень маленьких экранов */
     body {
-        font-size: 14px !important;
-    }
-    
-    .container {
-        padding: 0.5rem !important;
+        font-size: 12px !important;
     }
     
     /* Минималистичные таблицы */
@@ -290,6 +298,37 @@
     
     .admin-chat .message-input button {
         width: 100% !important;
+    }
+}
+
+/* Страница адресов на мобильных */
+@media (max-width: 768px) {
+    .addresses-page .search-filters {
+        grid-template-columns: 1fr !important;
+        gap: 0.75rem !important;
+    }
+    
+    .addresses-page .table-header {
+        flex-direction: column !important;
+        gap: 1rem !important;
+    }
+}
+
+/* Страница отчетов на мобильных */
+@media (max-width: 768px) {
+    .reports-page .stats-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+    
+    .reports-page .reports-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
+    }
+    
+    .reports-page .export-grid {
+        grid-template-columns: 1fr !important;
+        gap: 1rem !important;
     }
 }
 
