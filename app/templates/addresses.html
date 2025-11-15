@@ -1,0 +1,247 @@
+{% extends "base.html" %}
+
+{% block page_title %}Адреса клиентов{% endblock %}
+
+{% block content %}
+<div x-data="addresses" class="space-y-6">
+    <!-- Header -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="flex items-center justify-between">
+            <h3 class="text-lg font-semibold">Адреса клиентов</h3>
+            <div class="flex items-center space-x-4">
+                <button @click="exportToXLSX()" class="btn-primary px-4 py-2 rounded-2xl font-medium">
+                    <i class="fas fa-file-excel mr-2"></i>Выгрузить в XLSX
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Поиск по имени</label>
+                <input type="text" x-model="searchName" placeholder="Введите имя..."
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Поиск по username</label>
+                <input type="text" x-model="searchUsername" placeholder="Введите username..."
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Город</label>
+                <select x-model="selectedCity" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2">
+                    <option value="">Все города</option>
+                    <template x-for="city in cities" :key="city">
+                        <option x-text="city" :value="city"></option>
+                    </template>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-gray-400 mb-2">Сортировка</label>
+                <select x-model="sortBy" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2">
+                    <option value="username">По username (A-Z)</option>
+                    <option value="full_name">По имени (A-Z)</option>
+                    <option value="city">По городу</option>
+                    <option value="updated_at">По дате обновления</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Addresses List -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="overflow-x-auto">
+            <table class="w-full">
+                <thead>
+                    <tr class="border-b border-white/10">
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Клиент</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Контакт</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Адрес</th>
+                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Обновлено</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <template x-if="loading">
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                <p>Загрузка адресов...</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-if="!loading && filteredAddresses.length === 0">
+                        <tr>
+                            <td colspan="4" class="py-8 text-center text-gray-400">
+                                <i class="fas fa-map-marker-alt text-2xl mb-2"></i>
+                                <p>Адреса не найдены</p>
+                            </td>
+                        </tr>
+                    </template>
+                    <template x-for="address in filteredAddresses" :key="address.user_id">
+                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                            <td class="py-4 px-4">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                        <i class="fas fa-user text-white text-sm"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-medium" x-text="address.full_name || 'Не указано'"></p>
+                                        <p class="text-sm text-gray-400" x-text="'@' + address.username"></p>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="space-y-1">
+                                    <p class="text-sm" x-text="address.phone || 'Не указан'"></p>
+                                    <p class="text-xs text-gray-400">Telegram ID: <span x-text="address.user_id"></span></p>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4">
+                                <div class="space-y-1">
+                                    <p class="text-sm font-medium" x-text="address.city || 'Город не указан'"></p>
+                                    <p class="text-sm text-gray-400" x-text="address.address || 'Адрес не указан'"></p>
+                                    <p class="text-xs text-gray-400" x-text="address.postcode || 'Индекс не указан'"></p>
+                                </div>
+                            </td>
+                            <td class="py-4 px-4 text-gray-400 text-sm">
+                                <span x-text="formatDate(address.updated_at)"></span>
+                            </td>
+                        </tr>
+                    </template>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Pagination -->
+        <div class="flex items-center justify-between mt-6" x-show="!loading && filteredAddresses.length > 0">
+            <div class="text-sm text-gray-400">
+                Показано <span x-text="filteredAddresses.length"></span> из <span x-text="addresses.length"></span> адресов
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('addresses', () => ({
+        addresses: [],
+        loading: true,
+        searchName: '',
+        searchUsername: '',
+        selectedCity: '',
+        sortBy: 'username',
+        
+        get cities() {
+            const cities = [...new Set(this.addresses.map(a => a.city).filter(c => c))];
+            return cities.sort();
+        },
+        
+        get filteredAddresses() {
+            let filtered = this.addresses;
+            
+            // Фильтрация по имени
+            if (this.searchName) {
+                filtered = filtered.filter(a => 
+                    a.full_name && a.full_name.toLowerCase().includes(this.searchName.toLowerCase())
+                );
+            }
+            
+            // Фильтрация по username
+            if (this.searchUsername) {
+                filtered = filtered.filter(a => 
+                    a.username.toLowerCase().includes(this.searchUsername.toLowerCase())
+                );
+            }
+            
+            // Фильтрация по городу
+            if (this.selectedCity) {
+                filtered = filtered.filter(a => a.city === this.selectedCity);
+            }
+            
+            // Сортировка
+            filtered = filtered.sort((a, b) => {
+                const aVal = a[this.sortBy] || '';
+                const bVal = b[this.sortBy] || '';
+                
+                if (this.sortBy === 'updated_at') {
+                    return new Date(bVal) - new Date(aVal);
+                }
+                
+                return aVal.toString().localeCompare(bVal.toString(), 'ru');
+            });
+            
+            return filtered;
+        },
+        
+        async init() {
+            await this.loadAddresses();
+        },
+        
+        async loadAddresses() {
+            this.loading = true;
+            try {
+                const response = await fetch('/admin/api/addresses');
+                if (!response.ok) throw new Error('Failed to fetch addresses');
+                
+                const data = await response.json();
+                this.addresses = data.addresses || [];
+            } catch (error) {
+                console.error('Error loading addresses:', error);
+                this.showNotification('Ошибка загрузки адресов', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async exportToXLSX() {
+            try {
+                this.showNotification('Подготовка файла...', 'info');
+                
+                const response = await fetch('/admin/api/addresses/export/xlsx');
+                if (!response.ok) throw new Error('Export failed');
+                
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.style.display = 'none';
+                a.href = url;
+                a.download = `addresses_${new Date().toISOString().slice(0, 10)}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                
+                this.showNotification('Файл успешно выгружен', 'success');
+            } catch (error) {
+                console.error('Export error:', error);
+                this.showNotification('Ошибка при выгрузке', 'error');
+            }
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'Неизвестно';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Неизвестно';
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                alert(message);
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}
