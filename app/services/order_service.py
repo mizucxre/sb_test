@@ -383,6 +383,7 @@ class ParticipantService:
     async def get_participants_paginated(
         order_id: Optional[str] = None,
         paid: Optional[bool] = None,
+        search: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> Dict[str, Any]:
@@ -403,6 +404,11 @@ class ParticipantService:
                     param_count += 1
                     where_conditions.append(f"paid = ${param_count}")
                     params.append(paid)
+                
+                if search:
+                    param_count += 1
+                    where_conditions.append(f"(username ILIKE ${param_count} OR order_id ILIKE ${param_count})")
+                    params.append(f"%{search}%")
                 
                 where_clause = ""
                 if where_conditions:
