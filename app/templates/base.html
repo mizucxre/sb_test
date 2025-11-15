@@ -77,8 +77,10 @@
             border-top: 1px solid rgba(255, 255, 255, 0.1);
             padding: 1rem;
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(4, 1fr);
             gap: 0.5rem;
+            max-height: 60vh;
+            overflow-y: auto;
         }
         
         .expanded-menu-item {
@@ -304,6 +306,11 @@
                  x-transition:leave-start="opacity-100 transform translate-y-0"
                  x-transition:leave-end="opacity-0 transform translate-y-10"
                  class="expanded-menu">
+                
+                <a href="/admin/participants" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-users text-sm mb-1"></i>
+                    <span class="text-xs">Участники</span>
+                </a>
                 
                 <a href="/admin/addresses" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'addresses' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
                     <i class="fas fa-map-marker-alt text-sm mb-1"></i>
