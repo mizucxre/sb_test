@@ -125,6 +125,83 @@
         select::-ms-expand {
             display: none !important;
         }
+
+        /* Мобильная адаптация */
+        @media (max-width: 768px) {
+            .glass-effect {
+                margin: 0.5rem;
+                padding: 1rem;
+            }
+            
+            .max-w-2xl {
+                max-width: 100% !important;
+                margin: 0.5rem;
+            }
+            
+            /* Адаптация таблиц для мобильных */
+            table {
+                font-size: 0.875rem;
+            }
+            
+            td, th {
+                padding: 0.5rem 0.25rem;
+            }
+            
+            /* Адаптация форм для мобильных */
+            .grid {
+                gap: 0.5rem;
+            }
+            
+            input, select, textarea {
+                font-size: 16px !important; /* Отключаем масштабирование на iOS */
+            }
+            
+            /* Скрываем сложные элементы на мобильных */
+            .hidden-mobile {
+                display: none;
+            }
+            
+            /* Улучшаем кнопки для мобильных */
+            button, .btn-primary {
+                min-height: 44px; /* Минимальный размер для удобного нажатия */
+                padding: 0.75rem 1rem;
+            }
+            
+            /* Адаптация навигации */
+            .flex.space-x-4 {
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            
+            /* Адаптация sidebar для мобильных */
+            .w-64 {
+                width: 100vw;
+            }
+            
+            /* Улучшаем скролл на мобильных */
+            .overflow-x-auto {
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+
+        /* Дополнительные улучшения для очень маленьких экранов */
+        @media (max-width: 480px) {
+            body {
+                font-size: 14px;
+            }
+            
+            h1, h2, h3 {
+                font-size: 1.25rem;
+            }
+            
+            .p-6 {
+                padding: 1rem;
+            }
+            
+            .space-y-6 > * + * {
+                margin-top: 1rem;
+            }
+        }
     </style>
 </head>
 <body class="h-full bg-gradient-to-br from-gray-900 to-black text-white">
