@@ -3,178 +3,182 @@
 {% block page_title %}Дашборд{% endblock %}
 
 {% block content %}
-<div x-data="dashboard()" class="space-y-6">
+<div x-data="dashboard()" class="space-y-4 lg:space-y-6">
     <!-- Loading skeleton -->
     <template x-if="loading">
-        <div class="space-y-6">
+        <div class="space-y-4 lg:space-y-6">
             <!-- Stats skeleton -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <div class="glass-effect rounded-2xl p-6 animate-pulse">
-                    <div class="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
-                    <div class="h-8 bg-white/10 rounded w-3/4"></div>
+            <div class="responsive-grid gap-3 lg:gap-6">
+                <div class="glass-effect rounded-2xl p-4 lg:p-6 animate-pulse">
+                    <div class="h-3 bg-white/10 rounded w-1/2 mb-3 lg:mb-4"></div>
+                    <div class="h-6 lg:h-8 bg-white/10 rounded w-3/4"></div>
                 </div>
-                <div class="glass-effect rounded-2xl p-6 animate-pulse">
-                    <div class="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
-                    <div class="h-8 bg-white/10 rounded w-3/4"></div>
+                <div class="glass-effect rounded-2xl p-4 lg:p-6 animate-pulse">
+                    <div class="h-3 bg-white/10 rounded w-1/2 mb-3 lg:mb-4"></div>
+                    <div class="h-6 lg:h-8 bg-white/10 rounded w-3/4"></div>
                 </div>
-                <div class="glass-effect rounded-2xl p-6 animate-pulse">
-                    <div class="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
-                    <div class="h-8 bg-white/10 rounded w-3/4"></div>
+                <div class="glass-effect rounded-2xl p-4 lg:p-6 animate-pulse">
+                    <div class="h-3 bg-white/10 rounded w-1/2 mb-3 lg:mb-4"></div>
+                    <div class="h-6 lg:h-8 bg-white/10 rounded w-3/4"></div>
                 </div>
-                <div class="glass-effect rounded-2xl p-6 animate-pulse">
-                    <div class="h-4 bg-white/10 rounded w-1/2 mb-4"></div>
-                    <div class="h-8 bg-white/10 rounded w-3/4"></div>
+                <div class="glass-effect rounded-2xl p-4 lg:p-6 animate-pulse">
+                    <div class="h-3 bg-white/10 rounded w-1/2 mb-3 lg:mb-4"></div>
+                    <div class="h-6 lg:h-8 bg-white/10 rounded w-3/4"></div>
                 </div>
             </div>
         </div>
     </template>
 
     <!-- Content -->
-    <div x-show="!loading" class="space-y-6 slide-up">
+    <div x-show="!loading" class="space-y-4 lg:space-y-6 slide-up">
         <!-- Stats Cards -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div class="glass-effect rounded-2xl p-6 card-hover">
+        <div class="responsive-grid gap-3 lg:gap-6">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-gray-400 text-sm font-medium">Всего заказов</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_orders || 0"></p>
+                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Всего заказов</p>
+                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.total_orders || 0"></p>
                     </div>
-                    <div class="w-12 h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-box text-blue-400 text-xl"></i>
+                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-blue-500/20 rounded-2xl flex items-center justify-center">
+                        <i class="fas fa-box text-blue-400 text-sm lg:text-xl"></i>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-effect rounded-2xl p-6 card-hover">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-gray-400 text-sm font-medium">Активных заказов</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.active_orders || 0"></p>
+                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Активных заказов</p>
+                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.active_orders || 0"></p>
                     </div>
-                    <div class="w-12 h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-check-circle text-green-400 text-xl"></i>
+                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-green-500/20 rounded-2xl flex items-center justify-center">
+                        <i class="fas fa-check-circle text-green-400 text-sm lg:text-xl"></i>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-effect rounded-2xl p-6 card-hover">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-gray-400 text-sm font-medium">Уникальных участников</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_participants || 0"></p>
+                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Участников</p>
+                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.total_participants || 0"></p>
                     </div>
-                    <div class="w-12 h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-users text-purple-400 text-xl"></i>
+                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-purple-500/20 rounded-2xl flex items-center justify-center">
+                        <i class="fas fa-users text-purple-400 text-sm lg:text-xl"></i>
                     </div>
                 </div>
             </div>
 
-            <div class="glass-effect rounded-2xl p-6 card-hover">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6 card-hover">
                 <div class="flex items-center justify-between">
                     <div>
-                        <p class="text-gray-400 text-sm font-medium">Подписок</p>
-                        <p class="text-3xl font-bold mt-2" x-text="stats.total_subscriptions || 0"></p>
+                        <p class="text-gray-400 text-xs lg:text-sm font-medium">Подписок</p>
+                        <p class="text-xl lg:text-3xl font-bold mt-1 lg:mt-2" x-text="stats.total_subscriptions || 0"></p>
                     </div>
-                    <div class="w-12 h-12 bg-red-500/20 rounded-2xl flex items-center justify-center">
-                        <i class="fas fa-bell text-red-400 text-xl"></i>
+                    <div class="w-8 h-8 lg:w-12 lg:h-12 bg-red-500/20 rounded-2xl flex items-center justify-center">
+                        <i class="fas fa-bell text-red-400 text-sm lg:text-xl"></i>
                     </div>
                 </div>
             </div>
         </div>
 
         <!-- Quick Actions and System Status -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div class="responsive-grid gap-3 lg:gap-6">
             <!-- Quick Actions Card -->
-            <div class="glass-effect rounded-2xl p-6">
-                <h3 class="text-lg font-semibold mb-4">Быстрые действия</h3>
-                <div class="space-y-3">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6">
+                <h3 class="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Быстрые действия</h3>
+                <div class="space-y-2 lg:space-y-3">
                     <a href="/admin/orders/new" 
-                       class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group">
-                        <div class="w-10 h-10 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                            <i class="fas fa-plus text-blue-400"></i>
+                       class="flex items-center space-x-3 p-3 lg:p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group"
+                       data-touch-target>
+                        <div class="w-8 h-8 lg:w-10 lg:h-10 bg-blue-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <i class="fas fa-plus text-blue-400 text-sm lg:text-base"></i>
                         </div>
-                        <div>
-                            <p class="font-medium">Добавить заказ</p>
-                            <p class="text-sm text-gray-400">Создать новый разбор</p>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-sm lg:text-base truncate">Добавить заказ</p>
+                            <p class="text-xs lg:text-sm text-gray-400 truncate">Создать новый разбор</p>
                         </div>
                     </a>
 
                     <a href="/admin/orders" 
-                       class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group">
-                        <div class="w-10 h-10 bg-green-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                            <i class="fas fa-edit text-green-400"></i>
+                       class="flex items-center space-x-3 p-3 lg:p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group"
+                       data-touch-target>
+                        <div class="w-8 h-8 lg:w-10 lg:h-10 bg-green-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <i class="fas fa-edit text-green-400 text-sm lg:text-base"></i>
                         </div>
-                        <div>
-                            <p class="font-medium">Управление заказами</p>
-                            <p class="text-sm text-gray-400">Редактировать статусы</p>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-sm lg:text-base truncate">Управление заказами</p>
+                            <p class="text-xs lg:text-sm text-gray-400 truncate">Редактировать статусы</p>
                         </div>
                     </a>
 
                     <a href="/admin/broadcast" 
-                       class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group">
-                        <div class="w-10 h-10 bg-purple-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                            <i class="fas fa-bullhorn text-purple-400"></i>
+                       class="flex items-center space-x-3 p-3 lg:p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group"
+                       data-touch-target>
+                        <div class="w-8 h-8 lg:w-10 lg:h-10 bg-purple-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <i class="fas fa-bullhorn text-purple-400 text-sm lg:text-base"></i>
                         </div>
-                        <div>
-                            <p class="font-medium">Создать рассылку</p>
-                            <p class="text-sm text-gray-400">Уведомления пользователям</p>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-sm lg:text-base truncate">Создать рассылку</p>
+                            <p class="text-xs lg:text-sm text-gray-400 truncate">Уведомления пользователям</p>
                         </div>
                     </a>
 
                     <a href="/admin/reports" 
-                       class="flex items-center space-x-3 p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group">
-                        <div class="w-10 h-10 bg-orange-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
-                            <i class="fas fa-chart-bar text-orange-400"></i>
+                       class="flex items-center space-x-3 p-3 lg:p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 group"
+                       data-touch-target>
+                        <div class="w-8 h-8 lg:w-10 lg:h-10 bg-orange-500/20 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform duration-200">
+                            <i class="fas fa-chart-bar text-orange-400 text-sm lg:text-base"></i>
                         </div>
-                        <div>
-                            <p class="font-medium">Просмотр отчетов</p>
-                            <p class="text-sm text-gray-400">Аналитика и статистика</p>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-sm lg:text-base truncate">Просмотр отчетов</p>
+                            <p class="text-xs lg:text-sm text-gray-400 truncate">Аналитика и статистика</p>
                         </div>
                     </a>
                 </div>
             </div>
 
             <!-- System Status -->
-            <div class="glass-effect rounded-2xl p-6">
-                <h3 class="text-lg font-semibold mb-4">Статус системы</h3>
-                <div class="space-y-4">
+            <div class="glass-effect rounded-2xl p-4 lg:p-6">
+                <h3 class="text-base lg:text-lg font-semibold mb-3 lg:mb-4">Статус системы</h3>
+                <div class="space-y-3 lg:space-y-4">
                     <div class="flex items-center justify-between">
-                        <span class="text-gray-400">База данных</span>
-                        <span class="flex items-center text-green-400">
+                        <span class="text-gray-400 text-sm">База данных</span>
+                        <span class="flex items-center text-green-400 text-sm">
                             <i class="fas fa-circle text-xs mr-2"></i>
                             Online
                         </span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-gray-400">Telegram Bot</span>
-                        <span class="flex items-center text-green-400">
+                        <span class="text-gray-400 text-sm">Telegram Bot</span>
+                        <span class="flex items-center text-green-400 text-sm">
                             <i class="fas fa-circle text-xs mr-2"></i>
                             Active
                         </span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-gray-400">API</span>
-                        <span class="flex items-center text-green-400">
+                        <span class="text-gray-400 text-sm">API</span>
+                        <span class="flex items-center text-green-400 text-sm">
                             <i class="fas fa-circle text-xs mr-2"></i>
                             Running
                         </span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-gray-400">Веб-админка</span>
-                        <span class="flex items-center text-green-400">
+                        <span class="text-gray-400 text-sm">Веб-админка</span>
+                        <span class="flex items-center text-green-400 text-sm">
                             <i class="fas fa-circle text-xs mr-2"></i>
                             Online
                         </span>
                     </div>
                     <div class="flex items-center justify-between">
-                        <span class="text-gray-400">Количество админов</span>
-                        <span class="text-gray-300" x-text="stats.admin_count || 1"></span>
+                        <span class="text-gray-400 text-sm">Количество админов</span>
+                        <span class="text-gray-300 text-sm" x-text="stats.admin_count || 1"></span>
                     </div>
                 </div>
                 
                 <!-- Server Info -->
-                <div class="mt-6 pt-4 border-t border-white/10">
-                    <div class="space-y-2 text-sm">
+                <div class="mt-4 lg:mt-6 pt-3 lg:pt-4 border-t border-white/10">
+                    <div class="space-y-1 lg:space-y-2 text-xs lg:text-sm">
                         <div class="flex justify-between">
                             <span class="text-gray-400">Время работы:</span>
                             <span class="text-gray-300" x-text="formatUptime()"></span>
@@ -227,6 +231,9 @@ document.addEventListener('alpine:init', () => {
         
         showError(message) {
             console.error('Dashboard error:', message);
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, 'error');
+            }
         }
     }));
 });
