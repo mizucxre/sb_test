@@ -128,23 +128,29 @@
 
         /* Мобильная адаптация */
         @media (max-width: 768px) {
+            body {
+                font-size: 14px;
+            }
+            
             .glass-effect {
                 margin: 0.5rem;
                 padding: 1rem;
             }
             
-            .max-w-2xl {
+            .max-w-2xl, .max-w-4xl, .max-w-6xl {
                 max-width: 100% !important;
                 margin: 0.5rem;
             }
             
             /* Адаптация таблиц для мобильных */
             table {
-                font-size: 0.875rem;
+                font-size: 0.75rem;
+                width: 100%;
             }
             
             td, th {
                 padding: 0.5rem 0.25rem;
+                white-space: nowrap;
             }
             
             /* Адаптация форм для мобильных */
@@ -152,23 +158,34 @@
                 gap: 0.5rem;
             }
             
+            .grid-cols-1, .grid-cols-2, .grid-cols-3, .grid-cols-4, .grid-cols-5, .grid-cols-6 {
+                grid-template-columns: 1fr !important;
+            }
+            
             input, select, textarea {
                 font-size: 16px !important; /* Отключаем масштабирование на iOS */
+                min-height: 44px; /* Минимальный размер для удобного нажатия */
             }
             
             /* Скрываем сложные элементы на мобильных */
             .hidden-mobile {
-                display: none;
+                display: none !important;
+            }
+            
+            /* Показываем важные элементы на мобильных */
+            .show-mobile {
+                display: block !important;
             }
             
             /* Улучшаем кнопки для мобильных */
-            button, .btn-primary {
+            button, .btn-primary, a[class*="btn"] {
                 min-height: 44px; /* Минимальный размер для удобного нажатия */
                 padding: 0.75rem 1rem;
+                font-size: 14px;
             }
             
             /* Адаптация навигации */
-            .flex.space-x-4 {
+            .flex.space-x-2, .flex.space-x-3, .flex.space-x-4 {
                 flex-wrap: wrap;
                 gap: 0.5rem;
             }
@@ -181,6 +198,27 @@
             /* Улучшаем скролл на мобильных */
             .overflow-x-auto {
                 -webkit-overflow-scrolling: touch;
+                overflow-x: auto;
+            }
+            
+            /* Адаптация заголовков */
+            h1, h2, h3 {
+                font-size: 1.25rem;
+            }
+            
+            /* Адаптация отступов */
+            .p-6 {
+                padding: 1rem;
+            }
+            
+            .space-y-6 > * + * {
+                margin-top: 1rem;
+            }
+            
+            /* Компактные элементы на мобильных */
+            .compact-mobile {
+                padding: 0.5rem;
+                margin: 0.25rem;
             }
         }
 
