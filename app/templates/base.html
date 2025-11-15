@@ -26,7 +26,7 @@
         /* Mobile-first стили */
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            font-size: 16px; /* Базовый размер для мобильных */
+            font-size: 16px;
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
         }
@@ -41,7 +41,7 @@
         button, a[class*="btn"], .btn-primary {
             min-height: 44px;
             padding: 12px 16px;
-            font-size: 16px; /* Предотвращает масштабирование в iOS */
+            font-size: 16px;
         }
         
         .glass-effect {
@@ -50,52 +50,14 @@
             border: 1px solid rgba(255, 255, 255, 0.1);
         }
         
-        .card-hover {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .card-hover:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
-            transition: all 0.3s ease;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px rgba(0, 122, 255, 0.3);
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.6s ease-in-out;
-        }
-        
-        .slide-up {
-            animation: slideUp 0.5s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-            from { 
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to { 
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
         /* Mobile Navigation */
         .mobile-bottom-nav {
             padding-bottom: env(safe-area-inset-bottom);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        .mobile-bottom-nav.expanded {
+            transform: translateY(-180px);
         }
         
         .mobile-nav-item {
@@ -103,51 +65,40 @@
             padding: 8px 4px;
         }
         
-        /* Touch Scroll Optimization */
-        .touch-scroll {
-            -webkit-overflow-scrolling: touch;
-            scroll-behavior: smooth;
-        }
-        
-        /* Mobile Table Adaptations */
-        .mobile-table-container {
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
+        /* Mobile header optimization */
+        .mobile-header {
+            min-height: 60px;
+            padding: 0.5rem 1rem;
         }
 
-        .mobile-table {
-            min-width: 700px;
-        }
-        
-        /* Form Optimization */
-        input, select, textarea {
-            font-size: 16px !important;
-            min-height: 44px;
-            padding: 12px 16px;
-        }
-        
-        /* Responsive Grid */
-        .responsive-grid {
+        /* Expanded menu styles */
+        .expanded-menu {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: rgba(17, 24, 39, 0.98);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 1rem;
             display: grid;
-            grid-template-columns: 1fr;
-            gap: 16px;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
         }
         
-        @media (min-width: 768px) {
-            .responsive-grid {
-                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-                gap: 20px;
-            }
+        .expanded-menu-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60px;
+            padding: 0.5rem;
+            border-radius: 0.75rem;
+            text-decoration: none;
+            transition: all 0.2s ease;
         }
         
-        @media (min-width: 1024px) {
-            .responsive-grid {
-                grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-                gap: 24px;
-            }
-        }
-        
-        /* Desktop-only improvements */
+        /* Responsive adjustments */
         @media (min-width: 1024px) {
             body {
                 font-size: 14px;
@@ -162,11 +113,12 @@
     </style>
 </head>
 <body class="h-full bg-gradient-to-br from-gray-900 to-black text-white">
-    <div x-data="{ sidebarOpen: false, touchStartX: 0, touchEndX: 0 }" 
-         class="flex h-full"
-         @touchstart="touchStartX = $event.touches[0].clientX"
-         @touchend="touchEndX = $event.changedTouches[0].clientX; 
-                   if (touchEndX < touchStartX - 50 && window.innerWidth < 1024) sidebarOpen = true;">
+    <div x-data="{ 
+        sidebarOpen: false, 
+        mobileMenuExpanded: false,
+        touchStartX: 0, 
+        touchEndX: 0 
+    }" class="flex h-full">
         
         <!-- Mobile sidebar backdrop -->
         <div x-show="sidebarOpen" 
@@ -288,30 +240,29 @@
         </div>
 
         <!-- Main content -->
-        <div class="flex-1 flex flex-col lg:ml-0 pb-16 lg:pb-0"> <!-- Padding для мобильной навигации -->
-            <!-- Top bar -->
-            <header class="glass-effect border-b border-white/10">
-                <div class="flex items-center justify-between p-4">
-                    <div class="flex items-center space-x-4">
-                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-3 rounded-2xl hover:bg-white/5" data-touch-target>
-                            <i class="fas fa-bars"></i>
+        <div class="flex-1 flex flex-col lg:ml-0 pb-20 lg:pb-0">
+            <!-- Top bar - Compact on mobile -->
+            <header class="glass-effect border-b border-white/10 mobile-header">
+                <div class="flex items-center justify-between h-full px-4">
+                    <div class="flex items-center space-x-3">
+                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-2 rounded-xl hover:bg-white/5" data-touch-target>
+                            <i class="fas fa-bars text-lg"></i>
                         </button>
-                        <h1 class="text-xl lg:text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                        <h1 class="text-lg lg:text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate max-w-[200px] lg:max-w-none">
                             {% block page_title %}Панель управления{% endblock %}
                         </h1>
                     </div>
                     
-                    <div class="flex items-center space-x-4">
+                    <div class="flex items-center space-x-3">
                         <!-- User info in header for mobile -->
-                        <div class="flex items-center space-x-3 lg:hidden">
+                        <div class="flex items-center space-x-2 lg:hidden">
                             {% if current_admin.avatar_url %}
-                            <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-8 h-8 rounded-full">
+                            <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-6 h-6 rounded-full">
                             {% else %}
-                            <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
-                                <i class="fas fa-user text-white text-sm"></i>
+                            <div class="w-6 h-6 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-white text-xs"></i>
                             </div>
                             {% endif %}
-                            <span class="text-sm font-medium">{{ current_admin.username }}</span>
                         </div>
                     </div>
                 </div>
@@ -326,34 +277,90 @@
         </div>
 
         <!-- Mobile Bottom Navigation -->
-        <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-white/10 z-40 p-2 mobile-bottom-nav">
-            <div class="grid grid-cols-5 gap-1">
+        <div class="lg:hidden fixed bottom-0 left-0 right-0 bg-gray-900/95 backdrop-blur-lg border-t border-white/10 z-40 mobile-bottom-nav"
+             :class="{ 'expanded': mobileMenuExpanded }">
+            
+            <!-- Expanded Menu -->
+            <div x-show="mobileMenuExpanded" 
+                 x-transition:enter="transition-all duration-300 ease-out"
+                 x-transition:enter-start="opacity-0 transform translate-y-10"
+                 x-transition:enter-end="opacity-100 transform translate-y-0"
+                 x-transition:leave="transition-all duration-200 ease-in"
+                 x-transition:leave-start="opacity-100 transform translate-y-0"
+                 x-transition:leave-end="opacity-0 transform translate-y-10"
+                 class="expanded-menu">
+                
+                <a href="/admin/addresses" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'addresses' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-map-marker-alt text-sm mb-1"></i>
+                    <span class="text-xs">Адреса</span>
+                </a>
+                
+                <a href="/admin/broadcast" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'broadcast' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-bullhorn text-sm mb-1"></i>
+                    <span class="text-xs">Рассылки</span>
+                </a>
+                
+                {% if current_admin.role == 'super_admin' %}
+                <a href="/admin/admin-users" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'admin_users' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-user-shield text-sm mb-1"></i>
+                    <span class="text-xs">Админы</span>
+                </a>
+                {% endif %}
+                
+                <a href="/admin/admin-chat" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-comments text-sm mb-1"></i>
+                    <span class="text-xs">Чат</span>
+                </a>
+                
+                <a href="/admin/settings" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'settings' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-cog text-sm mb-1"></i>
+                    <span class="text-xs">Настройки</span>
+                </a>
+                
+                <a href="/admin/profile" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5 {% if current_page == 'profile' %}text-blue-400 bg-blue-500/10{% endif %}" data-touch-target>
+                    <i class="fas fa-user text-sm mb-1"></i>
+                    <span class="text-xs">Профиль</span>
+                </a>
+                
+                <a href="/admin/logout" class="expanded-menu-item text-gray-400 hover:text-white hover:bg-white/5" data-touch-target>
+                    <i class="fas fa-sign-out-alt text-sm mb-1"></i>
+                    <span class="text-xs">Выйти</span>
+                </a>
+            </div>
+            
+            <!-- Main Navigation -->
+            <div class="grid grid-cols-5 gap-1 p-2">
                 <a href="/admin/" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                     <i class="fas fa-chart-pie text-sm mb-1"></i>
                     <span class="text-xs">Главная</span>
                 </a>
+                
                 <a href="/admin/orders" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'orders' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                     <i class="fas fa-box text-sm mb-1"></i>
                     <span class="text-xs">Заказы</span>
                 </a>
-                <a href="/admin/participants" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
-                    <i class="fas fa-users text-sm mb-1"></i>
-                    <span class="text-xs">Люди</span>
+                
+                <a href="/admin/orders/new" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl text-green-400 hover:text-green-300 hover:bg-green-500/10 transition-all duration-200" data-touch-target>
+                    <i class="fas fa-plus text-lg mb-1"></i>
+                    <span class="text-xs">Создать</span>
                 </a>
+                
                 <a href="/admin/reports" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl {% if current_page == 'reports' %}text-blue-400 bg-blue-500/10{% else %}text-gray-400 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200" data-touch-target>
                     <i class="fas fa-chart-bar text-sm mb-1"></i>
                     <span class="text-xs">Отчеты</span>
                 </a>
-                <button @click="sidebarOpen = true" class="mobile-nav-item flex flex-col items-center p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200" data-touch-target>
-                    <i class="fas fa-bars text-sm mb-1"></i>
-                    <span class="text-xs">Еще</span>
+                
+                <button @click="mobileMenuExpanded = !mobileMenuExpanded" 
+                        class="mobile-nav-item flex flex-col items-center p-2 rounded-xl text-gray-400 hover:text-white hover:bg-white/5 transition-all duration-200" 
+                        data-touch-target>
+                    <i class="fas text-sm mb-1" :class="mobileMenuExpanded ? 'fa-times' : 'fa-ellipsis-h'"></i>
+                    <span class="text-xs" x-text="mobileMenuExpanded ? 'Закрыть' : 'Еще'"></span>
                 </button>
             </div>
         </div>
     </div>
 
     <script>
-        // Инициализация Alpine.js
         document.addEventListener('alpine:init', () => {
             Alpine.data('pageUtils', () => ({
                 formatDate(dateString) {
@@ -393,23 +400,6 @@
                             notification.parentNode.removeChild(notification);
                         }
                     }, 5000);
-                },
-                
-                // Lazy Loading для изображений
-                lazyLoadImages() {
-                    const images = document.querySelectorAll('img[data-src]');
-                    const imageObserver = new IntersectionObserver((entries, observer) => {
-                        entries.forEach(entry => {
-                            if (entry.isIntersecting) {
-                                const img = entry.target;
-                                img.src = img.dataset.src;
-                                img.classList.remove('lazy');
-                                imageObserver.unobserve(img);
-                            }
-                        });
-                    });
-                    
-                    images.forEach(img => imageObserver.observe(img));
                 }
             }));
         });
@@ -432,11 +422,6 @@
                 }
                 lastTouchEnd = now;
             }, false);
-            
-            // Initialize lazy loading
-            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
-                Alpine.$data.pageUtils.lazyLoadImages();
-            }
         });
     </script>
 </body>
