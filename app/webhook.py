@@ -2,6 +2,7 @@ import os
 import logging
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
+from fastapi.staticfiles import StaticFiles
 from telegram import Update
 from telegram.ext import Application, ApplicationBuilder
 
@@ -15,7 +16,14 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 
-# Подключаем веб-админку
+# Настраиваем статику и админку
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+STATIC_DIR = os.path.join(BASE_DIR, "static")
+
+# /static → папка app/static
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# /admin → админка, как и было
 app.mount("/admin", admin_app)
 
 application: Application = None
@@ -109,3 +117,4 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "ok", "database": "connected"}
+
