@@ -553,6 +553,9 @@ async def update_order_api(
         
         data = await request.json()
         
+        # Сохраняем старый статус для проверки изменений
+        old_status = order.status
+        
         # Обновляем поля
         update_data = {}
         if data.get('client_name') is not None:
@@ -568,6 +571,10 @@ async def update_order_api(
             success = await OrderService.update_order(order_id, update_data)
             if not success:
                 raise HTTPException(500, "Ошибка при обновлении заказа")
+        
+            # Отправляем уведомления если статус изменился
+            if 'status' in update_data and update_data['status'] != old_status:
+                await OrderService._send_status_notifications(order_id, update_data['status'])
         
         return {"success": True, "message": "Заказ обновлен"}
         
@@ -1221,9 +1228,16 @@ async def bulk_update_order_status(
         
         for order_id in order_ids:
             try:
+                # Получаем старый статус для проверки изменений
+                old_order = await OrderService.get_order(order_id)
+                old_status = old_order.status if old_order else ""
+                
                 success = await OrderService.update_order_status(order_id, new_status)
                 if success:
                     success_count += 1
+                    # Отправляем уведомления если статус изменился
+                    if old_status != new_status:
+                        await OrderService._send_status_notifications(order_id, new_status)
                 else:
                     failed_count += 1
             except Exception as e:
