@@ -1,700 +1,272 @@
-<!DOCTYPE html>
-<html lang="ru" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SEABLUU Admin{% endblock %}</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            important: true,
-        }
-    </script>
-    
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Alpine.js для интерактивности -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
-    <style>
-        /* Кастомные стили для темной темы iOS */
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-        }
-        
-        .glass-effect {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-        
-        .card-hover {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        
-        .card-hover:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
-        }
-        
-        .btn-primary {
-            background: linear-gradient(135deg, #007AFF 0%, #5856D6 100%);
-            transition: all 0.3s ease;
-        }
-        
-        .btn-primary:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 10px 20px rgba(0, 122, 255, 0.3);
-        }
-        
-        .fade-in {
-            animation: fadeIn 0.6s ease-in-out;
-        }
-        
-        .slide-up {
-            animation: slideUp 0.5s ease-out;
-        }
-        
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-            from { 
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to { 
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-        
-        /* Стили для скроллбара */
-        ::-webkit-scrollbar {
-            width: 6px;
-        }
-        
-        ::-webkit-scrollbar-track {
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-        }
-        
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 10px;
-        }
-        
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
+{% extends "base.html" %}
 
-        /* Стили для выпадающих списков */
-        select {
-            -webkit-appearance: none !important;
-            -moz-appearance: none !important;
-            appearance: none !important;
-            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%239ca3af'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
-            padding-right: 40px !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
-            border-radius: 1rem !important;
-            padding: 0.5rem 1rem !important;
-            color: white !important;
-            font-size: 0.875rem !important;
-            line-height: 1.25rem !important;
-            width: 100% !important;
-        }
+{% block page_title %}Чат администраторов{% endblock %}
 
-        select:focus {
-            outline: none !important;
-            border-color: rgba(0, 122, 255, 0.5) !important;
-            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1) !important;
-            background: rgba(255, 255, 255, 0.05) url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 24 24' stroke='%23007AFF'%3E%3Cpath stroke-linecap='round' stroke-linejoin='round' stroke-width='2' d='m19 9-7 7-7-7'/%3E%3C/svg%3E") no-repeat right 12px center / 16px !important;
-        }
-
-        select option {
-            background: #1f2937 !important;
-            color: white !important;
-        }
-
-        /* Скрываем стандартную стрелку в IE */
-        select::-ms-expand {
-            display: none !important;
-        }
-    </style>
-</head>
-<body class="h-full bg-gradient-to-br from-gray-900 to-black text-white">
-    <!-- Sidebar Navigation -->
-    <div x-data="{ sidebarOpen: false }" class="flex h-full">
-        <!-- Mobile sidebar backdrop -->
-        <div x-show="sidebarOpen" 
-             x-transition:enter="transition-opacity ease-linear duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition-opacity ease-linear duration-300"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 z-40 bg-black bg-opacity-60 lg:hidden"
-             @click="sidebarOpen = false">
-        </div>
-
-        <!-- Sidebar -->
-        <div x-show="sidebarOpen || window.matchMedia('(min-width: 1024px)').matches"
-             x-transition:enter="transition-transform duration-300 ease-in-out"
-             x-transition:enter-start="-translate-x-full"
-             x-transition:enter-end="translate-x-0"
-             x-transition:leave="transition-transform duration-300 ease-in-out"
-             x-transition:leave-start="translate-x-0"
-             x-transition:leave-end="-translate-x-full"
-             class="fixed inset-y-0 left-0 z-50 w-64 glass-effect lg:static lg:inset-0 lg:translate-x-0">
-            
-            <div class="flex flex-col h-full">
-                <!-- Logo -->
-                <div class="flex items-center justify-between p-6 border-b border-white/10">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-ship text-white text-sm"></i>
-                        </div>
-                        <span class="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                            SEABLUU
-                        </span>
-                    </div>
-                    <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
-
-                <!-- Navigation -->
-                <nav class="flex-1 p-4 space-y-2">
-                    <a href="/admin/" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'dashboard' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-chart-pie w-5"></i>
-                        <span>Дашборд</span>
-                    </a>
-                    
-                    <a href="/admin/orders" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'orders' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-box w-5"></i>
-                        <span>Заказы</span>
-                    </a>
-                    
-                    <a href="/admin/participants" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'participants' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-users w-5"></i>
-                        <span>Участники</span>
-                    </a>
-                    
-                    <a href="/admin/addresses" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'addresses' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-map-marker-alt w-5"></i>
-                        <span>Адреса</span>
-                    </a>
-                    
-                    <a href="/admin/reports" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'reports' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-chart-bar w-5"></i>
-                        <span>Отчеты</span>
-                    </a>
-
-                    <a href="/admin/broadcast" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'broadcast' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-bullhorn w-5"></i>
-                        <span>Рассылки</span>
-                    </a>
-
-                    <!-- Новые пункты меню -->
-                    {% if current_admin.role == 'super_admin' %}
-                    <a href="/admin/admin-users" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_users' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-user-shield w-5"></i>
-                        <span>Администраторы</span>
-                    </a>
-                    {% endif %}
-                    
-                    <a href="/admin/admin-chat" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'admin_chat' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-comments w-5"></i>
-                        <span>Чат админов</span>
-                    </a>
-                    
-                    <a href="/admin/settings" class="flex items-center space-x-3 p-3 rounded-2xl {% if current_page == 'settings' %}text-blue-400 bg-blue-500/10 border border-blue-500/20{% else %}text-gray-300 hover:text-white hover:bg-white/5{% endif %} transition-all duration-200">
-                        <i class="fas fa-cog w-5"></i>
-                        <span>Настройки</span>
-                    </a>
-                </nav>
-
-                <!-- User info -->
-                <div class="p-4 border-t border-white/10">
-                    <div class="flex items-center space-x-3 p-3 rounded-2xl bg-white/5">
-                        {% if current_admin.avatar_url %}
-                        <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-8 h-8 rounded-full">
-                        {% else %}
-                        <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
-                            <i class="fas fa-user text-white text-sm"></i>
-                        </div>
-                        {% endif %}
-                        <div class="flex-1 min-w-0">
-                            <p class="text-sm font-medium truncate">{{ current_admin.username }}</p>
-                            <p class="text-xs text-gray-400 truncate">
-                                {% if current_admin.role == 'super_admin' %}
-                                Супер-администратор
-                                {% else %}
-                                Администратор
-                                {% endif %}
-                            </p>
-                        </div>
-                        <a href="/admin/profile" class="text-gray-400 hover:text-white">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                    </div>
-                    <a href="/admin/logout" class="block w-full mt-2 text-center text-sm text-gray-400 hover:text-white p-2 rounded-2xl hover:bg-white/5 transition-all duration-200">
-                        <i class="fas fa-sign-out-alt mr-2"></i>Выйти
-                    </a>
-                </div>
+{% block content %}
+<div x-data="adminChat()" class="h-full flex flex-col space-y-6">
+    <!-- Chat Header -->
+    <div class="glass-effect rounded-2xl p-6">
+        <div class="flex items-center justify-between">
+            <div>
+                <h3 class="text-lg font-semibold">Чат администраторов</h3>
+                <p class="text-gray-400 text-sm mt-1">Общайтесь с другими администраторами системы</p>
             </div>
-        </div>
-
-        <!-- Main content -->
-        <div class="flex-1 flex flex-col lg:ml-0">
-            <!-- Top bar -->
-            <header class="glass-effect border-b border-white/10">
-                <div class="flex items-center justify-between p-4">
-                    <div class="flex items-center space-x-4">
-                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-2 rounded-2xl hover:bg-white/5">
-                            <i class="fas fa-bars"></i>
-                        </button>
-                        <h1 class="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                            {% block page_title %}Панель управления{% endblock %}
-                        </h1>
-                    </div>
-                    
-                    <div class="flex items-center space-x-4">
-                        <!-- User info in header for mobile -->
-                        <div class="flex items-center space-x-3 lg:hidden">
-                            {% if current_admin.avatar_url %}
-                            <img src="{{ current_admin.avatar_url }}" alt="{{ current_admin.username }}" class="w-8 h-8 rounded-full">
-                            {% else %}
-                            <div class="w-8 h-8 bg-gradient-to-r from-green-500 to-teal-400 rounded-full flex items-center justify-center">
-                                <i class="fas fa-user text-white text-sm"></i>
-                            </div>
-                            {% endif %}
-                            <span class="text-sm font-medium">{{ current_admin.username }}</span>
-                        </div>
-                    </div>
+            <div class="flex items-center space-x-4">
+                <div class="text-sm text-gray-400">
+                    <span x-text="onlineCount"></span> онлайн
                 </div>
-            </header>
-
-            <!-- Page content -->
-            <main class="flex-1 overflow-auto p-6">
-                <div class="fade-in">
-                    {% block content %}
-                    <!-- Страница управления администраторами -->
-                    <div x-data="adminUsers()" class="space-y-6">
-                        <!-- Заголовок и кнопка добавления -->
-                        <div class="flex items-center justify-between">
-                            <div>
-                                <h1 class="text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                    Администраторы
-                                </h1>
-                                <p class="text-gray-400 mt-1">Управление доступом к панели администратора</p>
-                            </div>
-                            <button @click="showAddModal = true" class="btn-primary px-6 py-3 rounded-2xl font-medium">
-                                <i class="fas fa-plus mr-2"></i>Добавить администратора
-                            </button>
-                        </div>
-
-                        <!-- Карточка со списком администраторов -->
-                        <div class="glass-effect rounded-2xl p-6 card-hover">
-                            <div class="flex items-center justify-between mb-6">
-                                <h2 class="text-xl font-semibold">Список администраторов</h2>
-                                <div class="flex items-center space-x-4">
-                                    <div class="text-sm text-gray-400">
-                                        Всего: <span x-text="users.length" class="font-medium text-white"></span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- Таблица администраторов -->
-                            <div class="overflow-x-auto">
-                                <table class="w-full">
-                                    <thead>
-                                        <tr class="border-b border-white/10">
-                                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Пользователь</th>
-                                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Роль</th>
-                                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
-                                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Последний вход</th>
-                                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <template x-for="user in users" :key="user.id">
-                                            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                                <td class="py-4 px-4">
-                                                    <div class="flex items-center space-x-3">
-                                                        <template x-if="user.avatar_url">
-                                                            <img :src="user.avatar_url" :alt="user.username" class="w-10 h-10 rounded-full">
-                                                        </template>
-                                                        <template x-if="!user.avatar_url">
-                                                            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                                                <i class="fas fa-user text-white"></i>
-                                                            </div>
-                                                        </template>
-                                                        <div>
-                                                            <div class="font-medium" x-text="user.username"></div>
-                                                            <div class="text-sm text-gray-400" x-text="user.email || 'Email не указан'"></div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td class="py-4 px-4">
-                                                    <span x-text="user.role === 'super_admin' ? 'Супер-администратор' : 'Администратор'" 
-                                                          :class="user.role === 'super_admin' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'"
-                                                          class="px-3 py-1 rounded-full text-xs font-medium text-white"></span>
-                                                </td>
-                                                <td class="py-4 px-4">
-                                                    <span x-text="user.is_active ? 'Активен' : 'Неактивен'" 
-                                                          :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
-                                                          class="px-3 py-1 rounded-full text-xs font-medium"></span>
-                                                </td>
-                                                <td class="py-4 px-4 text-gray-300" x-text="formatDate(user.last_login)"></td>
-                                                <td class="py-4 px-4">
-                                                    <div class="flex items-center space-x-2">
-                                                        <button @click="editUser(user)" class="text-blue-400 hover:text-blue-300 p-2 rounded-2xl hover:bg-white/5 transition-colors">
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <button @click="deleteUser(user)" class="text-red-400 hover:text-red-300 p-2 rounded-2xl hover:bg-white/5 transition-colors">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        </template>
-                                        <template x-if="!users.length">
-                                            <tr>
-                                                <td colspan="5" class="py-8 text-center text-gray-400">
-                                                    <i class="fas fa-users text-4xl mb-2 opacity-50"></i>
-                                                    <div>Нет администраторов</div>
-                                                </td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Модальное окно добавления/редактирования -->
-                        <div x-show="showAddModal || showEditModal" 
-                             x-transition:enter="transition-opacity ease-out duration-300"
-                             x-transition:enter-start="opacity-0"
-                             x-transition:enter-end="opacity-100"
-                             x-transition:leave="transition-opacity ease-in duration-200"
-                             x-transition:leave-start="opacity-100"
-                             x-transition:leave-end="opacity-0"
-                             class="fixed inset-0 z-50 bg-black bg-opacity-60 flex items-center justify-center p-4">
-                            <div class="glass-effect rounded-2xl p-6 w-full max-w-md"
-                                 @click.away="closeModal()">
-                                <h3 class="text-xl font-semibold mb-4" x-text="showEditModal ? 'Редактировать администратора' : 'Добавить администратора'"></h3>
-                                
-                                <form @submit.prevent="showEditModal ? updateUser() : createUser()" class="space-y-4">
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Имя пользователя</label>
-                                        <input type="text" x-model="currentUser.username" required
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Email</label>
-                                        <input type="email" x-model="currentUser.email"
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Пароль</label>
-                                        <input type="password" :required="!showEditModal" x-model="currentUser.password"
-                                               class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20">
-                                    </div>
-                                    
-                                    <div>
-                                        <label class="block text-sm font-medium text-gray-300 mb-2">Роль</label>
-                                        <select x-model="currentUser.role" class="custom-select">
-                                            <option value="admin">Администратор</option>
-                                            <option value="super_admin">Супер-администратор</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <div class="flex items-center space-x-4 pt-4">
-                                        <button type="submit" class="btn-primary flex-1 py-3 rounded-2xl font-medium">
-                                            <span x-text="showEditModal ? 'Сохранить' : 'Создать'"></span>
-                                        </button>
-                                        <button type="button" @click="closeModal()" class="flex-1 py-3 rounded-2xl font-medium border border-white/10 text-white hover:bg-white/5 transition-colors">
-                                            Отмена
-                                        </button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    {% endblock %}
-                </div>
-            </main>
+                <button @click="loadMessages()" class="btn-primary px-4 py-2 rounded-2xl font-medium text-sm">
+                    <i class="fas fa-sync-alt mr-2"></i>Обновить
+                </button>
+            </div>
         </div>
     </div>
 
-    <script>
-        // Инициализация Alpine.js - только базовые функции
-        document.addEventListener('alpine:init', () => {
-            // Базовые утилиты для всех страниц
-            Alpine.data('pageUtils', () => ({
-                formatDate(dateString) {
-                    if (!dateString) return 'Неизвестно';
-                    try {
-                        const date = new Date(dateString);
-                        return date.toLocaleDateString('ru-RU', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } catch (e) {
-                        return 'Неизвестно';
-                    }
-                },
-                
-                showNotification(message, type = 'info') {
-                    // Создаем уведомление
-                    const notification = document.createElement('div');
-                    const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
-                                   type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
-                                   'bg-blue-500/20 border-blue-500/50';
+    <!-- Chat Container -->
+    <div class="glass-effect rounded-2xl p-6 flex-1 flex flex-col">
+        <!-- Messages Container -->
+        <div class="flex-1 overflow-y-auto mb-4 space-y-4" id="messages-container">
+            <template x-if="loading">
+                <div class="text-center py-8 text-gray-400">
+                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                    <p>Загрузка сообщений...</p>
+                </div>
+            </template>
+            
+            <template x-if="!loading && messages.length === 0">
+                <div class="text-center py-8 text-gray-400">
+                    <i class="fas fa-comments text-2xl mb-2"></i>
+                    <p>Пока нет сообщений</p>
+                    <p class="text-sm">Начните общение первым!</p>
+                </div>
+            </template>
+            
+            <template x-for="message in messages" :key="message.id">
+                <div class="flex items-start space-x-3" :class="message.user_id === currentUser.user_id ? 'flex-row-reverse space-x-reverse' : ''">
+                    <!-- Avatar -->
+                    <div class="flex-shrink-0">
+                        <template x-if="message.is_system">
+                            <div class="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-600 rounded-full flex items-center justify-center">
+                                <i class="fas fa-robot text-white text-sm"></i>
+                            </div>
+                        </template>
+                        <template x-if="!message.is_system">
+                            <img :src="message.avatar_url || 'https://ui-avatars.com/api/?name=' + message.username + '&background=random&size=64'" 
+                                 :alt="message.username" 
+                                 class="w-8 h-8 rounded-full flex-shrink-0">
+                        </template>
+                    </div>
                     
-                    notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
-                    notification.innerHTML = `
-                        <div class="flex items-center space-x-3">
-                            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
-                                ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
-                            <span>${message}</span>
+                    <!-- Message Content -->
+                    <div :class="message.user_id === currentUser.user_id ? 'bg-blue-500/20 border border-blue-500/30' : message.is_system ? 'bg-purple-500/20 border border-purple-500/30' : 'bg-white/5 border border-white/10'"
+                         class="rounded-2xl p-3 max-w-xs lg:max-w-md">
+                        <!-- Message Header -->
+                        <div class="flex items-center space-x-2 mb-1">
+                            <span class="text-sm font-medium" 
+                                  :class="message.is_system ? 'text-purple-400' : message.user_id === currentUser.user_id ? 'text-blue-400' : 'text-gray-300'"
+                                  x-text="message.username"></span>
+                            <span class="text-xs text-gray-400" x-text="formatTime(message.created_at)"></span>
+                            <template x-if="message.user_id === currentUser.user_id">
+                                <span class="text-xs text-blue-400">(Вы)</span>
+                            </template>
                         </div>
-                    `;
-                    
-                    document.body.appendChild(notification);
-                    
-                    // Автоматически удаляем через 5 секунд
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 5000);
-                },
-                
-                async apiCall(url, options = {}) {
-                    try {
-                        const response = await fetch(url, {
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...options.headers
-                            },
-                            ...options
-                        });
                         
-                        if (!response.ok) {
-                            const errorData = await response.json().catch(() => ({}));
-                            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                        }
+                        <!-- Message Text -->
+                        <p class="text-sm" x-text="message.message"></p>
                         
-                        return await response.json();
-                    } catch (error) {
-                        console.error('API call error:', error);
-                        this.showNotification(error.message, 'error');
-                        throw error;
-                    }
-                }
-            }));
-        });
-
-        // Принудительное применение стилей к выпадающим спискам
-        function applySelectStyles() {
-            const allSelects = document.querySelectorAll('select');
-            allSelects.forEach(select => {
-                select.classList.add('custom-select');
-            });
-        }
-
-        // Применяем стили после загрузки
-        document.addEventListener('DOMContentLoaded', applySelectStyles);
-        document.addEventListener('alpine:init', applySelectStyles);
+                        <!-- System Message Indicator -->
+                        <template x-if="message.is_system">
+                            <div class="mt-1 text-xs text-purple-400">
+                                <i class="fas fa-robot mr-1"></i>Системное сообщение
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </template>
+        </div>
         
-        // Периодически проверяем и применяем стили (для динамического контента)
-        setInterval(applySelectStyles, 1000);
+        <!-- Message Input -->
+        <div class="flex space-x-2">
+            <input type="text" 
+                   x-model="newMessage" 
+                   @keyup.enter="sendMessage()"
+                   placeholder="Введите сообщение..." 
+                   class="flex-1 bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                   :disabled="sending">
+            <button @click="sendMessage()" 
+                    :disabled="!newMessage.trim() || sending"
+                    class="btn-primary px-4 py-3 rounded-2xl font-medium disabled:opacity-50">
+                <template x-if="!sending">
+                    <i class="fas fa-paper-plane"></i>
+                </template>
+                <template x-if="sending">
+                    <i class="fas fa-spinner fa-spin"></i>
+                </template>
+            </button>
+        </div>
+        
+        <!-- Typing Indicator -->
+        <div x-show="typing" class="mt-2 text-sm text-gray-400">
+            <i class="fas fa-pencil-alt mr-2"></i>
+            <span x-text="typingUser"></span> печатает...
+        </div>
+    </div>
+</div>
 
-        // Обработка ошибок загрузки страницы
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
-        });
-
-        // Функционал для страницы администраторов
-        function adminUsers() {
-            return {
-                users: [],
-                showAddModal: false,
-                showEditModal: false,
-                currentUser: {
-                    id: null,
-                    username: '',
-                    email: '',
-                    password: '',
-                    role: 'admin',
-                    is_active: true
-                },
-                
-                async init() {
-                    await this.loadUsers();
-                    // Убедимся, что модалки закрыты при инициализации
-                    this.showAddModal = false;
-                    this.showEditModal = false;
-                },
-                
-                async loadUsers() {
-                    try {
-                        const response = await fetch('/admin/api/admin/users');
-                        if (!response.ok) throw new Error('Ошибка загрузки данных');
-                        const data = await response.json();
-                        this.users = data.users || [];
-                    } catch (error) {
-                        console.error('Ошибка загрузки администраторов:', error);
-                        this.showNotification('Ошибка загрузки списка администраторов', 'error');
-                    }
-                },
-                
-                async createUser() {
-                    try {
-                        const response = await fetch('/admin/api/admin/users', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.currentUser)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.detail || 'Ошибка создания');
-                        }
-                        
-                        const data = await response.json();
-                        this.showNotification(data.message || 'Администратор создан', 'success');
-                        this.closeModal();
-                        await this.loadUsers();
-                    } catch (error) {
-                        console.error('Ошибка создания администратора:', error);
-                        this.showNotification(error.message, 'error');
-                    }
-                },
-                
-                async updateUser() {
-                    try {
-                        const response = await fetch(`/admin/api/admin/users/${this.currentUser.id}`, {
-                            method: 'PUT',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(this.currentUser)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.detail || 'Ошибка обновления');
-                        }
-                        
-                        const data = await response.json();
-                        this.showNotification(data.message || 'Администратор обновлен', 'success');
-                        this.closeModal();
-                        await this.loadUsers();
-                    } catch (error) {
-                        console.error('Ошибка обновления администратора:', error);
-                        this.showNotification(error.message, 'error');
-                    }
-                },
-                
-                async deleteUser(user) {
-                    if (!confirm(`Вы уверены, что хотите удалить администратора ${user.username}?`)) {
-                        return;
-                    }
-                    
-                    try {
-                        const response = await fetch(`/admin/api/admin/users/${user.id}`, {
-                            method: 'DELETE'
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json();
-                            throw new Error(errorData.detail || 'Ошибка удаления');
-                        }
-                        
-                        const data = await response.json();
-                        this.showNotification(data.message || 'Администратор удален', 'success');
-                        await this.loadUsers();
-                    } catch (error) {
-                        console.error('Ошибка удаления администратора:', error);
-                        this.showNotification(error.message, 'error');
-                    }
-                },
-                
-                editUser(user) {
-                    this.currentUser = {
-                        id: user.id,
-                        username: user.username,
-                        email: user.email || '',
-                        password: '',
-                        role: user.role,
-                        is_active: user.is_active
-                    };
-                    this.showEditModal = true;
-                },
-                
-                closeModal() {
-                    this.showAddModal = false;
-                    this.showEditModal = false;
-                    this.currentUser = {
-                        id: null,
-                        username: '',
-                        email: '',
-                        password: '',
-                        role: 'admin',
-                        is_active: true
-                    };
-                },
-                
-                formatDate(dateString) {
-                    if (!dateString) return 'Никогда';
-                    try {
-                        const date = new Date(dateString);
-                        return date.toLocaleDateString('ru-RU', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } catch (e) {
-                        return 'Неизвестно';
-                    }
-                },
-                
-                showNotification(message, type = 'info') {
-                    const notification = document.createElement('div');
-                    const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
-                                   type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
-                                   'bg-blue-500/20 border-blue-500/50';
-                    
-                    notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
-                    notification.innerHTML = `
-                        <div class="flex items-center space-x-3">
-                            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
-                                ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
-                            <span>${message}</span>
-                        </div>
-                    `;
-                    
-                    document.body.appendChild(notification);
-                    
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 5000);
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminChat', () => ({
+        messages: [],
+        newMessage: '',
+        loading: true,
+        sending: false,
+        typing: false,
+        typingUser: '',
+        onlineCount: 1,
+        currentUser: {
+            user_id: {{ current_admin.user_id }},
+            username: '{{ current_admin.username }}'
+        },
+        
+        async init() {
+            await this.loadMessages();
+            this.scrollToBottom();
+            
+            // Автообновление сообщений каждые 10 секунд
+            setInterval(() => {
+                this.loadMessages();
+            }, 10000);
+        },
+        
+        async loadMessages() {
+            try {
+                const response = await fetch('/admin/api/admin/chat/messages');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
                 }
-            };
+                const data = await response.json();
+                this.messages = data.messages || [];
+                this.loading = false;
+                this.scrollToBottom();
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                this.loading = false;
+                this.showNotification('Ошибка загрузки сообщений', 'error');
+            }
+        },
+        
+        async sendMessage() {
+            if (!this.newMessage.trim() || this.sending) return;
+            
+            this.sending = true;
+            
+            try {
+                const response = await fetch('/admin/api/admin/chat/messages', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        message: this.newMessage
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    this.newMessage = '';
+                    await this.loadMessages();
+                    this.showNotification('Сообщение отправлено', 'success');
+                } else {
+                    throw new Error(result.detail || 'Ошибка отправки сообщения');
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                this.showNotification('Ошибка отправки сообщения: ' + error.message, 'error');
+            } finally {
+                this.sending = false;
+            }
+        },
+        
+        scrollToBottom() {
+            this.$nextTick(() => {
+                const container = document.getElementById('messages-container');
+                if (container) {
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        },
+        
+        formatTime(dateString) {
+            if (!dateString) return '';
+            try {
+                const date = new Date(dateString);
+                const now = new Date();
+                const diffMs = now - date;
+                const diffMins = Math.floor(diffMs / (1000 * 60));
+                const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                
+                if (diffMins < 1) {
+                    return 'только что';
+                } else if (diffMins < 60) {
+                    return `${diffMins} мин назад`;
+                } else if (diffHours < 24) {
+                    return `${diffHours} ч назад`;
+                } else {
+                    return date.toLocaleDateString('ru-RU', {
+                        day: 'numeric',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                }
+            } catch (e) {
+                return '';
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                // Fallback notification
+                const notification = document.createElement('div');
+                notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border z-50 ${
+                    type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
+                    type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
+                    'bg-blue-500/20 border-blue-500/50'
+                }`;
+                notification.innerHTML = `
+                    <div class="flex items-center space-x-3">
+                        <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
+                            ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
+                        <span>${message}</span>
+                    </div>
+                `;
+                
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    if (notification.parentNode) {
+                        notification.parentNode.removeChild(notification);
+                    }
+                }, 5000);
+            }
+        },
+        
+        // Simulate typing indicator (for demo purposes)
+        simulateTyping() {
+            if (!this.typing) {
+                this.typing = true;
+                this.typingUser = 'Другой администратор';
+                
+                setTimeout(() => {
+                    this.typing = false;
+                    this.typingUser = '';
+                }, 2000);
+            }
         }
-    </script>
-</body>
-</html>
+    }));
+});
+</script>
+{% endblock %}
