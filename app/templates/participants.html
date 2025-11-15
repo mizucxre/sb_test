@@ -1,51 +1,65 @@
 {% extends "base.html" %}
 
-{% block page_title %}Управление участниками{% endblock %}
+{% block page_title %}Участники{% endblock %}
 
 {% block content %}
-<div x-data="participants()" class="space-y-6">
+<div x-data="participants()" class="space-y-4 lg:space-y-6">
     <!-- Filters -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <div class="responsive-grid gap-3 lg:gap-4">
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Заказ</label>
-                <select x-model="filters.order_id" @change="applyFilters()" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.order_id" @change="applyFilters()" 
+                        class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все заказы</option>
                     <template x-for="order in orders" :key="order.order_id">
                         <option :value="order.order_id" x-text="order.order_id"></option>
                     </template>
                 </select>
             </div>
+            
             <div>
                 <label class="block text-sm font-medium text-gray-400 mb-2">Статус оплаты</label>
-                <select x-model="filters.paid" @change="applyFilters()" class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <select x-model="filters.paid" @change="applyFilters()" 
+                        class="custom-select w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                        data-touch-target>
                     <option value="">Все</option>
                     <option value="true">Оплачено</option>
                     <option value="false">Не оплачено</option>
                 </select>
             </div>
-            <div>
+            
+            <div class="lg:col-span-2">
                 <label class="block text-sm font-medium text-gray-400 mb-2">Поиск</label>
-                <input type="text" x-model="filters.search" @input="applyFilters()" placeholder="Username..." class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50">
+                <input type="text" x-model="filters.search" @input="applyFilters()" placeholder="Username..." 
+                       class="w-full bg-white/5 border border-white/10 rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500/50"
+                       data-touch-target>
             </div>
         </div>
     </div>
 
-    <!-- Participants Table -->
-    <div class="glass-effect rounded-2xl p-6">
-        <div class="flex items-center justify-between mb-6">
+    <!-- Participants -->
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <!-- Header -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mb-4 lg:mb-6">
             <div>
-                <h3 class="text-lg font-semibold">Список участников</h3>
+                <h3 class="text-lg lg:text-xl font-semibold">Список участников</h3>
                 <div class="text-gray-400 text-sm mt-1">
-                    Показано <span x-text="filteredParticipants.length"></span> из <span x-text="totalParticipants"></span> участников
+                    Показано <span x-text="filteredParticipants.length" class="font-semibold text-white"></span> из <span x-text="totalParticipants" class="font-semibold text-white"></span> участников
                 </div>
             </div>
-            <div class="flex items-center space-x-4">
-                <button @click="exportParticipants()" class="px-4 py-2 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200">
+            
+            <div class="flex flex-col lg:flex-row space-y-2 lg:space-y-0 lg:space-x-3">
+                <button @click="exportParticipants()" 
+                        class="px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 transition-all duration-200 text-sm lg:text-base text-center"
+                        data-touch-target>
                     <i class="fas fa-download mr-2"></i>Экспорт
                 </button>
-                <button @click="broadcastUnpaid()" class="px-4 py-2 rounded-2xl bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 hover:border-yellow-500/50 transition-all duration-200">
-                    <i class="fas fa-bullhorn mr-2"></i>Уведомить неплательщиков
+                <button @click="broadcastUnpaid()" 
+                        class="px-4 py-3 rounded-2xl bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-400 border border-yellow-500/30 hover:border-yellow-500/50 transition-all duration-200 text-sm lg:text-base text-center"
+                        data-touch-target>
+                    <i class="fas fa-bullhorn mr-2"></i>Уведомить
                 </button>
             </div>
         </div>
@@ -56,78 +70,164 @@
             <p class="text-gray-400">Загрузка участников...</p>
         </div>
 
-        <div x-show="!loading && filteredParticipants.length > 0" class="overflow-x-auto">
-            <table class="w-full">
-                <thead>
-                    <tr class="border-b border-white/10">
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Username</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Заказ</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус оплаты</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Дата</th>
-                        <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <template x-for="participant in filteredParticipants" :key="`${participant.order_id}-${participant.username}`">
-                        <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
-                            <td class="py-4 px-4">
-                                <div class="flex items-center space-x-3">
-                                    <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                        <i class="fas fa-user text-white text-xs"></i>
-                                    </div>
-                                    <span class="font-medium" x-text="'@' + participant.username"></span>
-                                </div>
-                            </td>
-                            <td class="py-4 px-4">
-                                <span class="font-mono font-semibold" x-text="participant.order_id"></span>
-                            </td>
-                            <td class="py-4 px-4">
-                                <button @click="togglePayment(participant)" 
-                                        class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200"
-                                        :class="participant.paid ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'">
-                                    <i class="fas fa-credit-card mr-2"></i>
-                                    <span x-text="participant.paid ? 'Оплачено' : 'Не оплачено'"></span>
-                                </button>
-                            </td>
-                            <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(participant.updated_at)"></td>
-                            <td class="py-4 px-4">
-                                <div class="flex items-center space-x-2">
-                                    <button @click="viewUser(participant.username)" class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button @click="sendReminder(participant)" class="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded-2xl transition-all duration-200">
-                                        <i class="fas fa-bell"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                    </template>
-                </tbody>
-            </table>
+        <!-- Mobile Card View -->
+        <div class="lg:hidden space-y-3">
+            <template x-if="!loading && filteredParticipants.length === 0">
+                <div class="text-center py-8">
+                    <i class="fas fa-users text-gray-500 text-3xl mb-2"></i>
+                    <p class="text-gray-400">Участники не найдены</p>
+                    <p class="text-gray-500 text-sm mt-1">Попробуйте изменить параметры фильтрации</p>
+                </div>
+            </template>
+            
+            <template x-for="participant in filteredParticipants" :key="`${participant.order_id}-${participant.username}`">
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition-all duration-200">
+                    
+                    <!-- Header -->
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-white text-xs"></i>
+                            </div>
+                            <div>
+                                <span class="font-medium text-sm" x-text="'@' + participant.username"></span>
+                                <div class="text-gray-400 text-xs" x-text="participant.order_id"></div>
+                            </div>
+                        </div>
+                        
+                        <button @click="togglePayment(participant)" 
+                                class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium transition-all duration-200"
+                                :class="participant.paid ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'"
+                                data-touch-target>
+                            <i class="fas fa-credit-card mr-1"></i>
+                            <span x-text="participant.paid ? 'Оплачено' : 'Не оплачено'"></span>
+                        </button>
+                    </div>
+                    
+                    <!-- Details -->
+                    <div class="space-y-2 text-sm">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Дата:</span>
+                            <span class="text-gray-400 text-xs" x-text="formatDate(participant.updated_at)"></span>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="flex justify-center space-x-2 mt-3 pt-3 border-t border-white/10">
+                        <button @click="viewUser(participant.username)" 
+                                class="flex-1 p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-eye"></i>
+                            <span class="text-xs block mt-1">Просмотр</span>
+                        </button>
+                        <button @click="sendReminder(participant)" 
+                                class="flex-1 p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-bell"></i>
+                            <span class="text-xs block mt-1">Напомнить</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
         </div>
 
-        <!-- Empty State -->
-        <div x-show="!loading && filteredParticipants.length === 0" class="text-center py-12">
+        <!-- Desktop Table View -->
+        <div class="hidden lg:block">
+            <div x-show="!loading && filteredParticipants.length > 0" class="mobile-table-container touch-scroll">
+                <table class="mobile-table">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Username</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Заказ</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус оплаты</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Дата</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="participant in filteredParticipants" :key="`${participant.order_id}-${participant.username}`">
+                            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors duration-200">
+                                <td class="py-4 px-4">
+                                    <div class="flex items-center space-x-3">
+                                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                            <i class="fas fa-user text-white text-xs"></i>
+                                        </div>
+                                        <span class="font-medium" x-text="'@' + participant.username"></span>
+                                    </div>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <span class="font-mono font-semibold" x-text="participant.order_id"></span>
+                                </td>
+                                
+                                <td class="py-4 px-4">
+                                    <button @click="togglePayment(participant)" 
+                                            class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium transition-all duration-200"
+                                            :class="participant.paid ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'"
+                                            data-touch-target>
+                                        <i class="fas fa-credit-card mr-2"></i>
+                                        <span x-text="participant.paid ? 'Оплачено' : 'Не оплачено'"></span>
+                                    </button>
+                                </td>
+                                
+                                <td class="py-4 px-4 text-gray-400 text-sm" x-text="formatDate(participant.updated_at)"></td>
+                                
+                                <td class="py-4 px-4">
+                                    <div class="mobile-table-actions">
+                                        <button @click="viewUser(participant.username)" 
+                                                class="p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-2xl transition-all duration-200" 
+                                                title="Просмотр"
+                                                data-touch-target>
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button @click="sendReminder(participant)" 
+                                                class="p-2 text-yellow-400 hover:text-yellow-300 hover:bg-yellow-500/10 rounded-2xl transition-all duration-200" 
+                                                title="Напомнить"
+                                                data-touch-target>
+                                            <i class="fas fa-bell"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Empty State for Desktop -->
+        <div x-show="!loading && filteredParticipants.length === 0" class="hidden lg:block text-center py-12">
             <i class="fas fa-users text-gray-500 text-5xl mb-4"></i>
             <p class="text-gray-400 text-lg">Участники не найдены</p>
             <p class="text-gray-500 text-sm mt-2">Попробуйте изменить параметры фильтрации</p>
         </div>
 
         <!-- Pagination -->
-        <div x-show="!loading && filteredParticipants.length > 0" class="flex items-center justify-between mt-6">
-            <div class="text-gray-400 text-sm">
-                Страница <span x-text="currentPage"></span>
+        <div x-show="!loading && filteredParticipants.length > 0" 
+             class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mt-4 lg:mt-6">
+            
+            <div class="text-gray-400 text-sm text-center lg:text-left">
+                Страница <span x-text="currentPage" class="font-semibold text-white"></span>
             </div>
-            <div class="flex items-center space-x-2">
-                <button @click="prevPage()" :disabled="currentPage === 1 || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+            
+            <div class="flex items-center justify-center space-x-2">
+                <button @click="prevPage()" 
+                        :disabled="currentPage === 1 || loading" 
+                        class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        data-touch-target>
                     <i x-show="!loading" class="fas fa-chevron-left"></i>
                     <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
+                
                 <span class="px-4 py-2 text-sm">
-                    <span x-text="(currentPage - 1) * itemsPerPage + 1"></span> - 
-                    <span x-text="Math.min(currentPage * itemsPerPage, totalParticipants)"></span>
+                    <span x-text="(currentPage - 1) * itemsPerPage + 1" class="font-semibold"></span> - 
+                    <span x-text="Math.min(currentPage * itemsPerPage, totalParticipants)" class="font-semibold"></span>
                 </span>
-                <button @click="nextPage()" :disabled="!hasMore || loading" class="p-2 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200">
+                
+                <button @click="nextPage()" 
+                        :disabled="!hasMore || loading" 
+                        class="p-3 rounded-2xl bg-white/5 hover:bg-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                        data-touch-target>
                     <i x-show="!loading" class="fas fa-chevron-right"></i>
                     <i x-show="loading" class="fas fa-spinner fa-spin"></i>
                 </button>
@@ -147,7 +247,7 @@ document.addEventListener('alpine:init', () => {
             search: ''
         },
         currentPage: 1,
-        itemsPerPage: 50,
+        itemsPerPage: 20, // Reduced for mobile
         totalParticipants: 0,
         hasMore: false,
         loading: true,
@@ -185,7 +285,6 @@ document.addEventListener('alpine:init', () => {
                 this.loading = true;
                 const offset = (this.currentPage - 1) * this.itemsPerPage;
                 
-                // Строим URL с фильтрами
                 let url = `/admin/api/participants?limit=${this.itemsPerPage}&offset=${offset}`;
                 
                 if (this.filters.order_id) {
@@ -234,7 +333,6 @@ document.addEventListener('alpine:init', () => {
         
         async togglePayment(participant) {
             try {
-                // ИСПРАВЛЕНО: Отправляем PUT запрос без тела
                 const response = await fetch(`/admin/api/participants/${participant.order_id}/${participant.username}/paid`, {
                     method: 'PUT',
                     headers: {
@@ -245,14 +343,13 @@ document.addEventListener('alpine:init', () => {
                 const result = await response.json();
                 
                 if (response.ok) {
-                    // Обновляем статус локально
                     participant.paid = !participant.paid;
                 } else {
-                    alert('Ошибка: ' + (result.detail || 'Неизвестная ошибка'));
+                    this.showNotification('Ошибка: ' + (result.detail || 'Неизвестная ошибка'), 'error');
                 }
             } catch (error) {
                 console.error('Error toggling payment:', error);
-                alert('Ошибка при изменении статуса оплаты');
+                this.showNotification('Ошибка при изменении статуса оплаты', 'error');
             }
         },
         
@@ -261,13 +358,11 @@ document.addEventListener('alpine:init', () => {
         },
         
         viewUser(username) {
-            // В реальном приложении здесь будет переход к профилю пользователя
             alert('Просмотр пользователя: @' + username);
         },
         
         async sendReminder(participant) {
             try {
-                // ИСПРАВЛЕНО: Отправляем напоминание конкретному пользователю через правильный эндпоинт
                 const message = `🔔 Напоминание о задолженности по заказу ${participant.order_id}. Пожалуйста, оплатите ваш заказ.`;
                 
                 const response = await fetch('/admin/api/broadcast/reminder', {
@@ -286,7 +381,6 @@ document.addEventListener('alpine:init', () => {
                     throw new Error(errorData.detail || 'Ошибка отправки напоминания');
                 }
                 
-                const result = await response.json();
                 this.showNotification(`Напоминание отправлено @${participant.username}`, 'success');
                 
             } catch (error) {
@@ -296,7 +390,6 @@ document.addEventListener('alpine:init', () => {
         },
         
         exportParticipants() {
-            // Логика экспорта
             const csvContent = this.convertToCSV(this.filteredParticipants);
             this.downloadCSV(csvContent, 'participants.csv');
         },
@@ -355,27 +448,11 @@ document.addEventListener('alpine:init', () => {
         },
         
         showNotification(message, type = 'info') {
-            const notification = document.createElement('div');
-            const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
-                           type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
-                           'bg-blue-500/20 border-blue-500/50';
-            
-            notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
-            notification.innerHTML = `
-                <div class="flex items-center space-x-3">
-                    <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
-                        ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
-                    <span>${message}</span>
-                </div>
-            `;
-            
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                if (notification.parentNode) {
-                    notification.parentNode.removeChild(notification);
-                }
-            }, 5000);
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                alert(message);
+            }
         }
     }));
 });
