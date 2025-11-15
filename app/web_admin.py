@@ -891,7 +891,7 @@ async def get_analytics(
 
 @app.get("/api/reports/export/participants")
 async def export_participants(
-    format: str = Query("csv", regex="^(csv|json)$"),
+    format: str = Query("csv", regex="^(csv|json|xlsx)$"),
     current_admin: dict = Depends(get_current_admin)
 ):
     """Экспорт участников"""
@@ -908,7 +908,59 @@ async def export_participants(
                 participant_data["order_country"] = order.country
                 all_participants.append(participant_data)
         
-        if format == "csv":
+        if format == "xlsx":
+            # Экспорт в XLSX
+            import io
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Участники заказов"
+            
+            # Заголовки
+            headers = ["Username", "ID заказа", "Имя клиента", "Статус", "Страна", "Оплачено", "Обновлен"]
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center")
+            
+            # Данные
+            for row, p in enumerate(all_participants, 2):
+                ws.cell(row=row, column=1, value=f"@{p['username']}")
+                ws.cell(row=row, column=2, value=p['order_id'])
+                ws.cell(row=row, column=3, value=p['order_client_name'])
+                ws.cell(row=row, column=4, value=p['order_status'])
+                ws.cell(row=row, column=5, value=p['order_country'])
+                ws.cell(row=row, column=6, value="Да" if p['paid'] else "Нет")
+                ws.cell(row=row, column=7, value=p.get('updated_at', ''))
+            
+            # Автоматическая ширина колонок
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            filename = f"participants_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return Response(
+                content=buffer.getvalue(),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        
+        elif format == "csv":
             import csv
             from io import StringIO
             
@@ -947,14 +999,66 @@ async def export_participants(
 
 @app.get("/api/reports/export/orders")
 async def export_orders(
-    format: str = Query("csv", regex="^(csv|json)$"),
+    format: str = Query("csv", regex="^(csv|json|xlsx)$"),
     current_admin: dict = Depends(get_current_admin)
 ):
     """Экспорт заказов"""
     try:
         orders = await OrderService.list_recent_orders(1000)
         
-        if format == "csv":
+        if format == "xlsx":
+            # Экспорт в XLSX
+            import io
+            from openpyxl import Workbook
+            from openpyxl.styles import Font, PatternFill, Alignment
+            
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "Заказы"
+            
+            # Заголовки
+            headers = ["ID заказа", "Имя клиента", "Страна", "Статус", "Примечание", "Создан", "Обновлен"]
+            for col, header in enumerate(headers, 1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = Font(bold=True)
+                cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+                cell.alignment = Alignment(horizontal="center")
+            
+            # Данные
+            for row, order in enumerate(orders, 2):
+                ws.cell(row=row, column=1, value=order.order_id)
+                ws.cell(row=row, column=2, value=order.client_name)
+                ws.cell(row=row, column=3, value=order.country)
+                ws.cell(row=row, column=4, value=order.status)
+                ws.cell(row=row, column=5, value=order.note or "")
+                ws.cell(row=row, column=6, value=order.created_at.isoformat() if order.created_at else "")
+                ws.cell(row=row, column=7, value=order.updated_at.isoformat() if order.updated_at else "")
+            
+            # Автоматическая ширина колонок
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            buffer = io.BytesIO()
+            wb.save(buffer)
+            buffer.seek(0)
+            
+            filename = f"orders_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+            return Response(
+                content=buffer.getvalue(),
+                media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                headers={"Content-Disposition": f"attachment; filename={filename}"}
+            )
+        
+        elif format == "csv":
             import csv
             from io import StringIO
             
@@ -998,6 +1102,98 @@ async def export_orders(
             
     except Exception as e:
         logger.error(f"Error exporting orders: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/addresses", response_class=HTMLResponse)
+async def addresses_page(request: Request, current_admin: dict = Depends(get_current_admin)):
+    """Страница адресов клиентов"""
+    return templates.TemplateResponse("addresses.html", {
+        "request": request,
+        "current_admin": current_admin,
+        "current_page": "addresses"
+    })
+
+
+@app.get("/api/addresses")
+async def get_addresses(current_admin: dict = Depends(get_current_admin)):
+    """API для получения списка адресов"""
+    try:
+        addresses = await AddressService.get_all_addresses()
+        addresses_data = []
+        for address in addresses:
+            address_data = serialize_model(address)
+            if address_data.get('created_at') and isinstance(address_data['created_at'], datetime):
+                address_data['created_at'] = address_data['created_at'].isoformat()
+            if address_data.get('updated_at') and isinstance(address_data['updated_at'], datetime):
+                address_data['updated_at'] = address_data['updated_at'].isoformat()
+            addresses_data.append(address_data)
+        
+        return {"addresses": addresses_data}
+    except Exception as e:
+        logger.error(f"Error fetching addresses: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+@app.get("/api/addresses/export/xlsx")
+async def export_addresses_xlsx(current_admin: dict = Depends(get_current_admin)):
+    """Экспорт адресов в XLSX"""
+    try:
+        addresses = await AddressService.get_all_addresses()
+        
+        import io
+        from openpyxl import Workbook
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Адреса клиентов"
+        
+        # Заголовки
+        headers = ["Telegram ID", "Username", "Имя", "Телефон", "Город", "Адрес", "Индекс", "Обновлен"]
+        for col, header in enumerate(headers, 1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = Font(bold=True)
+            cell.fill = PatternFill(start_color="366092", end_color="366092", fill_type="solid")
+            cell.alignment = Alignment(horizontal="center")
+        
+        # Данные
+        for row, address in enumerate(addresses, 2):
+            ws.cell(row=row, column=1, value=address.user_id)
+            ws.cell(row=row, column=2, value=f"@{address.username}")
+            ws.cell(row=row, column=3, value=address.full_name or "")
+            ws.cell(row=row, column=4, value=address.phone or "")
+            ws.cell(row=row, column=5, value=address.city or "")
+            ws.cell(row=row, column=6, value=address.address or "")
+            ws.cell(row=row, column=7, value=address.postcode or "")
+            ws.cell(row=row, column=8, value=address.updated_at.isoformat() if address.updated_at else "")
+        
+        # Автоматическая ширина колонок
+        for column in ws.columns:
+            max_length = 0
+            column_letter = column[0].column_letter
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            ws.column_dimensions[column_letter].width = adjusted_width
+        
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        buffer.seek(0)
+        
+        filename = f"addresses_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
+        return Response(
+            content=buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error exporting addresses: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.post("/api/orders/bulk-update-status")
