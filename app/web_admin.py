@@ -1119,6 +1119,12 @@ async def send_order_created_notification(order, usernames):
 Следите за обновлениями статуса заказа!
 """
         
+        # Создаем инлайн-клавиатуру с кнопкой подписки
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔔 Подписаться на обновления", callback_data=f"sub:{order.order_id}")]
+        ])
+        
         # Отправляем сообщения через Telegram бота
         for user_id in user_ids:
             try:
@@ -1126,7 +1132,8 @@ async def send_order_created_notification(order, usernames):
                 await application.bot.send_message(
                     chat_id=user_id,
                     text=message,
-                    parse_mode='HTML'
+                    parse_mode='HTML',
+                    reply_markup=keyboard
                 )
             except Exception as e:
                 logger.error(f"Error sending order notification to {user_id}: {e}")
