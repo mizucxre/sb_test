@@ -263,9 +263,7 @@
             <header class="glass-effect border-b border-white/10 mobile-header">
                 <div class="flex items-center justify-between h-full px-4">
                     <div class="flex items-center space-x-3">
-                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-2 rounded-xl hover:bg-white/5" data-touch-target>
-                            <i class="fas fa-bars text-lg"></i>
-                        </button>
+                        <!-- Burger menu removed for mobile optimization -->
                         <h1 class="text-lg lg:text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent truncate max-w-[200px] lg:max-w-none">
                             {% block page_title %}Панель управления{% endblock %}
                         </h1>
