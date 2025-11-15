@@ -234,9 +234,15 @@ async def show_subscriptions(update: Update, context: ContextTypes.DEFAULT_TYPE)
     kb_rows = []
     
     for s in subs:
-        last = s.last_sent_status or "—"
         order_id = s.order_id
-        txt_lines.append(f"• {order_id} — последний статус: {last}")
+        # Получаем актуальный статус заказа из базы данных
+        order = await OrderService.get_order(order_id)
+        if order:
+            current_status = order.status or "—"
+        else:
+            current_status = "—"
+        
+        txt_lines.append(f"• {order_id} — последний статус: {current_status}")
         kb_rows.append([InlineKeyboardButton(f"🗑 Отписаться от {order_id}", callback_data=f"unsub:{order_id}")])
     
     await reply_animated(update, context, "🔔 Ваши подписки:\n" + "\n".join(txt_lines), 
