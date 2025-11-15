@@ -1,460 +1,258 @@
-<!DOCTYPE html>
-<html lang="ru" class="h-full">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}SEABLUU Admin{% endblock %}</title>
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            important: true,
-        }
-    </script>
-    
-    <!-- Font Awesome -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
-    
-    <!-- Alpine.js для интерактивности -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
-    <style>
-        /* ... (стили из оригинального кода) ... */
-    </style>
-</head>
-<body class="h-full bg-gradient-to-br from-gray-900 to-black text-white">
-    <!-- Sidebar Navigation -->
-    <div x-data="{ sidebarOpen: false }" class="flex h-full">
-        <!-- Mobile sidebar backdrop -->
-        <div x-show="sidebarOpen" 
-             x-transition:enter="transition-opacity ease-linear duration-300"
-             x-transition:enter-start="opacity-0"
-             x-transition:enter-end="opacity-100"
-             x-transition:leave="transition-opacity ease-linear duration-300"
-             x-transition:leave-start="opacity-100"
-             x-transition:leave-end="opacity-0"
-             class="fixed inset-0 z-40 bg-black bg-opacity-60 lg:hidden"
-             @click="sidebarOpen = false">
-        </div>
+{% extends "base.html" %}
 
-        <!-- Sidebar -->
-        <div x-show="sidebarOpen || window.matchMedia('(min-width: 1024px)').matches"
-             x-transition:enter="transition-transform duration-300 ease-in-out"
-             x-transition:enter-start="-translate-x-full"
-             x-transition:enter-end="translate-x-0"
-             x-transition:leave="transition-transform duration-300 ease-in-out"
-             x-transition:leave-start="translate-x-0"
-             x-transition:leave-end="-translate-x-full"
-             class="fixed inset-y-0 left-0 z-50 w-64 glass-effect lg:static lg:inset-0 lg:translate-x-0">
-            
-            <div class="flex flex-col h-full">
-                <!-- Logo -->
-                <div class="flex items-center justify-between p-6 border-b border-white/10">
-                    <div class="flex items-center space-x-3">
-                        <div class="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                            <i class="fas fa-ship text-white text-sm"></i>
-                        </div>
-                        <span class="text-xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                            SEABLUU
-                        </span>
-                    </div>
-                    <button @click="sidebarOpen = false" class="lg:hidden text-gray-400 hover:text-white">
-                        <i class="fas fa-times"></i>
-                    </button>
-                </div>
+{% block page_title %}Администраторы{% endblock %}
 
-                <!-- Navigation -->
-                <nav class="flex-1 p-4 space-y-2">
-                    <!-- ... (нavigational links) ... -->
-                </nav>
-
-                <!-- User info -->
-                <div class="p-4 border-t border-white/10">
-                    <!-- ... (user info) ... -->
-                </div>
+{% block content %}
+<div x-data="adminUsers()" class="space-y-4 lg:space-y-6">
+    <!-- Header -->
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
+            <div>
+                <h1 class="text-lg lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
+                    Администраторы
+                </h1>
+                <p class="text-gray-400 mt-1 text-sm lg:text-base">Управление доступом к панели администратора</p>
             </div>
-        </div>
-
-        <!-- Main content -->
-        <div class="flex-1 flex flex-col lg:ml-0">
-            <!-- Top bar -->
-            <header class="glass-effect border-b border-white/10">
-                <div class="flex items-center justify-between p-4">
-                    <div class="flex items-center space-x-4">
-                        <button @click="sidebarOpen = true" class="lg:hidden text-gray-300 hover:text-white p-2 rounded-2xl hover:bg-white/5">
-                            <i class="fas fa-bars"></i>
-                        </button>
-                        <h1 class="text-2xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                            {% block page_title %}Панель управления{% endblock %}
-                        </h1>
-                    </div>
-                    
-                    <div class="flex items-center space-x-4">
-                        <!-- User info in header for mobile -->
-                        <div class="flex items-center space-x-3 lg:hidden">
-                            <!-- ... (mobile user avatar) ... -->
-                        </div>
-                    </div>
-                </div>
-            </header>
-
-            <!-- Page content -->
-            <main class="flex-1 overflow-auto p-6">
-                <div class="fade-in">
-                    {% block content %}
-                    {% extends "base.html" %}
-
-                    {% block page_title %}Администраторы{% endblock %}
-
-                    {% block content %}
-                    <div x-data="adminUsers()" class="space-y-4 lg:space-y-6">
-                        <!-- Header -->
-                        <div class="glass-effect rounded-2xl p-4 lg:p-6">
-                            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0">
-                                <div>
-                                    <h1 class="text-lg lg:text-3xl font-bold bg-gradient-to-r from-white to-gray-300 bg-clip-text text-transparent">
-                                        Администраторы
-                                    </h1>
-                                    <p class="text-gray-400 mt-1 text-sm lg:text-base">Управление доступом к панели администратора</p>
-                                </div>
-                                <a href="/admin/admin-users/new" class="btn-primary px-4 py-3 rounded-2xl font-medium text-sm lg:text-base text-center" data-touch-target>
-                                    <i class="fas fa-plus mr-2"></i>Добавить администратора
-                                </a>
-                            </div>
-                        </div>
-
-                        <!-- Admin Users List -->
-                        <div class="glass-effect rounded-2xl p-4 lg:p-6">
-                            <!-- Header -->
-                            <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mb-4 lg:mb-6">
-                                <h2 class="text-lg lg:text-xl font-semibold">Список администраторов</h2>
-                                <div class="text-sm text-gray-400">
-                                    Всего: <span x-text="users.length" class="font-semibold text-white"></span>
-                                </div>
-                            </div>
-
-                            <!-- Mobile Card View -->
-                            <div class="lg:hidden space-y-3">
-                                <template x-if="loading">
-                                    <div class="text-center py-8">
-                                        <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
-                                        <p class="text-gray-400">Загрузка администраторов...</p>
-                                    </div>
-                                </template>
-                                
-                                <template x-if="!loading && users.length === 0">
-                                    <div class="text-center py-8">
-                                        <i class="fas fa-users text-2xl mb-2"></i>
-                                        <p class="text-gray-400">Нет администраторов</p>
-                                    </div>
-                                </template>
-                                
-                                <template x-for="user in users" :key="user.id">
-                                    <div class="bg-white/5 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition-all duration-200">
-                                        <!-- Header -->
-                                        <div class="flex items-center space-x-3 mb-3">
-                                            <template x-if="user.avatar_url">
-                                                <img :src="user.avatar_url" :alt="user.username" class="w-10 h-10 rounded-full">
-                                            </template>
-                                            <template x-if="!user.avatar_url">
-                                                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                                    <i class="fas fa-user text-white text-sm"></i>
-                                                </div>
-                                            </template>
-                                            <div class="flex-1 min-w-0">
-                                                <p class="font-medium truncate" x-text="user.username"></p>
-                                                <p class="text-sm text-gray-400 truncate" x-text="user.email || 'Email не указан'"></p>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Details -->
-                                        <div class="space-y-2 text-sm mb-3">
-                                            <div class="flex justify-between">
-                                                <span class="text-gray-400">Роль:</span>
-                                                <span x-text="user.role === 'super_admin' ? 'Супер-админ' : 'Админ'" 
-                                                      :class="user.role === 'super_admin' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'"
-                                                      class="px-2 py-1 rounded-full text-xs font-medium text-white"></span>
-                                            </div>
-                                            <div class="flex justify-between">
-                                                <span class="text-gray-400">Статус:</span>
-                                                <span x-text="user.is_active ? 'Активен' : 'Неактивен'" 
-                                                      :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
-                                                      class="px-2 py-1 rounded-full text-xs font-medium"></span>
-                                            </div>
-                                            <div class="flex justify-between">
-                                                <span class="text-gray-400">Последний вход:</span>
-                                                <span class="text-gray-400 text-xs" x-text="formatDate(user.last_login)"></span>
-                                            </div>
-                                        </div>
-                                        
-                                        <!-- Actions -->
-                                        <div class="flex justify-center space-x-2 pt-3 border-t border-white/10">
-                                            <a :href="`/admin/admin-users/${user.id}/edit`" 
-                                               class="flex-1 p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 text-center"
-                                               data-touch-target>
-                                                <i class="fas fa-edit"></i>
-                                                <span class="text-xs block mt-1">Редактировать</span>
-                                            </a>
-                                            <button @click="deleteUser(user)" 
-                                                    class="flex-1 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-center"
-                                                    data-touch-target>
-                                                <i class="fas fa-trash"></i>
-                                                <span class="text-xs block mt-1">Удалить</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </template>
-                            </div>
-
-                            <!-- Desktop Table View -->
-                            <div class="hidden lg:block">
-                                <div class="overflow-x-auto">
-                                    <table class="w-full">
-                                        <thead>
-                                            <tr class="border-b border-white/10">
-                                                <th class="text-left py-4 px-4 text-gray-400 font-medium">Пользователь</th>
-                                                <th class="text-left py-4 px-4 text-gray-400 font-medium">Роль</th>
-                                                <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
-                                                <th class="text-left py-4 px-4 text-gray-400 font-medium">Последний вход</th>
-                                                <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <template x-if="loading">
-                                                <tr>
-                                                    <td colspan="5" class="py-8 text-center text-gray-400">
-                                                        <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
-                                                        <p>Загрузка администраторов...</p>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                            
-                                            <template x-if="!loading && users.length === 0">
-                                                <tr>
-                                                    <td colspan="5" class="py-8 text-center text-gray-400">
-                                                        <i class="fas fa-users text-4xl mb-2 opacity-50"></i>
-                                                        <div>Нет администраторов</div>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                            
-                                            <template x-for="user in users" :key="user.id">
-                                                <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
-                                                    <td class="py-4 px-4">
-                                                        <div class="flex items-center space-x-3">
-                                                            <template x-if="user.avatar_url">
-                                                                <img :src="user.avatar_url" :alt="user.username" class="w-10 h-10 rounded-full">
-                                                            </template>
-                                                            <template x-if="!user.avatar_url">
-                                                                <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                                                                    <i class="fas fa-user text-white"></i>
-                                                                </div>
-                                                            </template>
-                                                            <div>
-                                                                <div class="font-medium" x-text="user.username"></div>
-                                                                <div class="text-sm text-gray-400" x-text="user.email || 'Email не указан'"></div>
-                                                            </div>
-                                                        </div>
-                                                    </td>
-                                                    <td class="py-4 px-4">
-                                                        <span x-text="user.role === 'super_admin' ? 'Супер-администратор' : 'Администратор'" 
-                                                              :class="user.role === 'super_admin' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'"
-                                                              class="px-3 py-1 rounded-full text-xs font-medium text-white"></span>
-                                                    </td>
-                                                    <td class="py-4 px-4">
-                                                        <span x-text="user.is_active ? 'Активен' : 'Неактивен'" 
-                                                              :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
-                                                              class="px-3 py-1 rounded-full text-xs font-medium"></span>
-                                                    </td>
-                                                    <td class="py-4 px-4 text-gray-300" x-text="formatDate(user.last_login)"></td>
-                                                    <td class="py-4 px-4">
-                                                        <div class="flex items-center space-x-2">
-                                                            <a :href="`/admin/admin-users/${user.id}/edit`" class="text-blue-400 hover:text-blue-300 p-2 rounded-2xl hover:bg-white/5 transition-colors" data-touch-target>
-                                                                <i class="fas fa-edit"></i>
-                                                            </a>
-                                                            <button @click="deleteUser(user)" class="text-red-400 hover:text-red-300 p-2 rounded-2xl hover:bg-white/5 transition-colors" data-touch-target>
-                                                                <i class="fas fa-trash"></i>
-                                                            </button>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            </template>
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <script>
-                    document.addEventListener('alpine:init', () => {
-                        Alpine.data('adminUsers', () => ({
-                            users: [],
-                            loading: true,
-                            
-                            async init() {
-                                await this.loadUsers();
-                            },
-                            
-                            async loadUsers() {
-                                try {
-                                    const response = await fetch('/admin/api/admin/users');
-                                    if (!response.ok) throw new Error('Ошибка загрузки данных');
-                                    const data = await response.json();
-                                    this.users = data.users || [];
-                                } catch (error) {
-                                    console.error('Ошибка загрузки администраторов:', error);
-                                    this.showNotification('Ошибка загрузки списка администраторов', 'error');
-                                } finally {
-                                    this.loading = false;
-                                }
-                            },
-                            
-                            async deleteUser(user) {
-                                if (!confirm(`Вы уверены, что хотите удалить администратора ${user.username}?`)) {
-                                    return;
-                                }
-                                
-                                try {
-                                    const response = await fetch(`/admin/api/admin/users/${user.id}`, {
-                                        method: 'DELETE'
-                                    });
-                                    
-                                    if (!response.ok) {
-                                        const errorData = await response.json();
-                                        throw new Error(errorData.detail || 'Ошибка удаления');
-                                    }
-                                    
-                                    const data = await response.json();
-                                    this.showNotification(data.message || 'Администратор удален', 'success');
-                                    await this.loadUsers();
-                                } catch (error) {
-                                    console.error('Ошибка удаления администратора:', error);
-                                    this.showNotification(error.message, 'error');
-                                }
-                            },
-                            
-                            formatDate(dateString) {
-                                if (!dateString) return 'Никогда';
-                                try {
-                                    const date = new Date(dateString);
-                                    return date.toLocaleDateString('ru-RU', {
-                                        day: 'numeric',
-                                        month: 'short',
-                                        hour: '2-digit',
-                                        minute: '2-digit'
-                                    });
-                                } catch (e) {
-                                    return 'Неизвестно';
-                                }
-                            },
-                            
-                            showNotification(message, type = 'info') {
-                                if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
-                                    Alpine.$data.pageUtils.showNotification(message, type);
-                                } else {
-                                    alert(message);
-                                }
-                            }
-                        }));
-                    });
-                    </script>
-                    {% endblock %}
-                    {% endblock %}
-                </div>
-            </main>
+            <a href="/admin/admin-users/new" class="btn-primary px-4 py-3 rounded-2xl font-medium text-sm lg:text-base text-center" data-touch-target>
+                <i class="fas fa-plus mr-2"></i>Добавить администратора
+            </a>
         </div>
     </div>
 
-    <script>
-        // Инициализация Alpine.js - только базовые функции
-        document.addEventListener('alpine:init', () => {
-            // Базовые утилиты для всех страниц
-            Alpine.data('pageUtils', () => ({
-                formatDate(dateString) {
-                    if (!dateString) return 'Неизвестно';
-                    try {
-                        const date = new Date(dateString);
-                        return date.toLocaleDateString('ru-RU', {
-                            day: 'numeric',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        });
-                    } catch (e) {
-                        return 'Неизвестно';
-                    }
-                },
-                
-                showNotification(message, type = 'info') {
-                    const notification = document.createElement('div');
-                    const bgColor = type === 'error' ? 'bg-red-500/20 border-red-500/50' : 
-                                   type === 'success' ? 'bg-green-500/20 border-green-500/50' : 
-                                   'bg-blue-500/20 border-blue-500/50';
-                    
-                    notification.className = `fixed top-4 right-4 glass-effect rounded-2xl p-4 border ${bgColor} z-50`;
-                    notification.innerHTML = `
-                        <div class="flex items-center space-x-3">
-                            <i class="fas fa-${type === 'error' ? 'exclamation-circle' : type === 'success' ? 'check-circle' : 'info-circle'} 
-                                ${type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-blue-400'}"></i>
-                            <span>${message}</span>
+    <!-- Admin Users List -->
+    <div class="glass-effect rounded-2xl p-4 lg:p-6">
+        <!-- Header -->
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-3 lg:space-y-0 mb-4 lg:mb-6">
+            <h2 class="text-lg lg:text-xl font-semibold">Список администраторов</h2>
+            <div class="text-sm text-gray-400">
+                Всего: <span x-text="users.length" class="font-semibold text-white"></span>
+            </div>
+        </div>
+
+        <!-- Mobile Card View -->
+        <div class="lg:hidden space-y-3">
+            <template x-if="loading">
+                <div class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl text-gray-400 mb-2"></i>
+                    <p class="text-gray-400">Загрузка администраторов...</p>
+                </div>
+            </template>
+            
+            <template x-if="!loading && users.length === 0">
+                <div class="text-center py-8">
+                    <i class="fas fa-users text-2xl mb-2"></i>
+                    <p class="text-gray-400">Нет администраторов</p>
+                </div>
+            </template>
+            
+            <template x-for="user in users" :key="user.id">
+                <div class="bg-white/5 rounded-2xl p-4 border border-white/10 hover:border-white/20 transition-all duration-200">
+                    <!-- Header -->
+                    <div class="flex items-center space-x-3 mb-3">
+                        <template x-if="user.avatar_url">
+                            <img :src="user.avatar_url" :alt="user.username" class="w-10 h-10 rounded-full">
+                        </template>
+                        <template x-if="!user.avatar_url">
+                            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <i class="fas fa-user text-white text-sm"></i>
+                            </div>
+                        </template>
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium truncate" x-text="user.username"></p>
+                            <p class="text-sm text-gray-400 truncate" x-text="user.email || 'Email не указан'"></p>
                         </div>
-                    `;
+                    </div>
                     
-                    document.body.appendChild(notification);
+                    <!-- Details -->
+                    <div class="space-y-2 text-sm mb-3">
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Роль:</span>
+                            <span x-text="user.role === 'super_admin' ? 'Супер-админ' : 'Админ'" 
+                                  :class="user.role === 'super_admin' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'"
+                                  class="px-2 py-1 rounded-full text-xs font-medium text-white"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Статус:</span>
+                            <span x-text="user.is_active ? 'Активен' : 'Неактивен'" 
+                                  :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                  class="px-2 py-1 rounded-full text-xs font-medium"></span>
+                        </div>
+                        <div class="flex justify-between">
+                            <span class="text-gray-400">Последний вход:</span>
+                            <span class="text-gray-400 text-xs" x-text="formatDate(user.last_login)"></span>
+                        </div>
+                    </div>
                     
-                    setTimeout(() => {
-                        if (notification.parentNode) {
-                            notification.parentNode.removeChild(notification);
-                        }
-                    }, 5000);
-                },
-                
-                async apiCall(url, options = {}) {
-                    try {
-                        const response = await fetch(url, {
-                            headers: {
-                                'Content-Type': 'application/json',
-                                ...options.headers
-                            },
-                            ...options
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json().catch(() => ({}));
-                            throw new Error(errorData.detail || `HTTP error! status: ${response.status}`);
-                        }
-                        
-                        return await response.json();
-                    } catch (error) {
-                        console.error('API call error:', error);
-                        this.showNotification(error.message, 'error');
-                        throw error;
-                    }
-                }
-            }));
-        });
+                    <!-- Actions -->
+                    <div class="flex justify-center space-x-2 pt-3 border-t border-white/10">
+                        <a :href="`/admin/admin-users/${user.id}/edit`" 
+                           class="flex-1 p-2 text-blue-400 hover:text-blue-300 hover:bg-blue-500/10 rounded-xl transition-all duration-200 text-center"
+                           data-touch-target>
+                            <i class="fas fa-edit"></i>
+                            <span class="text-xs block mt-1">Редактировать</span>
+                        </a>
+                        <button @click="deleteUser(user)" 
+                                class="flex-1 p-2 text-red-400 hover:text-red-300 hover:bg-red-500/10 rounded-xl transition-all duration-200 text-center"
+                                data-touch-target>
+                            <i class="fas fa-trash"></i>
+                            <span class="text-xs block mt-1">Удалить</span>
+                        </button>
+                    </div>
+                </div>
+            </template>
+        </div>
 
-        // Принудительное применение стилей к выпадающим спискам
-        function applySelectStyles() {
-            const allSelects = document.querySelectorAll('select');
-            allSelects.forEach(select => {
-                select.classList.add('custom-select');
-            });
-        }
+        <!-- Desktop Table View -->
+        <div class="hidden lg:block">
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="border-b border-white/10">
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Пользователь</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Роль</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Статус</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Последний вход</th>
+                            <th class="text-left py-4 px-4 text-gray-400 font-medium">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-if="loading">
+                            <tr>
+                                <td colspan="5" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-spinner fa-spin text-2xl mb-2"></i>
+                                    <p>Загрузка администраторов...</p>
+                                </td>
+                            </tr>
+                        </template>
+                        
+                        <template x-if="!loading && users.length === 0">
+                            <tr>
+                                <td colspan="5" class="py-8 text-center text-gray-400">
+                                    <i class="fas fa-users text-4xl mb-2 opacity-50"></i>
+                                    <div>Нет администраторов</div>
+                                </td>
+                            </tr>
+                        </template>
+                        
+                        <template x-for="user in users" :key="user.id">
+                            <tr class="border-b border-white/5 hover:bg-white/5 transition-colors">
+                                <td class="py-4 px-4">
+                                    <div class="flex items-center space-x-3">
+                                        <template x-if="user.avatar_url">
+                                            <img :src="user.avatar_url" :alt="user.username" class="w-10 h-10 rounded-full">
+                                        </template>
+                                        <template x-if="!user.avatar_url">
+                                            <div class="w-10 h-10 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                                <i class="fas fa-user text-white"></i>
+                                            </div>
+                                        </template>
+                                        <div>
+                                            <div class="font-medium" x-text="user.username"></div>
+                                            <div class="text-sm text-gray-400" x-text="user.email || 'Email не указан'"></div>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span x-text="user.role === 'super_admin' ? 'Супер-администратор' : 'Администратор'" 
+                                          :class="user.role === 'super_admin' ? 'bg-gradient-to-r from-yellow-500 to-orange-500' : 'bg-gradient-to-r from-blue-500 to-purple-500'"
+                                          class="px-3 py-1 rounded-full text-xs font-medium text-white"></span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span x-text="user.is_active ? 'Активен' : 'Неактивен'" 
+                                          :class="user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'"
+                                          class="px-3 py-1 rounded-full text-xs font-medium"></span>
+                                </td>
+                                <td class="py-4 px-4 text-gray-300" x-text="formatDate(user.last_login)"></td>
+                                <td class="py-4 px-4">
+                                    <div class="flex items-center space-x-2">
+                                        <a :href="`/admin/admin-users/${user.id}/edit`" class="text-blue-400 hover:text-blue-300 p-2 rounded-2xl hover:bg-white/5 transition-colors" data-touch-target>
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button @click="deleteUser(user)" class="text-red-400 hover:text-red-300 p-2 rounded-2xl hover:bg-white/5 transition-colors" data-touch-target>
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
-        // Применяем стили после загрузки
-        document.addEventListener('DOMContentLoaded', applySelectStyles);
-        document.addEventListener('alpine:init', applySelectStyles);
+<script>
+document.addEventListener('alpine:init', () => {
+    Alpine.data('adminUsers', () => ({
+        users: [],
+        loading: true,
         
-        // Периодически проверяем и применяем стили (для динамического контента)
-        setInterval(applySelectStyles, 1000);
-
-        // Обработка ошибок загрузки страницы
-        window.addEventListener('error', (event) => {
-            console.error('Global error:', event.error);
-        });
-    </script>
-</body>
-</html>
+        async init() {
+            await this.loadUsers();
+        },
+        
+        async loadUsers() {
+            try {
+                const response = await fetch('/admin/api/admin/users');
+                if (!response.ok) throw new Error('Ошибка загрузки данных');
+                const data = await response.json();
+                this.users = data.users || [];
+            } catch (error) {
+                console.error('Ошибка загрузки администраторов:', error);
+                this.showNotification('Ошибка загрузки списка администраторов', 'error');
+            } finally {
+                this.loading = false;
+            }
+        },
+        
+        async deleteUser(user) {
+            if (!confirm(`Вы уверены, что хотите удалить администратора ${user.username}?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`/admin/api/admin/users/${user.id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Ошибка удаления');
+                }
+                
+                const data = await response.json();
+                this.showNotification(data.message || 'Администратор удален', 'success');
+                await this.loadUsers();
+            } catch (error) {
+                console.error('Ошибка удаления администратора:', error);
+                this.showNotification(error.message, 'error');
+            }
+        },
+        
+        formatDate(dateString) {
+            if (!dateString) return 'Никогда';
+            try {
+                const date = new Date(dateString);
+                return date.toLocaleDateString('ru-RU', {
+                    day: 'numeric',
+                    month: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return 'Неизвестно';
+            }
+        },
+        
+        showNotification(message, type = 'info') {
+            if (window.Alpine && Alpine.$data && Alpine.$data.pageUtils) {
+                Alpine.$data.pageUtils.showNotification(message, type);
+            } else {
+                alert(message);
+            }
+        }
+    }));
+});
+</script>
+{% endblock %}
