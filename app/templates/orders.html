@@ -249,6 +249,8 @@ document.addEventListener('alpine:init', () => {
             try {
                 const offset = (this.currentPage - 1) * this.itemsPerPage;
                 let url = `/admin/api/orders?limit=${this.itemsPerPage}&offset=${offset}`;
+                
+                // Добавляем фильтры в запрос к серверу
                 if (this.filters.status) {
                     url += `&status=${encodeURIComponent(this.filters.status)}`;
                 }
@@ -257,6 +259,9 @@ document.addEventListener('alpine:init', () => {
                 }
                 if (this.filters.note) {
                     url += `&note=${encodeURIComponent(this.filters.note)}`;
+                }
+                if (this.filters.search) {
+                    url += `&search=${encodeURIComponent(this.filters.search)}`;
                 }
                 
                 const response = await fetch(url);
@@ -268,13 +273,12 @@ document.addEventListener('alpine:init', () => {
                 this.totalOrders = data.total || 0;
                 this.hasMore = data.has_more || false;
                 
-                // Получаем уникальные метки из загруженных заказов
-                this.uniqueNotes = [...new Set(this.orders
-                    .filter(order => order.note && order.note.trim() !== '')
-                    .map(order => order.note)
-                    .filter(note => note !== null && note !== undefined))];
+                // Получаем уникальные метки из всех заказов (через отдельный запрос)
+                await this.loadUniqueNotes();
                 
-                this.applyFilters();
+                // Не применяем локальную фильтрацию - сервер уже отфильтровал
+                this.filteredOrders = this.orders;
+                this.selectedOrders = [];
             } catch (error) {
                 console.error('Error loading orders:', error);
                 this.showNotification('Ошибка загрузки заказов', 'error');
@@ -299,36 +303,35 @@ document.addEventListener('alpine:init', () => {
             }
         },
         
+        async loadUniqueNotes() {
+            try {
+                // Загружаем все уникальные метки из базы данных
+                const response = await fetch('/admin/api/orders/unique-notes');
+                if (response.ok) {
+                    const data = await response.json();
+                    this.uniqueNotes = data.notes || [];
+                } else {
+                    // Fallback: получаем метки из текущих загруженных заказов
+                    this.uniqueNotes = [...new Set(this.orders
+                        .filter(order => order.note && order.note.trim() !== '')
+                        .map(order => order.note)
+                        .filter(note => note !== null && note !== undefined))];
+                }
+            } catch (error) {
+                console.error('Error loading unique notes:', error);
+                // Fallback на локальные данные
+                this.uniqueNotes = [...new Set(this.orders
+                    .filter(order => order.note && order.note.trim() !== '')
+                    .map(order => order.note)
+                    .filter(note => note !== null && note !== undefined))];
+            }
+        },
+        
         applyFilters() {
-            let filtered = this.orders;
-            
-            // Фильтр по статусу
-            if (this.filters.status) {
-                filtered = filtered.filter(order => order.status === this.filters.status);
-            }
-            
-            // Фильтр по стране
-            if (this.filters.country) {
-                filtered = filtered.filter(order => order.country === this.filters.country);
-            }
-            
-            // Фильтр по метке админа
-            if (this.filters.note) {
-                filtered = filtered.filter(order => order.note === this.filters.note);
-            }
-            
-            // Поиск по всем полям
-            if (this.filters.search) {
-                const searchTerm = this.filters.search.toLowerCase();
-                filtered = filtered.filter(order => 
-                    order.order_id.toLowerCase().includes(searchTerm) ||
-                    order.client_name.toLowerCase().includes(searchTerm) ||
-                    (order.note && order.note.toLowerCase().includes(searchTerm))
-                );
-            }
-            
-            this.filteredOrders = filtered;
-            this.selectedOrders = [];
+            // Сбрасываем на первую страницу при применении фильтров
+            this.currentPage = 1;
+            // Перезагружаем данные с сервера с примененными фильтрами
+            this.loadOrders();
         },
         
         resetFilters() {
