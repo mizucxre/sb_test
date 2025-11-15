@@ -4,6 +4,7 @@ from telegram.ext import ContextTypes, CallbackQueryHandler
 
 from app.utils.helpers import reply_animated
 from app.services.user_service import SubscriptionService, AddressService
+from app.utils.keyboards import BACK_KB
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ async def _handle_address_callbacks(update: Update, context: ContextTypes.DEFAUL
     """Обработка callback для адресов"""
     if data == "addr:add":
         context.user_data["mode"] = "add_address_fullname"
-        await reply_animated(update, context, "Давайте добавим/обновим адрес.\n👤 ФИО:")
+        await reply_animated(update, context, "Давайте добавим/обновим адрес.\n👤 ФИО:", reply_markup=BACK_KB)
     elif data == "addr:del":
         user_id = update.effective_user.id
         success = await AddressService.delete_address(user_id)
